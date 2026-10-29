@@ -21,6 +21,11 @@ hearthcast/
         appsettings.json
         appsettings.Development.json
       Hearthcast.Data/
+        Classification/
+          Category.cs
+          ItemGroup.cs
+          FinancialType.cs
+          ClassificationService.cs
         Households/
           Household.cs
           Person.cs
@@ -28,24 +33,33 @@ hearthcast/
         Persistence/
           HearthcastDbContext.cs
           Configurations/
+            CategoryConfiguration.cs
             HouseholdConfiguration.cs
+            ItemGroupConfiguration.cs
             PersonConfiguration.cs
           DesignTime/
             HearthcastDbContextFactory.cs
           Migrations/
             <timestamp>_CreateHouseholdsAndPeople.cs
             <timestamp>_CreateHouseholdsAndPeople.Designer.cs
+            <timestamp>_CreateCategoriesAndItemGroups.cs
+            <timestamp>_CreateCategoriesAndItemGroups.Designer.cs
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
       Hearthcast.Data.Tests/
+        Classification/
+          ClassificationPersistenceTests.cs
         Households/
           HouseholdPersistenceTests.cs
+        Infrastructure/
+          SqliteTestDatabase.cs
         Hearthcast.Data.Tests.csproj
   docs/
     schema-proposal.md
     relational-schema-plan.md
     household-person-slice.md
+    classification-slice.md
     project-layout.md
 ```
 
@@ -57,7 +71,7 @@ temporary financial files are excluded by the root `.gitignore`.
 - Projects and assemblies use `Hearthcast.<Responsibility>`; test projects append
   `.Tests` to the project being tested.
 - Put each main C# type in a file with the same name, using PascalCase.
-- Feature folders use descriptive plural names, such as `Households`. Household
+- Feature folders use descriptive names, such as `Households` and `Classification`. Household
   and Person belong together because membership is controlled by the household.
   Add later feature folders when those features are implemented.
 - Namespaces follow project and folder names: `Hearthcast.Data.Households`,

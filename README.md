@@ -6,16 +6,18 @@ A household finance app built around configured items and dated snapshots.
 
 ## Current step
 
-The first persistence slice implements Household and Person, with EF Core SQLite
-mapping, a migration and integration tests. The API still exposes only its health
-endpoint. Categories, tracked items, snapshots and the frontend follow in separate
-steps.
+The persistence model implements Household, Person, Category and ItemGroup, with
+EF Core SQLite mappings, migrations and integration tests. The API still exposes
+only its health endpoint. Tracked items, allocations, snapshots and the frontend
+follow in separate steps.
 
 The proposed data model is documented in [the schema proposal](docs/schema-proposal.md).
 The [relational schema plan](docs/relational-schema-plan.md) maps the proposed
 relationships, constraints and implementation slices for review before entity mapping.
 See the [Household and Person slice](docs/household-person-slice.md) for the code
 to review and the rules implemented so far.
+The [Classification slice](docs/classification-slice.md) adds user-defined
+categories/groups and the system Asset/Debt identifier.
 
 ## Structure
 

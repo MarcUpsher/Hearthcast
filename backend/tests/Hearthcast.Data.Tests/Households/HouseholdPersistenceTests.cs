@@ -1,5 +1,6 @@
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
+using Hearthcast.Data.Tests.Infrastructure;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -9,33 +10,22 @@ namespace Hearthcast.Data.Tests.Households;
 
 public sealed class HouseholdPersistenceTests : IAsyncLifetime
 {
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(), "hearthcast-tests", Guid.NewGuid().ToString("N"));
-    private DbContextOptions<HearthcastDbContext> _options = null!;
-    private HouseholdService _service = null!;
+    private readonly SqliteTestDatabase _database = new();
+    private readonly HouseholdService _service;
 
-    public async Task InitializeAsync()
+    public HouseholdPersistenceTests()
     {
-        Directory.CreateDirectory(_directory);
-        var connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = Path.Combine(_directory, "test.db"),
-            ForeignKeys = true,
-            Pooling = false,
-            DefaultTimeout = 5
-        }.ToString();
-        _options = new DbContextOptionsBuilder<HearthcastDbContext>()
-            .UseSqlite(connectionString).Options;
-        _service = new HouseholdService(new TestContextFactory(_options));
+        _service = new HouseholdService(_database);
+    }
 
-        await using var context = CreateContext();
-        await context.Database.MigrateAsync();
+    public Task InitializeAsync()
+    {
+        return _database.InitializeAsync();
     }
 
     public Task DisposeAsync()
     {
-        Directory.Delete(_directory, recursive: true);
-        return Task.CompletedTask;
+        return _database.DisposeAsync();
     }
 
     [Fact]
@@ -245,7 +235,7 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     {
         await using var context = CreateContext();
         Assert.False(context.Database.HasPendingModelChanges());
-        Assert.Single(await context.Database.GetAppliedMigrationsAsync());
+        Assert.Equal(context.Database.GetMigrations(), await context.Database.GetAppliedMigrationsAsync());
 
         await context.GetService<IMigrator>().MigrateAsync("0");
         await context.Database.MigrateAsync();
@@ -255,11 +245,8 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
         Assert.Equal(1, await context.People.CountAsync());
     }
 
-    private HearthcastDbContext CreateContext() => new(_options);
-
-    private sealed class TestContextFactory(DbContextOptions<HearthcastDbContext> options)
-        : IDbContextFactory<HearthcastDbContext>
+    private HearthcastDbContext CreateContext()
     {
-        public HearthcastDbContext CreateDbContext() => new(options);
+        return _database.CreateDbContext();
     }
 }

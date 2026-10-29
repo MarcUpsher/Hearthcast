@@ -15,6 +15,7 @@ and stops before classification, balances, snapshots or API CRUD endpoints.
 | [HouseholdService.cs](../backend/src/Hearthcast.Data/Households/HouseholdService.cs) | Transactional create/add/change-participation/remove operations. |
 | [Migrations](../backend/src/Hearthcast.Data/Persistence/Migrations) | Initial migration, generated metadata and EF model snapshot. |
 | [HouseholdPersistenceTests.cs](../backend/tests/Hearthcast.Data.Tests/Households/HouseholdPersistenceTests.cs) | Integration checks against migrated temporary SQLite files. |
+| [SqliteTestDatabase.cs](../backend/tests/Hearthcast.Data.Tests/Infrastructure/SqliteTestDatabase.cs) | Isolated test-database factory shared with the Classification tests. |
 
 ## Tables and relationship
 

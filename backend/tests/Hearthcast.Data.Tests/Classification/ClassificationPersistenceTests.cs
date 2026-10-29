@@ -1,0 +1,309 @@
+using Hearthcast.Data.Classification;
+using Hearthcast.Data.Households;
+using Hearthcast.Data.Tests.Infrastructure;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+namespace Hearthcast.Data.Tests.Classification;
+
+public sealed class ClassificationPersistenceTests : IAsyncLifetime
+{
+    private readonly SqliteTestDatabase _database = new();
+    private readonly HouseholdService _households;
+    private readonly ClassificationService _classification;
+
+    public ClassificationPersistenceTests()
+    {
+        _households = new HouseholdService(_database);
+        _classification = new ClassificationService(_database);
+    }
+
+    public Task InitializeAsync()
+    {
+        return _database.InitializeAsync();
+    }
+
+    public Task DisposeAsync()
+    {
+        return _database.DisposeAsync();
+    }
+
+    [Theory]
+    [InlineData(FinancialType.Asset)]
+    [InlineData(FinancialType.Debt)]
+    public async Task CategoryAndGroupPersistWithAnExplicitFinancialType(FinancialType financialType)
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        var category = await _classification.CreateCategoryAsync(household.Id, " Category A ", financialType);
+        var group = await _classification.CreateGroupAsync(household.Id, category.Id, " Group A ");
+
+        await using var context = _database.CreateDbContext();
+        var saved = await context.ItemGroups.Include(item => item.Category).SingleAsync();
+        Assert.Equal(group.Id, saved.Id);
+        Assert.Equal(category.Id, saved.CategoryId);
+        Assert.Equal(household.Id, saved.HouseholdId);
+        Assert.Equal(household.Id, saved.Category.HouseholdId);
+        Assert.Equal("Category A", saved.Category.Name);
+        Assert.Equal("Group A", saved.Name);
+        Assert.Equal(financialType, saved.Category.FinancialType);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task AnUndefinedFinancialTypeCannotBeSaved(int financialType)
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            _classification.CreateCategoryAsync(household.Id, "Category A", (FinancialType)financialType));
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(0, await context.Categories.CountAsync());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    public async Task CategoryNamesAreRequired(string? name)
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            _classification.CreateCategoryAsync(household.Id, name!, FinancialType.Asset));
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(0, await context.Categories.CountAsync());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    public async Task GroupNamesAreRequired(string? name)
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            _classification.CreateGroupAsync(household.Id, category.Id, name!));
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(0, await context.ItemGroups.CountAsync());
+    }
+
+    [Fact]
+    public async Task ACategoryRequiresAnExistingHousehold()
+    {
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            _classification.CreateCategoryAsync(Guid.NewGuid(), "Category A", FinancialType.Asset));
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(0, await context.Categories.CountAsync());
+    }
+
+    [Fact]
+    public async Task AGroupRequiresAnExistingCategory()
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            _classification.CreateGroupAsync(household.Id, Guid.NewGuid(), "Group A"));
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(0, await context.ItemGroups.CountAsync());
+    }
+
+    [Fact]
+    public async Task TheServiceRejectsACategoryFromAnotherHousehold()
+    {
+        var first = await _households.CreateAsync("Household A", "Person A");
+        var second = await _households.CreateAsync("Household B", "Person B");
+        var category = await _classification.CreateCategoryAsync(second.Id, "Category B", FinancialType.Asset);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            _classification.CreateGroupAsync(first.Id, category.Id, "Group A"));
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(0, await context.ItemGroups.CountAsync());
+    }
+
+    [Fact]
+    public async Task SqliteRejectsACategoryWithoutAHousehold()
+    {
+        await using var context = _database.CreateDbContext();
+        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+            context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Categories" ("Id", "HouseholdId", "Name", "FinancialType")
+                VALUES ({Guid.NewGuid()}, {Guid.NewGuid()}, {"Category A"}, {1})
+                """));
+
+        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+    }
+
+    [Fact]
+    public async Task SqliteRejectsAGroupWithoutACategory()
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        await using var context = _database.CreateDbContext();
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+            context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "ItemGroups" ("Id", "HouseholdId", "CategoryId", "Name")
+                VALUES ({Guid.NewGuid()}, {household.Id}, {Guid.NewGuid()}, {"Group A"})
+                """));
+
+        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+    }
+
+    [Fact]
+    public async Task TheCompositeForeignKeyRejectsACategoryInAnotherExistingHousehold()
+    {
+        var first = await _households.CreateAsync("Household A", "Person A");
+        var second = await _households.CreateAsync("Household B", "Person B");
+        var category = await _classification.CreateCategoryAsync(second.Id, "Category B", FinancialType.Asset);
+        await using var context = _database.CreateDbContext();
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+            context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "ItemGroups" ("Id", "HouseholdId", "CategoryId", "Name")
+                VALUES ({Guid.NewGuid()}, {first.Id}, {category.Id}, {"Group A"})
+                """));
+
+        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task SqliteRejectsUndefinedFinancialTypes(int financialType)
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        await using var context = _database.CreateDbContext();
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+            context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Categories" ("Id", "HouseholdId", "Name", "FinancialType")
+                VALUES ({Guid.NewGuid()}, {household.Id}, {"Category A"}, {financialType})
+                """));
+
+        Assert.Equal(275, exception.SqliteExtendedErrorCode);
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(false, "")]
+    [InlineData(false, "   ")]
+    [InlineData(true, null)]
+    [InlineData(true, "")]
+    [InlineData(true, "   ")]
+    public async Task SqliteRequiresCategoryAndGroupNames(bool isGroup, string? name)
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
+        await using var context = _database.CreateDbContext();
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(async () =>
+        {
+            if (isGroup)
+            {
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "ItemGroups" ("Id", "HouseholdId", "CategoryId", "Name")
+                    VALUES ({Guid.NewGuid()}, {household.Id}, {category.Id}, {name})
+                    """);
+            }
+            else
+            {
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Categories" ("Id", "HouseholdId", "Name", "FinancialType")
+                    VALUES ({Guid.NewGuid()}, {household.Id}, {name}, {1})
+                    """);
+            }
+        });
+
+        Assert.Equal(19, exception.SqliteErrorCode);
+        Assert.Equal(1, await context.Categories.CountAsync());
+        Assert.Equal(0, await context.ItemGroups.CountAsync());
+    }
+
+    [Fact]
+    public async Task RenamingPreservesIdentityAndRelationships()
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Debt);
+        var group = await _classification.CreateGroupAsync(household.Id, category.Id, "Group A");
+
+        await using (var context = _database.CreateDbContext())
+        {
+            var saved = await context.ItemGroups.Include(item => item.Category).SingleAsync();
+            saved.Category.Rename(" Renamed category ");
+            saved.Rename(" Renamed group ");
+            await context.SaveChangesAsync();
+        }
+
+        await using var verification = _database.CreateDbContext();
+        var renamed = await verification.ItemGroups.Include(item => item.Category).SingleAsync();
+        Assert.Equal(group.Id, renamed.Id);
+        Assert.Equal(category.Id, renamed.CategoryId);
+        Assert.Equal(household.Id, renamed.HouseholdId);
+        Assert.Equal("Renamed category", renamed.Category.Name);
+        Assert.Equal("Renamed group", renamed.Name);
+        Assert.Equal(FinancialType.Debt, renamed.Category.FinancialType);
+    }
+
+    [Fact]
+    public async Task AReferencedCategoryCannotBeDeleted()
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
+        await _classification.CreateGroupAsync(household.Id, category.Id, "Group A");
+
+        await using (var context = _database.CreateDbContext())
+        {
+            context.Categories.Remove(await context.Categories.SingleAsync());
+            var exception = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            Assert.Equal(19, Assert.IsType<SqliteException>(exception.InnerException).SqliteErrorCode);
+        }
+
+        await using var verification = _database.CreateDbContext();
+        Assert.Equal(1, await verification.Categories.CountAsync());
+        Assert.Equal(1, await verification.ItemGroups.CountAsync());
+    }
+
+    [Fact]
+    public async Task AnUnusedCategoryCanBeDeletedWithoutDeletingItsHousehold()
+    {
+        var household = await _households.CreateAsync("Household A", "Person A");
+        await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
+        await using var context = _database.CreateDbContext();
+
+        context.Categories.Remove(await context.Categories.SingleAsync());
+        await context.SaveChangesAsync();
+
+        Assert.Equal(0, await context.Categories.CountAsync());
+        Assert.Equal(1, await context.Households.CountAsync());
+        Assert.Equal(1, await context.People.CountAsync());
+    }
+
+    [Fact]
+    public async Task TheClassificationMigrationPreservesExistingHouseholdsAndPeople()
+    {
+        await using var context = _database.CreateDbContext();
+        await context.GetService<IMigrator>().MigrateAsync("20261028205033_CreateHouseholdsAndPeople");
+        var household = await _households.CreateAsync("Household A", "Person A");
+        var personId = Assert.Single(household.People).Id;
+
+        await context.Database.MigrateAsync();
+        var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
+        await _classification.CreateGroupAsync(household.Id, category.Id, "Group A");
+
+        Assert.Equal(household.Id, (await context.Households.SingleAsync()).Id);
+        Assert.Equal(personId, (await context.People.SingleAsync()).Id);
+        Assert.True((await context.People.SingleAsync()).ParticipatesInHouseholdFinances);
+        Assert.Equal(1, await context.ItemGroups.CountAsync());
+        Assert.False(context.Database.HasPendingModelChanges());
+    }
+}

@@ -1,9 +1,10 @@
 # Hearthcast relational schema and implementation plan
 
-Updated 28 October 2026. This translates the [logical model](schema-proposal.md)
+Updated 29 October 2026. This translates the [logical model](schema-proposal.md)
 into proposed tables and constraints. The [Household/Person slice](household-person-slice.md)
-is implemented locally. Other tables and recommendations remain a plan for review
-before those entities and migrations are created.
+and [Classification slice](classification-slice.md) are implemented. Other tables
+and recommendations remain a plan for review before their entities and migrations
+are created.
 
 Work proceeds in small slices. Each slice ends with a visible diff and relevant
 verification. Pushes require explicit user instruction.
@@ -205,16 +206,18 @@ logic must also enforce:
    SQLite migration. Verify a round trip, the FK, required fields, and the
    household/participant creation rule. Inspect the generated migration. This
    slice is implemented locally with 21 passing SQLite integration cases.
-3. **Classification and ordinary items.** Category, ItemGroup, TrackedItem and
-   household allocation. Verify household boundaries, independent holder/allocation
-   treatment and invalid allocation rejection.
-4. **Ordinary snapshots.** Snapshot, SnapshotPerson, ItemSnapshot and allocations.
+3. **Classification.** Category and ItemGroup, including Asset/Debt, required names,
+   same-household FKs, renaming and deletion restrictions. Implemented locally;
+   28 new cases and the existing 21 household cases pass.
+4. **Ordinary items.** TrackedItem and household allocation. Verify household
+   boundaries, independent holder/allocation treatment and invalid allocation rejection.
+5. **Ordinary snapshots.** Snapshot, SnapshotPerson, ItemSnapshot and allocations.
    Verify complete saves, carried values, null versus zero and preservation of
    saved metadata after current setup changes.
-5. **Financed assets and their snapshots.** Add the dedicated setup, person links,
+6. **Financed assets and their snapshots.** Add the dedicated setup, person links,
    independent balance fields and equity calculations. Verify shared allocations,
    missing/inapplicable withdrawal balances, and no double counting.
-6. **Bulk API workflow and calculated summaries.** Build entry and reporting around
+7. **Bulk API workflow and calculated summaries.** Build entry and reporting around
    the verified persistence model. Frontend and historical import remain separate
    steps; no spreadsheet-specific fields enter this core schema.
 

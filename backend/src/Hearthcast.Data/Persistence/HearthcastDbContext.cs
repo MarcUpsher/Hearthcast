@@ -1,3 +1,4 @@
+using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,8 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
 {
     public DbSet<Household> Households => Set<Household>();
     public DbSet<Person> People => Set<Person>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<ItemGroup> ItemGroups => Set<ItemGroup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
