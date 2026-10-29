@@ -7,11 +7,12 @@ public sealed class HearthcastDbContextFactory : IDesignTimeDbContextFactory<Hea
 {
     public HearthcastDbContext CreateDbContext(string[] args)
     {
-        // Migration generation needs a provider, not a persistent database.
-        // Supply --connection explicitly when applying a migration to a file.
+        // Generating migrations needs provider metadata, not a live connection.
+        // Applying migrations requires an explicit --connection or environment value.
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Hearthcast")
+            ?? "Host=localhost;Database=hearthcast;Username=hearthcast";
         var options = new DbContextOptionsBuilder<HearthcastDbContext>()
-            .UseSqlite("Data Source=:memory:;Foreign Keys=True")
-            .Options;
+            .UseNpgsql(connectionString).Options;
         return new HearthcastDbContext(options);
     }
 }

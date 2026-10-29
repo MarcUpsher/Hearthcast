@@ -1,5 +1,10 @@
 # Tracked items and household allocations
 
+Provider note: this guide records the original SQLite implementation checkpoint.
+The domain rules remain in place; PostgreSQL now replaces its provider, migrations
+and test infrastructure. See [containers and PostgreSQL](containers-and-postgres.md)
+for current mappings and commands.
+
 Implemented locally, 29 October 2026. This slice adds reusable item setup and
 allocation rules. Values belong to the next Snapshot/ItemSnapshot slice; there
 are no balance fields, conversions, summaries or new API endpoints here.

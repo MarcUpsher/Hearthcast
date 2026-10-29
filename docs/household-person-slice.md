@@ -1,5 +1,10 @@
 # Household and Person: first persistence slice
 
+Provider note: this guide records the original SQLite implementation checkpoint.
+The domain rules remain in place; PostgreSQL now replaces its provider, migrations
+and test infrastructure. See [containers and PostgreSQL](containers-and-postgres.md)
+for current mappings and commands.
+
 Implemented locally, 28 October 2026. This slice contains two business entities
 and stops before classification, balances, snapshots or API CRUD endpoints.
 
@@ -15,7 +20,7 @@ and stops before classification, balances, snapshots or API CRUD endpoints.
 | [HouseholdService.cs](../backend/src/Hearthcast.Data/Households/HouseholdService.cs) | Transactional create/add/change-participation/remove operations. |
 | [Migrations](../backend/src/Hearthcast.Data/Persistence/Migrations) | Initial migration, generated metadata and EF model snapshot. |
 | [HouseholdPersistenceTests.cs](../backend/tests/Hearthcast.Data.Tests/Households/HouseholdPersistenceTests.cs) | Integration checks against migrated temporary SQLite files. |
-| [SqliteTestDatabase.cs](../backend/tests/Hearthcast.Data.Tests/Infrastructure/SqliteTestDatabase.cs) | Isolated test-database factory shared with the Classification tests. |
+| [PostgresTestDatabase.cs](../backend/tests/Hearthcast.Data.Tests/Infrastructure/PostgresTestDatabase.cs) | Isolated test-database factory shared with the Classification tests. |
 
 ## Tables and relationship
 

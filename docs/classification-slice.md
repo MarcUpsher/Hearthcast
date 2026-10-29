@@ -1,5 +1,10 @@
 # Classification: categories and item groups
 
+Provider note: this guide records the original SQLite implementation checkpoint.
+The domain rules remain in place; PostgreSQL now replaces its provider, migrations
+and test infrastructure. See [containers and PostgreSQL](containers-and-postgres.md)
+for current mappings and commands.
+
 Implemented locally, 29 October 2026. This slice adds classification only. Tracked
 items, household allocations, snapshot entries and API CRUD endpoints follow later.
 
@@ -14,7 +19,7 @@ items, household allocations, snapshot entries and API CRUD endpoints follow lat
 | [CategoryConfiguration.cs](../backend/src/Hearthcast.Data/Persistence/Configurations/CategoryConfiguration.cs) | Category table, financial-type/name checks and household FK. |
 | [ItemGroupConfiguration.cs](../backend/src/Hearthcast.Data/Persistence/Configurations/ItemGroupConfiguration.cs) | Group table and composite FK to a category in the same household. |
 | [ClassificationPersistenceTests.cs](../backend/tests/Hearthcast.Data.Tests/Classification/ClassificationPersistenceTests.cs) | SQLite persistence, household boundaries, renaming, deletion and migration-upgrade checks. |
-| [SqliteTestDatabase.cs](../backend/tests/Hearthcast.Data.Tests/Infrastructure/SqliteTestDatabase.cs) | Shared test infrastructure; each test gets its own migrated temporary file. |
+| [PostgresTestDatabase.cs](../backend/tests/Hearthcast.Data.Tests/Infrastructure/PostgresTestDatabase.cs) | Current test infrastructure; each test gets its own migrated PostgreSQL database. |
 
 The new migration is `CreateCategoriesAndItemGroups` under
 `backend/src/Hearthcast.Data/Persistence/Migrations`.

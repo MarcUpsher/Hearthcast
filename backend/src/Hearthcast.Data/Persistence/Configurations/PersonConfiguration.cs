@@ -11,8 +11,6 @@ public sealed class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.ToTable("People", table =>
         {
             table.HasCheckConstraint("CK_People_DisplayName_NotBlank", "length(trim(\"DisplayName\")) > 0");
-            table.HasCheckConstraint(
-                "CK_People_Participation_Boolean", "\"ParticipatesInHouseholdFinances\" IN (0, 1)");
         });
         builder.HasKey(person => person.Id);
         builder.Property(person => person.Id).ValueGeneratedNever();

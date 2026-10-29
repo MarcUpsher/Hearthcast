@@ -203,7 +203,7 @@ applicable but unrecorded.
   assets minus ordinary tracked debts plus included financed-asset equity.
   Different currencies remain separate until conversion rules are agreed.
 - Use exact decimal arithmetic and exact persistence for money, not binary
-  floating point. Ordinary amounts now use invariant decimal TEXT in SQLite,
+  floating point. Ordinary amounts now use native numeric in PostgreSQL,
   without fixed-scale rounding; see the ordinary-snapshot implementation guide.
 - Proposed share storage is integer basis points: 10,000 represents 100%.
   Avoid premature rounding of per-person money when aggregating totals.

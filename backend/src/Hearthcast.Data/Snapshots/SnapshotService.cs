@@ -1,4 +1,3 @@
-using System.Data;
 using Hearthcast.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,25 +12,22 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         DatePrecision datePrecision = DatePrecision.Day,
         CancellationToken cancellationToken = default)
     {
-        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable, cancellationToken);
+        return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var household = await context.Households.Include(household => household.People)
+                .SingleOrDefaultAsync(household => household.Id == householdId, token)
+                ?? throw new KeyNotFoundException("The household does not exist.");
+            var items = await context.TrackedItems
+                .Where(item => item.HouseholdId == householdId && !item.IsRetired)
+                .Include(item => item.Group).ThenInclude(group => group.Category)
+                .Include(item => item.HouseholdAllocations)
+                .ToArrayAsync(token);
 
-        var household = await context.Households.Include(household => household.People)
-            .SingleOrDefaultAsync(household => household.Id == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The household does not exist.");
-        var items = await context.TrackedItems
-            .Where(item => item.HouseholdId == householdId && !item.IsRetired)
-            .Include(item => item.Group).ThenInclude(group => group.Category)
-            .Include(item => item.HouseholdAllocations)
-            .ToArrayAsync(cancellationToken);
-
-        var snapshot = new Snapshot(household, snapshotDate ?? DateOnly.FromDateTime(DateTime.Today),
-            datePrecision, items, values ?? []);
-        context.Snapshots.Add(snapshot);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return snapshot;
+            var snapshot = new Snapshot(household, snapshotDate ?? DateOnly.FromDateTime(DateTime.Today),
+                datePrecision, items, values ?? []);
+            context.Snapshots.Add(snapshot);
+            return snapshot;
+        }, cancellationToken);
     }
 
     public async Task<Snapshot> GetAsync(

@@ -4,6 +4,7 @@ using Hearthcast.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -15,22 +16,26 @@ namespace Hearthcast.Data.Persistence.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Hearthcast.Data.Classification.Category", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("FinancialType")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -45,17 +50,17 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Classification.ItemGroup", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CategoryId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -70,11 +75,11 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Households.Household", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -87,88 +92,86 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Households.Person", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("ParticipatesInHouseholdFinances")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
                     b.ToTable("People", null, t =>
                         {
                             t.HasCheckConstraint("CK_People_DisplayName_NotBlank", "length(trim(\"DisplayName\")) > 0");
-
-                            t.HasCheckConstraint("CK_People_Participation_Boolean", "\"ParticipatesInHouseholdFinances\" IN (0, 1)");
                         });
                 });
 
             modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("Amount")
-                        .HasColumnType("TEXT");
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("numeric");
 
                     b.Property<Guid>("CategoryId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CategoryName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("CountryCode")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("CurrencyCode")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<int>("FinancialType")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("GroupId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("GroupName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("HolderSnapshotPersonId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IncludeInHousehold")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ItemName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<DateOnly?>("LastConfirmedDate")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("date");
 
                     b.Property<int?>("LastConfirmedPrecision")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("SnapshotId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("TrackedItemId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("ValueOrigin")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -187,13 +190,13 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.ToTable("ItemSnapshots", null, t =>
                         {
-                            t.HasCheckConstraint("CK_ItemSnapshots_CountryCode", "\"CountryCode\" GLOB '[A-Z][A-Z]'");
+                            t.HasCheckConstraint("CK_ItemSnapshots_Amount_Nonnegative", "\"Amount\" >= 0 AND \"Amount\" < 'Infinity'::numeric");
 
-                            t.HasCheckConstraint("CK_ItemSnapshots_CurrencyCode", "\"CurrencyCode\" GLOB '[A-Z][A-Z][A-Z]'");
+                            t.HasCheckConstraint("CK_ItemSnapshots_CountryCode", "\"CountryCode\" ~ '^[A-Z]{2}$'");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("CK_ItemSnapshots_FinancialType", "\"FinancialType\" IN (1, 2)");
-
-                            t.HasCheckConstraint("CK_ItemSnapshots_Inclusion_Boolean", "\"IncludeInHousehold\" IN (0, 1)");
 
                             t.HasCheckConstraint("CK_ItemSnapshots_Names_NotBlank", "length(trim(\"ItemName\")) > 0 AND length(trim(\"GroupName\")) > 0 AND length(trim(\"CategoryName\")) > 0");
 
@@ -204,16 +207,16 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshotHouseholdAllocation", b =>
                 {
                     b.Property<Guid>("ItemSnapshotId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("SnapshotPersonId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("ShareBasisPoints")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("SnapshotId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.HasKey("ItemSnapshotId", "SnapshotPersonId");
 
@@ -230,26 +233,26 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Snapshots.Snapshot", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("DatePrecision")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("HouseholdName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<DateOnly>("SnapshotDate")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("date");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -266,23 +269,23 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Snapshots.SnapshotPerson", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("ParticipatesInHouseholdFinances")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("boolean");
 
                     b.Property<Guid>("PersonId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("SnapshotId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -296,42 +299,40 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.ToTable("SnapshotPeople", null, t =>
                         {
                             t.HasCheckConstraint("CK_SnapshotPeople_DisplayName_NotBlank", "length(trim(\"DisplayName\")) > 0");
-
-                            t.HasCheckConstraint("CK_SnapshotPeople_Participation_Boolean", "\"ParticipatesInHouseholdFinances\" IN (0, 1)");
                         });
                 });
 
             modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("CountryCode")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("CurrencyCode")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("GroupId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("HolderPersonId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IncludeInHousehold")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsRetired")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -341,31 +342,27 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.ToTable("TrackedItems", null, t =>
                         {
-                            t.HasCheckConstraint("CK_TrackedItems_CountryCode", "\"CountryCode\" GLOB '[A-Z][A-Z]'");
+                            t.HasCheckConstraint("CK_TrackedItems_CountryCode", "\"CountryCode\" ~ '^[A-Z]{2}$'");
 
-                            t.HasCheckConstraint("CK_TrackedItems_CurrencyCode", "\"CurrencyCode\" GLOB '[A-Z][A-Z][A-Z]'");
-
-                            t.HasCheckConstraint("CK_TrackedItems_Inclusion_Boolean", "\"IncludeInHousehold\" IN (0, 1)");
+                            t.HasCheckConstraint("CK_TrackedItems_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("CK_TrackedItems_Name_NotBlank", "length(trim(\"Name\")) > 0");
-
-                            t.HasCheckConstraint("CK_TrackedItems_Retirement_Boolean", "\"IsRetired\" IN (0, 1)");
                         });
                 });
 
             modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItemHouseholdAllocation", b =>
                 {
                     b.Property<Guid>("TrackedItemId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("PersonId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("HouseholdId")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("ShareBasisPoints")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.HasKey("TrackedItemId", "PersonId");
 

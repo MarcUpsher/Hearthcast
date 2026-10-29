@@ -1,5 +1,4 @@
 using Hearthcast.Data.Classification;
-using Hearthcast.Data.Persistence.Conversions;
 using Hearthcast.Data.Snapshots;
 using Hearthcast.Data.TrackedItems;
 using Microsoft.EntityFrameworkCore;
@@ -16,9 +15,10 @@ public sealed class ItemSnapshotConfiguration : IEntityTypeConfiguration<ItemSna
             table.HasCheckConstraint("CK_ItemSnapshots_Names_NotBlank",
                 "length(trim(\"ItemName\")) > 0 AND length(trim(\"GroupName\")) > 0 AND length(trim(\"CategoryName\")) > 0");
             table.HasCheckConstraint("CK_ItemSnapshots_FinancialType", "\"FinancialType\" IN (1, 2)");
-            table.HasCheckConstraint("CK_ItemSnapshots_CurrencyCode", "\"CurrencyCode\" GLOB '[A-Z][A-Z][A-Z]'");
-            table.HasCheckConstraint("CK_ItemSnapshots_CountryCode", "\"CountryCode\" GLOB '[A-Z][A-Z]'");
-            table.HasCheckConstraint("CK_ItemSnapshots_Inclusion_Boolean", "\"IncludeInHousehold\" IN (0, 1)");
+            table.HasCheckConstraint("CK_ItemSnapshots_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+            table.HasCheckConstraint("CK_ItemSnapshots_CountryCode", "\"CountryCode\" ~ '^[A-Z]{2}$'");
+            table.HasCheckConstraint("CK_ItemSnapshots_Amount_Nonnegative",
+                "\"Amount\" >= 0 AND \"Amount\" < 'Infinity'::numeric");
             table.HasCheckConstraint("CK_ItemSnapshots_ValueState", """
                 ("Amount" IS NULL AND "ValueOrigin" = 1
                     AND "LastConfirmedDate" IS NULL AND "LastConfirmedPrecision" IS NULL)
@@ -36,7 +36,7 @@ public sealed class ItemSnapshotConfiguration : IEntityTypeConfiguration<ItemSna
         builder.Property(item => item.GroupName).IsRequired();
         builder.Property(item => item.CurrencyCode).IsRequired();
         builder.Property(item => item.CountryCode).IsRequired();
-        builder.Property(item => item.Amount).HasConversion(new DecimalTextConverter()).HasColumnType("TEXT");
+        builder.Property(item => item.Amount).HasColumnType("numeric");
 
         builder.HasOne<Snapshot>().WithMany(snapshot => snapshot.ItemSnapshots)
             .HasForeignKey(item => new { item.HouseholdId, item.SnapshotId })

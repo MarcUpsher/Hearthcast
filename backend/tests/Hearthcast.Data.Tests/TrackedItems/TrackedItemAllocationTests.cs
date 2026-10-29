@@ -1,14 +1,14 @@
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Tests.Infrastructure;
 using Hearthcast.Data.TrackedItems;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hearthcast.Data.Tests.TrackedItems;
 
 public sealed class TrackedItemAllocationTests : IAsyncLifetime
 {
-    private readonly SqliteTestDatabase _database = new();
+    private readonly PostgresTestDatabase _database = new();
     private readonly TrackedItemService _items;
     private readonly HouseholdService _households;
 
@@ -124,7 +124,7 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SqliteRejectsAllocationItemsOrRecipientsFromAnotherHousehold(bool foreignItem)
+    public async Task PostgresRejectsAllocationItemsOrRecipientsFromAnotherHousehold(bool foreignItem)
     {
         var first = await TrackedItemTestSetup.CreateAsync(_database);
         var second = await TrackedItemTestSetup.CreateAsync(_database);
@@ -134,29 +134,29 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
         var personId = foreignItem ? first.HolderPersonId : second.HolderPersonId;
         await using var context = _database.CreateDbContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "TrackedItemHouseholdAllocations" ("TrackedItemId", "HouseholdId", "PersonId", "ShareBasisPoints")
                 VALUES ({itemId}, {first.HouseholdId}, {personId}, {10_000})
                 """));
-        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
 
     [Theory]
     [InlineData(-1)]
     [InlineData(0)]
     [InlineData(10_001)]
-    public async Task SqliteEnforcesTheIndividualShareRange(int share)
+    public async Task PostgresEnforcesTheIndividualShareRange(int share)
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         var item = await setup.CreateItemAsync(_items, false);
         await using var context = _database.CreateDbContext();
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "TrackedItemHouseholdAllocations" ("TrackedItemId", "HouseholdId", "PersonId", "ShareBasisPoints")
                 VALUES ({item.Id}, {setup.HouseholdId}, {setup.HolderPersonId}, {share})
                 """));
-        Assert.Equal(275, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
     }
 
     [Fact]
@@ -278,10 +278,13 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         await using var context = _database.CreateDbContext();
         await context.Database.ExecuteSqlRawAsync("""
-            CREATE TRIGGER "FailAllocationInsert" BEFORE INSERT ON "TrackedItemHouseholdAllocations"
+            CREATE FUNCTION "FailAllocationInsertFunction"() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN
-                SELECT RAISE(ABORT, 'Synthetic allocation failure');
+                RAISE EXCEPTION 'Synthetic allocation failure';
             END;
+            $$;
+            CREATE TRIGGER "FailAllocationInsert" BEFORE INSERT ON "TrackedItemHouseholdAllocations"
+            FOR EACH ROW EXECUTE FUNCTION "FailAllocationInsertFunction"();
             """);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => setup.CreateItemAsync(_items));

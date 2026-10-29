@@ -1,0 +1,65 @@
+name: hearthcast
+
+x-app: &app
+  image: hearthcast-api:local
+  build:
+    context: .
+    target: runtime
+  environment:
+    ConnectionStrings__Hearthcast: "Host=postgres;Database=hearthcast;Username=hearthcast;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+  init: true
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm
+    environment:
+      POSTGRES_DB: hearthcast
+      POSTGRES_USER: hearthcast
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearthcast -d hearthcast"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["--migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${API_PORT:-5190}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  tests:
+    profiles: ["test"]
+    image: hearthcast-tests:local
+    build:
+      context: .
+      target: test
+    environment:
+      HEARTHCAST_TEST_POSTGRES: "Host=postgres;Database=postgres;Username=hearthcast;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+
+volumes:
+  postgres-data:

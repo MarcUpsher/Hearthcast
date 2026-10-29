@@ -1,4 +1,3 @@
-using System.Data;
 using Hearthcast.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -83,19 +82,16 @@ public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> cont
         Func<Household, HearthcastDbContext, CancellationToken, Task> change,
         CancellationToken cancellationToken)
     {
-        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable, cancellationToken);
+        return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            // Load the complete household inside the transaction, using fresh tracked state.
+            var household = await context.Households.Include(household => household.People)
+                .SingleOrDefaultAsync(household => household.Id == householdId, token)
+                ?? throw new KeyNotFoundException("The household does not exist.");
 
-        // Load the complete household inside the transaction, using fresh tracked state.
-        var household = await context.Households.Include(household => household.People)
-            .SingleOrDefaultAsync(household => household.Id == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The household does not exist.");
-
-        await change(household, context, cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return household;
+            await change(household, context, token);
+            return household;
+        }, cancellationToken);
     }
 
     private static async Task EnsureNoHouseholdAllocationsAsync(

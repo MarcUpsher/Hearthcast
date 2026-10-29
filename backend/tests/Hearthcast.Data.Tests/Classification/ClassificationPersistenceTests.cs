@@ -1,16 +1,14 @@
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Tests.Infrastructure;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Hearthcast.Data.Tests.Classification;
 
 public sealed class ClassificationPersistenceTests : IAsyncLifetime
 {
-    private readonly SqliteTestDatabase _database = new();
+    private readonly PostgresTestDatabase _database = new();
     private readonly HouseholdService _households;
     private readonly ClassificationService _classification;
 
@@ -132,31 +130,31 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SqliteRejectsACategoryWithoutAHousehold()
+    public async Task PostgresRejectsACategoryWithoutAHousehold()
     {
         await using var context = _database.CreateDbContext();
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Categories" ("Id", "HouseholdId", "Name", "FinancialType")
                 VALUES ({Guid.NewGuid()}, {Guid.NewGuid()}, {"Category A"}, {1})
                 """));
 
-        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
 
     [Fact]
-    public async Task SqliteRejectsAGroupWithoutACategory()
+    public async Task PostgresRejectsAGroupWithoutACategory()
     {
         var household = await _households.CreateAsync("Household A", "Person A");
         await using var context = _database.CreateDbContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "ItemGroups" ("Id", "HouseholdId", "CategoryId", "Name")
                 VALUES ({Guid.NewGuid()}, {household.Id}, {Guid.NewGuid()}, {"Group A"})
                 """));
 
-        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
 
     [Fact]
@@ -167,30 +165,30 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
         var category = await _classification.CreateCategoryAsync(second.Id, "Category B", FinancialType.Asset);
         await using var context = _database.CreateDbContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "ItemGroups" ("Id", "HouseholdId", "CategoryId", "Name")
                 VALUES ({Guid.NewGuid()}, {first.Id}, {category.Id}, {"Group A"})
                 """));
 
-        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(3)]
-    public async Task SqliteRejectsUndefinedFinancialTypes(int financialType)
+    public async Task PostgresRejectsUndefinedFinancialTypes(int financialType)
     {
         var household = await _households.CreateAsync("Household A", "Person A");
         await using var context = _database.CreateDbContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Categories" ("Id", "HouseholdId", "Name", "FinancialType")
                 VALUES ({Guid.NewGuid()}, {household.Id}, {"Category A"}, {financialType})
                 """));
 
-        Assert.Equal(275, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
     }
 
     [Theory]
@@ -200,13 +198,13 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
     [InlineData(true, null)]
     [InlineData(true, "")]
     [InlineData(true, "   ")]
-    public async Task SqliteRequiresCategoryAndGroupNames(bool isGroup, string? name)
+    public async Task PostgresRequiresCategoryAndGroupNames(bool isGroup, string? name)
     {
         var household = await _households.CreateAsync("Household A", "Person A");
         var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
         await using var context = _database.CreateDbContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(async () =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(async () =>
         {
             if (isGroup)
             {
@@ -224,7 +222,7 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
             }
         });
 
-        Assert.Equal(19, exception.SqliteErrorCode);
+        Assert.Equal(name is null ? PostgresErrorCodes.NotNullViolation : PostgresErrorCodes.CheckViolation, exception.SqlState);
         Assert.Equal(1, await context.Categories.CountAsync());
         Assert.Equal(0, await context.ItemGroups.CountAsync());
     }
@@ -265,7 +263,7 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
         {
             context.Categories.Remove(await context.Categories.SingleAsync());
             var exception = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
-            Assert.Equal(19, Assert.IsType<SqliteException>(exception.InnerException).SqliteErrorCode);
+            Assert.Equal(PostgresErrorCodes.RestrictViolation, Assert.IsType<PostgresException>(exception.InnerException).SqlState);
         }
 
         await using var verification = _database.CreateDbContext();
@@ -288,22 +286,4 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
         Assert.Equal(1, await context.People.CountAsync());
     }
 
-    [Fact]
-    public async Task TheClassificationMigrationPreservesExistingHouseholdsAndPeople()
-    {
-        await using var context = _database.CreateDbContext();
-        await context.GetService<IMigrator>().MigrateAsync("20261028205033_CreateHouseholdsAndPeople");
-        var household = await _households.CreateAsync("Household A", "Person A");
-        var personId = Assert.Single(household.People).Id;
-
-        await context.Database.MigrateAsync();
-        var category = await _classification.CreateCategoryAsync(household.Id, "Category A", FinancialType.Asset);
-        await _classification.CreateGroupAsync(household.Id, category.Id, "Group A");
-
-        Assert.Equal(household.Id, (await context.Households.SingleAsync()).Id);
-        Assert.Equal(personId, (await context.People.SingleAsync()).Id);
-        Assert.True((await context.People.SingleAsync()).ParticipatesInHouseholdFinances);
-        Assert.Equal(1, await context.ItemGroups.CountAsync());
-        Assert.False(context.Database.HasPendingModelChanges());
-    }
 }

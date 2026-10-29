@@ -6,14 +6,12 @@ using Hearthcast.Data.Tests.Infrastructure;
 using Hearthcast.Data.Tests.TrackedItems;
 using Hearthcast.Data.TrackedItems;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Hearthcast.Data.Tests.Snapshots;
 
 public sealed class SnapshotPersistenceTests : IAsyncLifetime
 {
-    private readonly SqliteTestDatabase _database = new();
+    private readonly PostgresTestDatabase _database = new();
     private readonly SnapshotService _snapshots;
     private readonly TrackedItemService _items;
 
@@ -171,7 +169,7 @@ public sealed class SnapshotPersistenceTests : IAsyncLifetime
     [InlineData("123456789.1234567890123456789")]
     [InlineData("79228162514264337593543950335")]
     [InlineData("0.0000000000000000000000000001")]
-    public async Task MonetaryValuesRoundTripExactlyAsInvariantText(string amountText)
+    public async Task MonetaryValuesRoundTripExactlyAsNativeNumeric(string amountText)
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         var item = await setup.CreateItemAsync(_items);
@@ -187,11 +185,11 @@ public sealed class SnapshotPersistenceTests : IAsyncLifetime
             await using var context = _database.CreateDbContext();
             await context.Database.OpenConnectionAsync();
             await using var command = context.Database.GetDbConnection().CreateCommand();
-            command.CommandText = "SELECT typeof(Amount), Amount FROM ItemSnapshots";
+            command.CommandText = "SELECT pg_typeof(\"Amount\")::text, \"Amount\" FROM \"ItemSnapshots\"";
             await using var reader = await command.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
-            Assert.Equal("text", reader.GetString(0));
-            Assert.Equal(amount.ToString("G29", CultureInfo.InvariantCulture), reader.GetString(1));
+            Assert.Equal("numeric", reader.GetString(0));
+            Assert.Equal(amount, reader.GetDecimal(1));
         }
         finally
         {
@@ -256,18 +254,4 @@ public sealed class SnapshotPersistenceTests : IAsyncLifetime
         Assert.Equal(2, await context.Snapshots.CountAsync(snapshot => snapshot.SnapshotDate == new DateOnly(2023, 5, 1)));
     }
 
-    [Fact]
-    public async Task TheMigrationPreservesExistingSetupAndAllocations()
-    {
-        await using var context = _database.CreateDbContext();
-        await context.GetService<IMigrator>().MigrateAsync("20261029165744_CreateTrackedItemsAndHouseholdAllocations");
-        var setup = await TrackedItemTestSetup.CreateAsync(_database);
-        var item = await setup.CreateItemAsync(_items);
-        await context.Database.MigrateAsync();
-        var snapshot = await _snapshots.CreateAsync(setup.HouseholdId, values: [new(item.Id, 10m)]);
-        Assert.Single(snapshot.ItemSnapshots);
-        Assert.Equal(2, await context.People.CountAsync());
-        Assert.Equal(1, await context.TrackedItemHouseholdAllocations.CountAsync());
-        Assert.False(context.Database.HasPendingModelChanges());
-    }
 }

@@ -14,7 +14,6 @@ and corrections follow separately, before financed assets or the bulk API.
 | [ItemSnapshotHouseholdAllocation.cs](../backend/src/Hearthcast.Data/Snapshots/ItemSnapshotHouseholdAllocation.cs) | Copied share assigned to a person in this snapshot. |
 | [SnapshotService.cs](../backend/src/Hearthcast.Data/Snapshots/SnapshotService.cs) | Transactional capture from current setup, and household-scoped reload. |
 | [ItemSnapshotValue.cs](../backend/src/Hearthcast.Data/Snapshots/ItemSnapshotValue.cs) | Input value containing a tracked-item ID and nullable amount; not an entity. |
-| [DecimalTextConverter.cs](../backend/src/Hearthcast.Data/Persistence/Conversions/DecimalTextConverter.cs) | Exact invariant decimal text storage. |
 | [Configurations](../backend/src/Hearthcast.Data/Persistence/Configurations) | Four matching snapshot mappings, constraints and relationship keys. |
 | [SnapshotPersistenceTests.cs](../backend/tests/Hearthcast.Data.Tests/Snapshots/SnapshotPersistenceTests.cs) | Capture/reload, metadata preservation, amounts, dates and migration upgrade. |
 | [SnapshotIntegrityTests.cs](../backend/tests/Hearthcast.Data.Tests/Snapshots/SnapshotIntegrityTests.cs) | Atomicity, malformed setup, database boundaries, uniqueness and deletion restrictions. |
@@ -77,35 +76,22 @@ decision.
 
 ## Exact money
 
-Amounts use .NET decimal and SQLite TEXT, with invariant `G29` formatting. The
-converter parses exponent notation too, preserving the smallest decimal values.
-It applies to the nullable amount property; null remains SQL NULL. EF does not
-pass nulls through value converters, as documented in Microsoft's
-[value conversion guidance](https://learn.microsoft.com/en-us/ef/core/modeling/value-conversions).
-
-Round-trip tests run under a comma-decimal culture, covering zero, fractional
-precision, decimal.MaxValue and 0.0000000000000000000000000001. They check the
-actual SQLite storage type and string as well as the reloaded decimal.
-
-There is no fixed currency scale or implicit rounding. Future aggregation starts
-with materialised .NET decimal values, grouped by currency. Do not sort or sum
-these custom TEXT values as though they were SQL numeric columns. Nonnegativity
-and valid numeric format are application rules; direct SQL can bypass those
-checks. A floating-point database check would not establish exactness.
+Amounts now use .NET decimal and native PostgreSQL numeric, without a fixed scale
+or text converter. Round-trip tests cover a comma-decimal culture, zero,
+fractional precision, decimal.MaxValue and the smallest nonzero decimal value.
+Database aggregation is exact; nonnegative/finite amount constraints also apply
+to direct SQL writes. See [containers and PostgreSQL](containers-and-postgres.md).
 
 ## Verification and scope
 
-The fourth migration, CreateOrdinarySnapshots, adds only the four tables and
-their indexes/constraints. It preserves existing setup and allocations, does not
-seed financial data and does not edit previous migrations. Upgrade and full-chain
-rollback/reapply tests pass; the EF model matches its migration snapshot.
-
-Build: zero warnings/errors. SQLite integration suite: 136 passing cases, including
-42 new snapshot cases. A synthetic failure on the last association insert proves
-that the header, roster and item entries roll back together.
+The original snapshot checkpoint passed 136 SQLite cases and was committed at
+`664b27e`. PostgreSQL now replaces that provider and its migrations. The current
+integration suite retains capture/history/constraint/rollback coverage and adds
+numeric and transaction-retry checks. The PostgreSQL baseline includes all four
+snapshot tables alongside the existing setup tables.
 
 Backdating currently copies **current setup**. It does not reconstruct historical
 items or allocations. Historical templates/import metadata, carry-forward,
-corrections, financed assets, summaries and API/UI workflows are subsequent work.
-There is no persistent application database migration on API startup. This local
-slice is uncommitted and unpushed for review.
+corrections, financed assets, summaries and finance API/UI workflows remain
+subsequent work. Container startup applies migrations in a separate one-shot
+service; ordinary API startup does not migrate or seed data.

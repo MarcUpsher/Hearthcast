@@ -8,6 +8,10 @@ Other tables and
 recommendations remain a plan for review before their entities and migrations
 are created.
 
+PostgreSQL now replaces the original SQLite provider and migration chain;
+see [containers and PostgreSQL](containers-and-postgres.md) for the current baseline
+and verification. Test counts below record their original implementation checkpoints.
+
 Work proceeds in small slices. Each slice ends with a visible diff and relevant
 verification. Pushes require explicit user instruction.
 
@@ -120,7 +124,7 @@ are independent copies.
 
 ## Keys, uniqueness and relationship boundaries
 
-- Proposed entity IDs: Guid, stored with SQLite's standard text mapping.
+- Proposed entity IDs: Guid, stored as PostgreSQL uuid.
 - Setup entities referenced across a household boundary have an additional unique
   key `(HouseholdId, Id)`. For example, TrackedItem references
   Person through `(HouseholdId, HolderPersonId)` and ItemGroup through
@@ -169,12 +173,12 @@ are independent copies.
 
 ## Exact numbers and dates
 
-- Ordinary amount mapping: .NET decimal with invariant decimal text in SQLite,
+- Ordinary amount mapping: .NET decimal with native numeric in PostgreSQL,
   preserving exact values. Start with decimal aggregation in application code;
-  avoid implicit floating-point conversion or SQL lexical sorting of amounts.
-- Verify the converter with representative amounts and round trips when it is
-  introduced. Numeric range/format and nonnegativity are application rules with
-  this mapping; a normal SQLite REAL check would not establish exactness.
+  avoid implicit floating-point conversion. Numeric SQL aggregation is also exact.
+- Verify representative amounts and exact round trips. Native numeric needs no
+  text converter. The application validates inputs; PostgreSQL also checks amounts
+  are nonnegative and finite.
 - Store shares as integer basis points, range 1 to 10,000 for present rows.
   Share collections must total exactly 10,000. Omit zero-share rows.
 - Use DateOnly for financial dates, with separate precision, and UTC timestamps

@@ -1,0 +1,22 @@
+# Only application source and build definitions may enter the build context.
+**
+!Dockerfile
+!global.json
+!backend/
+!backend/src/
+!backend/src/**
+!backend/tests/
+!backend/tests/**
+**/bin/
+**/obj/
+**/appsettings.local.json
+**/appsettings.*.local.json
+**/secrets.json
+**/.env*
+**/*.key
+**/*.pem
+**/*.pfx
+**/*.db
+**/*.sqlite*
+**/*.xls*
+**/*.csv

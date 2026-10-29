@@ -1,4 +1,3 @@
-using System.Data;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Validation;
@@ -19,24 +18,21 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
         IReadOnlyCollection<TrackedItemAllocationShare>? allocations = null,
         CancellationToken cancellationToken = default)
     {
-        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable, cancellationToken);
+        return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var group = await context.ItemGroups.Include(group => group.Category)
+                .SingleOrDefaultAsync(group => group.Id == groupId && group.HouseholdId == householdId, token)
+                ?? throw new KeyNotFoundException("The group does not belong to this household.");
+            var holder = await context.People.SingleOrDefaultAsync(
+                person => person.Id == holderPersonId && person.HouseholdId == householdId, token)
+                ?? throw new KeyNotFoundException("The holder does not belong to this household.");
 
-        var group = await context.ItemGroups.Include(group => group.Category)
-            .SingleOrDefaultAsync(group => group.Id == groupId && group.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The group does not belong to this household.");
-        var holder = await context.People.SingleOrDefaultAsync(
-            person => person.Id == holderPersonId && person.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The holder does not belong to this household.");
-
-        var item = new TrackedItem(group, holder, name, currencyCode, countryCode);
-        var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, cancellationToken);
-        item.SetHouseholdAllocation(includeInHousehold, shares);
-        context.TrackedItems.Add(item);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return item;
+            var item = new TrackedItem(group, holder, name, currencyCode, countryCode);
+            var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, token);
+            item.SetHouseholdAllocation(includeInHousehold, shares);
+            context.TrackedItems.Add(item);
+            return item;
+        }, cancellationToken);
     }
 
     public async Task<TrackedItem> SetHouseholdAllocationAsync(
@@ -46,21 +42,18 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
         IReadOnlyCollection<TrackedItemAllocationShare>? allocations = null,
         CancellationToken cancellationToken = default)
     {
-        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await context.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable, cancellationToken);
+        return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var item = await context.TrackedItems.Include(item => item.HolderPerson)
+                .Include(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.Person)
+                .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, token)
+                ?? throw new KeyNotFoundException("The tracked item does not belong to this household.");
 
-        var item = await context.TrackedItems.Include(item => item.HolderPerson)
-            .Include(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.Person)
-            .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The tracked item does not belong to this household.");
-
-        var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, cancellationToken);
-        var removed = item.SetHouseholdAllocation(includeInHousehold, shares);
-        context.TrackedItemHouseholdAllocations.RemoveRange(removed);
-        await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return item;
+            var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, token);
+            var removed = item.SetHouseholdAllocation(includeInHousehold, shares);
+            context.TrackedItemHouseholdAllocations.RemoveRange(removed);
+            return item;
+        }, cancellationToken);
     }
 
     public async Task<TrackedItem> SetRetiredAsync(

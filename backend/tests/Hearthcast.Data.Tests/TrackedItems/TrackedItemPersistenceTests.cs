@@ -3,16 +3,14 @@ using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Tests.Infrastructure;
 using Hearthcast.Data.TrackedItems;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Hearthcast.Data.Tests.TrackedItems;
 
 public sealed class TrackedItemPersistenceTests : IAsyncLifetime
 {
-    private readonly SqliteTestDatabase _database = new();
+    private readonly PostgresTestDatabase _database = new();
     private readonly TrackedItemService _items;
 
     public TrackedItemPersistenceTests()
@@ -106,15 +104,15 @@ public sealed class TrackedItemPersistenceTests : IAsyncLifetime
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SqliteRejectsAHolderOrGroupFromAnotherHousehold(bool foreignGroup)
+    public async Task PostgresRejectsAHolderOrGroupFromAnotherHousehold(bool foreignGroup)
     {
         var first = await TrackedItemTestSetup.CreateAsync(_database);
         var second = await TrackedItemTestSetup.CreateAsync(_database);
         await using var context = _database.CreateDbContext();
-        var exception = await Assert.ThrowsAsync<SqliteException>(() => InsertItemAsync(context,
+        var exception = await Assert.ThrowsAsync<PostgresException>(() => InsertItemAsync(context,
             first.HouseholdId, foreignGroup ? second.GroupId : first.GroupId,
             foreignGroup ? first.HolderPersonId : second.HolderPersonId));
-        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
 
     [Theory]
@@ -122,13 +120,13 @@ public sealed class TrackedItemPersistenceTests : IAsyncLifetime
     [InlineData("", "GBP", "GB")]
     [InlineData("Item A", "gbp", "GB")]
     [InlineData("Item A", "GBP", "G")]
-    public async Task SqliteEnforcesRequiredNamesAndCodeFormats(string? name, string currencyCode, string countryCode)
+    public async Task PostgresEnforcesRequiredNamesAndCodeFormats(string? name, string currencyCode, string countryCode)
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         await using var context = _database.CreateDbContext();
-        var exception = await Assert.ThrowsAsync<SqliteException>(() => InsertItemAsync(context,
+        var exception = await Assert.ThrowsAsync<PostgresException>(() => InsertItemAsync(context,
             setup.HouseholdId, setup.GroupId, setup.HolderPersonId, name, currencyCode, countryCode));
-        Assert.Equal(19, exception.SqliteErrorCode);
+        Assert.Equal(name is null ? PostgresErrorCodes.NotNullViolation : PostgresErrorCodes.CheckViolation, exception.SqlState);
     }
 
     [Fact]
@@ -178,22 +176,6 @@ public sealed class TrackedItemPersistenceTests : IAsyncLifetime
         Assert.True(renamed.IncludeInHousehold);
         Assert.Equal(setup.HolderPersonId, renamed.HolderPersonId);
         Assert.Equal(10_000, Assert.Single(renamed.HouseholdAllocations).ShareBasisPoints);
-    }
-
-    [Fact]
-    public async Task TheMigrationPreservesExistingPeopleAndClassification()
-    {
-        await using var context = _database.CreateDbContext();
-        await context.GetService<IMigrator>().MigrateAsync("20261029151124_CreateCategoriesAndItemGroups");
-        var setup = await TrackedItemTestSetup.CreateAsync(_database);
-        await context.Database.MigrateAsync();
-        await setup.CreateItemAsync(_items);
-
-        Assert.Equal(setup.GroupId, (await context.ItemGroups.SingleAsync()).Id);
-        Assert.Equal(2, await context.People.CountAsync());
-        Assert.Equal(1, await context.Categories.CountAsync());
-        Assert.Equal(1, await context.TrackedItems.CountAsync());
-        Assert.False(context.Database.HasPendingModelChanges());
     }
 
     private static Task<int> InsertItemAsync(HearthcastDbContext context,

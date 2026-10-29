@@ -12,7 +12,6 @@ public sealed class SnapshotPersonConfiguration : IEntityTypeConfiguration<Snaps
         builder.ToTable("SnapshotPeople", table =>
         {
             table.HasCheckConstraint("CK_SnapshotPeople_DisplayName_NotBlank", "length(trim(\"DisplayName\")) > 0");
-            table.HasCheckConstraint("CK_SnapshotPeople_Participation_Boolean", "\"ParticipatesInHouseholdFinances\" IN (0, 1)");
         });
         builder.HasKey(person => person.Id);
         builder.Property(person => person.Id).ValueGeneratedNever();

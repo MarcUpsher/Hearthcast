@@ -11,10 +11,16 @@ hearthcast/
     dotnet-tools.json
   Hearthcast.slnx
   global.json
+  Dockerfile
+  .dockerignore
+  compose.yaml
+  .env.example
   backend/
     src/
       Hearthcast.Api/
         Program.cs
+        Health/
+          DatabaseHealthCheck.cs
         Properties/
           launchSettings.json
         Hearthcast.Api.csproj
@@ -50,6 +56,7 @@ hearthcast/
           RequiredText.cs
         Persistence/
           HearthcastDbContext.cs
+          SerializableTransaction.cs
           Configurations/
             CategoryConfiguration.cs
             HouseholdConfiguration.cs
@@ -61,19 +68,11 @@ hearthcast/
             SnapshotPersonConfiguration.cs
             ItemSnapshotConfiguration.cs
             ItemSnapshotHouseholdAllocationConfiguration.cs
-          Conversions/
-            DecimalTextConverter.cs
           DesignTime/
             HearthcastDbContextFactory.cs
           Migrations/
-            <timestamp>_CreateHouseholdsAndPeople.cs
-            <timestamp>_CreateHouseholdsAndPeople.Designer.cs
-            <timestamp>_CreateCategoriesAndItemGroups.cs
-            <timestamp>_CreateCategoriesAndItemGroups.Designer.cs
-            <timestamp>_CreateTrackedItemsAndHouseholdAllocations.cs
-            <timestamp>_CreateTrackedItemsAndHouseholdAllocations.Designer.cs
-            <timestamp>_CreateOrdinarySnapshots.cs
-            <timestamp>_CreateOrdinarySnapshots.Designer.cs
+            <timestamp>_CreateInitialPostgresSchema.cs
+            <timestamp>_CreateInitialPostgresSchema.Designer.cs
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
@@ -89,8 +88,9 @@ hearthcast/
         Snapshots/
           SnapshotPersistenceTests.cs
           SnapshotIntegrityTests.cs
+          PostgresTransactionTests.cs
         Infrastructure/
-          SqliteTestDatabase.cs
+          PostgresTestDatabase.cs
         Hearthcast.Data.Tests.csproj
   docs/
     schema-proposal.md
@@ -100,6 +100,7 @@ hearthcast/
     tracked-items-slice.md
     ordinary-snapshots-slice.md
     project-layout.md
+    containers-and-postgres.md
 ```
 
 The frontend will be created under `frontend/` in a later step. Build output and
@@ -136,28 +137,9 @@ The `.config/dotnet-tools.json` manifest is a supported [local-tool manifest loc
 
 ## Commands
 
-Run solution build/test and local-tool restore from the repository root:
+The container workflow and optional host-build commands are documented in
+[containers and PostgreSQL](containers-and-postgres.md). Run them from the
+repository root. Keep new migrations under Persistence/Migrations.
 
-```sh
-dotnet restore Hearthcast.slnx
-dotnet tool restore
-dotnet build Hearthcast.slnx --no-restore
-dotnet test Hearthcast.slnx --no-build --no-restore
-dotnet run --project backend/src/Hearthcast.Api
-```
-
-Migration commands target the data project and use the API as startup project:
-
-```sh
-dotnet ef migrations script --project backend/src/Hearthcast.Data --startup-project backend/src/Hearthcast.Api
-```
-
-When adding a subsequent migration, keep its output in `Persistence/Migrations`:
-
-```sh
-dotnet ef migrations add <DescriptiveName> --project backend/src/Hearthcast.Data --startup-project backend/src/Hearthcast.Api --output-dir Persistence/Migrations
-```
-
-The folder/namespace reorganisation does not change table names, migration IDs or
-financial rules. The API remains a health endpoint; there is no application
-database migration or seed operation on startup.
+The API currently exposes liveness/readiness endpoints only. A separate migration
+process applies schema changes; the ordinary API does not migrate or seed data.

@@ -8,7 +8,7 @@ namespace Hearthcast.Data.Tests.TrackedItems;
 internal sealed record TrackedItemTestSetup(Guid HouseholdId, Guid GroupId, Guid HolderPersonId, Guid OtherPersonId)
 {
     public static async Task<TrackedItemTestSetup> CreateAsync(
-        SqliteTestDatabase database,
+        PostgresTestDatabase database,
         bool otherPersonParticipates = true,
         FinancialType financialType = FinancialType.Asset)
     {

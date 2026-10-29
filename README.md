@@ -6,28 +6,51 @@ A household finance app built around configured items and dated snapshots.
 
 ## Current step
 
-The persistence model implements household setup, classification, tracked items
-and household allocations, plus the first ordinary-snapshot capture/reload workflow,
-with EF Core SQLite mappings, migrations and integration tests. The API still
-exposes only its health endpoint. Carry-forward and corrections, financed assets
-and the frontend follow in separate steps.
+The persistence model implements household setup, classification, tracked items,
+household allocations and ordinary-snapshot capture/reload. PostgreSQL is the
+only database provider, with EF Core migrations and real database integration
+tests. Carry-forward/corrections, financed assets, finance endpoints and the
+Angular Material frontend follow in separate steps.
 
-The proposed data model is documented in [the schema proposal](docs/schema-proposal.md).
-The [relational schema plan](docs/relational-schema-plan.md) maps the proposed
-relationships, constraints and implementation slices for review before entity mapping.
-See the [Household and Person slice](docs/household-person-slice.md) for the code
-to review and the rules implemented so far.
-The [Classification slice](docs/classification-slice.md) adds user-defined
-categories/groups and the system Asset/Debt identifier.
-The [Tracked items slice](docs/tracked-items-slice.md) connects holders and groups
-to reusable items, with independent household allocations and participation guards.
-The [Ordinary snapshots slice](docs/ordinary-snapshots-slice.md) adds atomic dated
-captures, copied reporting metadata and exact decimal storage.
+The API and database run in separate Docker containers. A one-shot migration
+service applies the schema before the API starts. There is no user data seeded
+and no schema mutation during ordinary API startup.
 
-## Structure
+## Run with Docker
+
+Requires Docker Engine and Docker Compose.
+
+On a fresh checkout, copy `.env.example` to `.env` and replace its password with a
+long random hex password. Then:
+
+```sh
+docker compose up -d --build --wait
+```
+
+Readiness: `http://127.0.0.1:5190/health`.
+Liveness: `http://127.0.0.1:5190/health/live`.
+There is no frontend yet.
+
+```sh
+docker compose ps -a
+docker compose logs --tail=100 api migrate
+docker compose --profile test run --build --rm tests
+docker compose down
+```
+
+The database persists in a named Docker volume. `down` retains it; removing the
+volume removes its data. Local `.env` files and financial files are excluded from
+Git and the image build context.
+
+See [containers and PostgreSQL](docs/containers-and-postgres.md) for architecture,
+migrations, tests, configuration and optional host debugging.
+
+## Model and structure
 
 ```text
 Hearthcast.slnx
+Dockerfile
+compose.yaml
 backend/
   src/
     Hearthcast.Api/
@@ -37,33 +60,13 @@ backend/
 frontend/                 # Planned Angular Material app; not created yet
 ```
 
-See [project layout and naming](docs/project-layout.md) for the feature folders,
-persistence folders and conventions to follow as the app grows.
+- [Schema proposal](docs/schema-proposal.md)
+- [Relational schema and implementation plan](docs/relational-schema-plan.md)
+- [Household and Person slice](docs/household-person-slice.md)
+- [Classification slice](docs/classification-slice.md)
+- [Tracked items slice](docs/tracked-items-slice.md)
+- [Ordinary snapshots slice](docs/ordinary-snapshots-slice.md)
+- [Project layout and naming](docs/project-layout.md)
 
-## Build and run
-
-Requires the .NET 10 SDK specified in `global.json`.
-
-```sh
-dotnet restore Hearthcast.slnx
-dotnet tool restore
-dotnet build Hearthcast.slnx --no-restore
-dotnet test Hearthcast.slnx --no-build --no-restore
-dotnet run --project backend/src/Hearthcast.Api
-```
-
-The local launch profile listens at `http://127.0.0.1:5190` without opening a
-browser. `GET /health` returns `Healthy` when the application is running.
-
-Stop the API with Ctrl+C. To use another port:
-
-```sh
-dotnet run --project backend/src/Hearthcast.Api --no-launch-profile --urls http://127.0.0.1:5191
-```
-
-Keep financial files and local configuration outside tracked source. The root
-`.gitignore` excludes build output, local credentials, SQLite files and financial
-imports/exports.
-
-Tests apply the migration to isolated temporary SQLite databases and remove them
-afterwards. API startup does not create, seed or migrate an application database.
+Source builds on the host use the .NET 10 SDK specified in `global.json`.
+The container workflow builds and tests with the official .NET 10 SDK image.

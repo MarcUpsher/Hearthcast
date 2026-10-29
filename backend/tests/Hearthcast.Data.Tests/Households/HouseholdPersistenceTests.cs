@@ -1,7 +1,7 @@
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Tests.Infrastructure;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -10,7 +10,7 @@ namespace Hearthcast.Data.Tests.Households;
 
 public sealed class HouseholdPersistenceTests : IAsyncLifetime
 {
-    private readonly SqliteTestDatabase _database = new();
+    private readonly PostgresTestDatabase _database = new();
     private readonly HouseholdService _service;
 
     public HouseholdPersistenceTests()
@@ -171,10 +171,13 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     {
         await using var context = CreateContext();
         await context.Database.ExecuteSqlRawAsync("""
-            CREATE TRIGGER "FailPersonInsert" BEFORE INSERT ON "People"
+            CREATE FUNCTION "FailPersonInsertFunction"() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN
-                SELECT RAISE(ABORT, 'Synthetic insert failure');
+                RAISE EXCEPTION 'Synthetic insert failure';
             END;
+            $$;
+            CREATE TRIGGER "FailPersonInsert" BEFORE INSERT ON "People"
+            FOR EACH ROW EXECUTE FUNCTION "FailPersonInsertFunction"();
             """);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => _service.CreateAsync("Household A", "Person A"));
@@ -184,30 +187,30 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SqliteRejectsAnOrphanPerson()
+    public async Task PostgresRejectsAnOrphanPerson()
     {
         await using var context = CreateContext();
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "People" ("Id", "HouseholdId", "DisplayName", "ParticipatesInHouseholdFinances")
                 VALUES ({Guid.NewGuid()}, {Guid.NewGuid()}, {"Person A"}, {true})
                 """));
 
-        Assert.Equal(787, exception.SqliteExtendedErrorCode);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
 
     [Fact]
-    public async Task SqlitePreventsCascadingDeletionOfAReferencedHousehold()
+    public async Task PostgresPreventsCascadingDeletionOfAReferencedHousehold()
     {
         var household = await _service.CreateAsync("Household A", "Person A");
         await using var context = CreateContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 DELETE FROM "Households" WHERE "Id" = {household.Id}
                 """));
 
-        Assert.Equal(19, exception.SqliteErrorCode);
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, exception.SqlState);
         Assert.Equal(1, await context.Households.CountAsync());
         Assert.Equal(1, await context.People.CountAsync());
     }
@@ -216,18 +219,18 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task SqliteRejectsMissingOrBlankPersonNames(string? displayName)
+    public async Task PostgresRejectsMissingOrBlankPersonNames(string? displayName)
     {
         var household = await _service.CreateAsync("Household A", "Person A");
         await using var context = CreateContext();
 
-        var exception = await Assert.ThrowsAsync<SqliteException>(() =>
+        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "People" ("Id", "HouseholdId", "DisplayName", "ParticipatesInHouseholdFinances")
                 VALUES ({Guid.NewGuid()}, {household.Id}, {displayName}, {false})
                 """));
 
-        Assert.Equal(19, exception.SqliteErrorCode);
+        Assert.Equal(displayName is null ? PostgresErrorCodes.NotNullViolation : PostgresErrorCodes.CheckViolation, exception.SqlState);
         Assert.Equal(1, await context.People.CountAsync());
     }
 

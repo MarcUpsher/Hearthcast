@@ -11,10 +11,8 @@ public sealed class TrackedItemConfiguration : IEntityTypeConfiguration<TrackedI
         builder.ToTable("TrackedItems", table =>
         {
             table.HasCheckConstraint("CK_TrackedItems_Name_NotBlank", "length(trim(\"Name\")) > 0");
-            table.HasCheckConstraint("CK_TrackedItems_CurrencyCode", "\"CurrencyCode\" GLOB '[A-Z][A-Z][A-Z]'");
-            table.HasCheckConstraint("CK_TrackedItems_CountryCode", "\"CountryCode\" GLOB '[A-Z][A-Z]'");
-            table.HasCheckConstraint("CK_TrackedItems_Inclusion_Boolean", "\"IncludeInHousehold\" IN (0, 1)");
-            table.HasCheckConstraint("CK_TrackedItems_Retirement_Boolean", "\"IsRetired\" IN (0, 1)");
+            table.HasCheckConstraint("CK_TrackedItems_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+            table.HasCheckConstraint("CK_TrackedItems_CountryCode", "\"CountryCode\" ~ '^[A-Z]{2}$'");
         });
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).ValueGeneratedNever();
