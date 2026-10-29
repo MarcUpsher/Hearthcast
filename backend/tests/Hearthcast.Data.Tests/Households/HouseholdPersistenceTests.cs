@@ -54,7 +54,8 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     [InlineData("Household A", " \t ")]
     public async Task InvalidNamesDoNotLeaveAnEmptyHousehold(string? name, string? firstPerson)
     {
-        await Assert.ThrowsAnyAsync<ArgumentException>(() => _service.CreateAsync(name!, firstPerson!));
+        var exception = await Assert.ThrowsAnyAsync<ArgumentException>(() => _service.CreateAsync(name!, firstPerson!));
+        Assert.Equal(string.IsNullOrWhiteSpace(name) ? "name" : "displayName", exception.ParamName);
 
         await using var context = CreateContext();
         Assert.Equal(0, await context.Households.CountAsync());

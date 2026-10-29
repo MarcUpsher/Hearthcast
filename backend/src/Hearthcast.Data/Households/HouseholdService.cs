@@ -31,28 +31,50 @@ public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> cont
         Guid householdId,
         Guid personId,
         bool participatesInHouseholdFinances,
-        CancellationToken cancellationToken = default) =>
-        UpdateAsync(householdId,
-            household => household.SetPersonParticipation(personId, participatesInHouseholdFinances),
-            cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(householdId, async (household, context, token) =>
+        {
+            if (!participatesInHouseholdFinances)
+            {
+                await EnsureNoHouseholdAllocationsAsync(context, householdId, personId, token);
+            }
+
+            household.SetPersonParticipation(personId, participatesInHouseholdFinances);
+        }, cancellationToken);
+    }
 
     public Task<Household> RemovePersonAsync(
         Guid householdId,
         Guid personId,
-        CancellationToken cancellationToken = default) =>
-        UpdateAsync(householdId,
-            (household, context) => context.People.Remove(household.RemovePerson(personId)),
-            cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        return UpdateAsync(householdId, async (household, context, token) =>
+        {
+            await EnsureNoHouseholdAllocationsAsync(context, householdId, personId, token);
+            if (await context.TrackedItems.AnyAsync(
+                item => item.HouseholdId == householdId && item.HolderPersonId == personId, token))
+            {
+                throw new InvalidOperationException("A person who holds tracked items cannot be removed.");
+            }
+
+            context.People.Remove(household.RemovePerson(personId));
+        }, cancellationToken);
+    }
 
     private Task<Household> UpdateAsync(
         Guid householdId,
         Action<Household> change,
         CancellationToken cancellationToken) =>
-        UpdateAsync(householdId, (household, _) => change(household), cancellationToken);
+        UpdateAsync(householdId, (household, _, _) =>
+        {
+            change(household);
+            return Task.CompletedTask;
+        }, cancellationToken);
 
     private async Task<Household> UpdateAsync(
         Guid householdId,
-        Action<Household, HearthcastDbContext> change,
+        Func<Household, HearthcastDbContext, CancellationToken, Task> change,
         CancellationToken cancellationToken)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -64,9 +86,19 @@ public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> cont
             .SingleOrDefaultAsync(household => household.Id == householdId, cancellationToken)
             ?? throw new KeyNotFoundException("The household does not exist.");
 
-        change(household, context);
+        await change(household, context, cancellationToken);
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return household;
+    }
+
+    private static async Task EnsureNoHouseholdAllocationsAsync(
+        HearthcastDbContext context, Guid householdId, Guid personId, CancellationToken cancellationToken)
+    {
+        if (await context.TrackedItemHouseholdAllocations.AnyAsync(
+            allocation => allocation.HouseholdId == householdId && allocation.PersonId == personId, cancellationToken))
+        {
+            throw new InvalidOperationException("Resolve the person's household allocations before changing participation or removing them.");
+        }
     }
 }

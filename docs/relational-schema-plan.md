@@ -2,8 +2,9 @@
 
 Updated 29 October 2026. This translates the [logical model](schema-proposal.md)
 into proposed tables and constraints. The [Household/Person slice](household-person-slice.md)
-and [Classification slice](classification-slice.md) are implemented. Other tables
-and recommendations remain a plan for review before their entities and migrations
+[Classification slice](classification-slice.md) and
+[Tracked items slice](tracked-items-slice.md) are implemented. Other tables and
+recommendations remain a plan for review before their entities and migrations
 are created.
 
 Work proceeds in small slices. Each slice ends with a visible diff and relevant
@@ -28,9 +29,9 @@ verification. Pushes require explicit user instruction.
    foreign keys as well as application validation. Globally unique IDs alone
    do not prevent a row from pointing to another household's person.
 
-These recommendations refine unresolved points in the logical proposal; they
-are not additional financial features. The logical document remains unchanged
-until this relational plan has been reviewed.
+The direct ordinary holder and same-household item/allocation keys are now
+implemented. Remaining recommendations guide later slices; implementation guides
+record the currently enforced subset.
 
 ## Current setup relationships
 
@@ -211,6 +212,8 @@ logic must also enforce:
    28 new cases and the existing 21 household cases pass.
 4. **Ordinary items.** TrackedItem and household allocation. Verify household
    boundaries, independent holder/allocation treatment and invalid allocation rejection.
+   Implemented locally with 45 new cases; all 94 SQLite cases pass. Participation
+   and membership writes now guard existing allocations and holder references.
 5. **Ordinary snapshots.** Snapshot, SnapshotPerson, ItemSnapshot and allocations.
    Verify complete saves, carried values, null versus zero and preservation of
    saved metadata after current setup changes.

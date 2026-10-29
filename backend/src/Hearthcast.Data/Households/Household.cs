@@ -1,3 +1,5 @@
+using Hearthcast.Data.Validation;
+
 namespace Hearthcast.Data.Households;
 
 public sealed class Household
@@ -14,8 +16,7 @@ public sealed class Household
 
     public void Rename(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        Name = name.Trim();
+        Name = RequiredText.Trim(name);
     }
 
     internal static Household Create(string name, string firstPersonDisplayName)

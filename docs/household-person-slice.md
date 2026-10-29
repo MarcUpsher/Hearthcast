@@ -62,8 +62,9 @@ values. Minimum member/participant counts are application rules; direct SQL or
 deliberately bypassing the service can bypass those cross-row rules. Application
 validation also handles whitespace beyond SQLite's ordinary space trimming.
 
-No item-allocation rules are implemented yet because item tables do not exist in
-this slice. Those checks belong to the subsequent item slice.
+The [Tracked items slice](tracked-items-slice.md) adds service guards against
+excluding/removing allocation recipients and removing actual holders. The
+Household entity continues to enforce its own minimum membership/participation rules.
 
 ## Migration tooling and verification
 

@@ -1,3 +1,5 @@
+using Hearthcast.Data.Validation;
+
 namespace Hearthcast.Data.Households;
 
 public sealed class Person
@@ -23,8 +25,7 @@ public sealed class Person
 
     public void Rename(string displayName)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
-        DisplayName = displayName.Trim();
+        DisplayName = RequiredText.Trim(displayName);
     }
 
     internal void SetParticipation(bool participatesInHouseholdFinances) =>

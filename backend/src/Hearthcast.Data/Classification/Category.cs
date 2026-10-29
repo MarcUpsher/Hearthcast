@@ -1,4 +1,5 @@
 using Hearthcast.Data.Households;
+using Hearthcast.Data.Validation;
 
 namespace Hearthcast.Data.Classification;
 
@@ -30,7 +31,6 @@ public sealed class Category
 
     public void Rename(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        Name = name.Trim();
+        Name = RequiredText.Trim(name);
     }
 }

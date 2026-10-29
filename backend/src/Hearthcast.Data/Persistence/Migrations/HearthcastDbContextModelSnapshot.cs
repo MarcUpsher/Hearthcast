@@ -59,8 +59,6 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasAlternateKey("HouseholdId", "Id");
-
                     b.HasIndex("HouseholdId", "CategoryId");
 
                     b.ToTable("ItemGroups", null, t =>
@@ -103,13 +101,89 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasAlternateKey("HouseholdId", "Id");
-
                     b.ToTable("People", null, t =>
                         {
                             t.HasCheckConstraint("CK_People_DisplayName_NotBlank", "length(trim(\"DisplayName\")) > 0");
 
                             t.HasCheckConstraint("CK_People_Participation_Boolean", "\"ParticipatesInHouseholdFinances\" IN (0, 1)");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HolderPersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludeInHousehold")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsRetired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "GroupId");
+
+                    b.HasIndex("HouseholdId", "HolderPersonId");
+
+                    b.ToTable("TrackedItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TrackedItems_CountryCode", "\"CountryCode\" GLOB '[A-Z][A-Z]'");
+
+                            t.HasCheckConstraint("CK_TrackedItems_CurrencyCode", "\"CurrencyCode\" GLOB '[A-Z][A-Z][A-Z]'");
+
+                            t.HasCheckConstraint("CK_TrackedItems_Inclusion_Boolean", "\"IncludeInHousehold\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_TrackedItems_Name_NotBlank", "length(trim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_TrackedItems_Retirement_Boolean", "\"IsRetired\" IN (0, 1)");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItemHouseholdAllocation", b =>
+                {
+                    b.Property<Guid>("TrackedItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ShareBasisPoints")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TrackedItemId", "PersonId");
+
+                    b.HasIndex("HouseholdId", "PersonId");
+
+                    b.HasIndex("HouseholdId", "TrackedItemId");
+
+                    b.ToTable("TrackedItemHouseholdAllocations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TrackedItemHouseholdAllocations_Share", "\"ShareBasisPoints\" BETWEEN 1 AND 10000");
                         });
                 });
 
@@ -147,9 +221,56 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Household");
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItem", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Classification.ItemGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "GroupId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Households.Person", "HolderPerson")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "HolderPersonId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("HolderPerson");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItemHouseholdAllocation", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Households.Person", "Person")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "PersonId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.TrackedItems.TrackedItem", "TrackedItem")
+                        .WithMany("HouseholdAllocations")
+                        .HasForeignKey("HouseholdId", "TrackedItemId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Person");
+
+                    b.Navigation("TrackedItem");
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Households.Household", b =>
                 {
                     b.Navigation("People");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItem", b =>
+                {
+                    b.Navigation("HouseholdAllocations");
                 });
 #pragma warning restore 612, 618
         }

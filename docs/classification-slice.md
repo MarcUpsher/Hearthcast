@@ -64,14 +64,14 @@ category's financial type and existing group relationships. Moving groups betwee
 categories or changing financial types is outside this slice.
 
 Deleting a category referenced by a group is restricted by the FK. Deleting an
-unused category is allowed. Future tracked-item references will add their own
+unused category is allowed. Tracked items now reference groups with their own
 deletion restrictions. There is no automatic cascade deletion or API delete
 endpoint in this slice.
 
 ## Verification
 
-The full suite passes 49 cases: the existing 21 household cases and 28 new
-classification cases. It uses actual migrations and isolated SQLite files.
+Classification contributes 28 cases alongside the 21 household cases; later
+slices add their own cases. The suite uses actual migrations and isolated SQLite files.
 
 Checks include Asset/Debt round trips, required names, undefined types, missing
 parents, same-household enforcement through both the service and raw SQL,

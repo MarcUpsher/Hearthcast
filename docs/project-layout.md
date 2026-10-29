@@ -30,6 +30,15 @@ hearthcast/
           Household.cs
           Person.cs
           HouseholdService.cs
+        TrackedItems/
+          TrackedItem.cs
+          TrackedItemHouseholdAllocation.cs
+          TrackedItemAllocationShare.cs
+          TrackedItemService.cs
+        Validation/
+          AllocationShareRules.cs
+          RequiredAlphabeticCode.cs
+          RequiredText.cs
         Persistence/
           HearthcastDbContext.cs
           Configurations/
@@ -37,6 +46,8 @@ hearthcast/
             HouseholdConfiguration.cs
             ItemGroupConfiguration.cs
             PersonConfiguration.cs
+            TrackedItemConfiguration.cs
+            TrackedItemHouseholdAllocationConfiguration.cs
           DesignTime/
             HearthcastDbContextFactory.cs
           Migrations/
@@ -44,6 +55,8 @@ hearthcast/
             <timestamp>_CreateHouseholdsAndPeople.Designer.cs
             <timestamp>_CreateCategoriesAndItemGroups.cs
             <timestamp>_CreateCategoriesAndItemGroups.Designer.cs
+            <timestamp>_CreateTrackedItemsAndHouseholdAllocations.cs
+            <timestamp>_CreateTrackedItemsAndHouseholdAllocations.Designer.cs
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
@@ -52,6 +65,10 @@ hearthcast/
           ClassificationPersistenceTests.cs
         Households/
           HouseholdPersistenceTests.cs
+        TrackedItems/
+          TrackedItemPersistenceTests.cs
+          TrackedItemAllocationTests.cs
+          TrackedItemTestSetup.cs
         Infrastructure/
           SqliteTestDatabase.cs
         Hearthcast.Data.Tests.csproj
@@ -60,6 +77,7 @@ hearthcast/
     relational-schema-plan.md
     household-person-slice.md
     classification-slice.md
+    tracked-items-slice.md
     project-layout.md
 ```
 
@@ -78,6 +96,13 @@ temporary financial files are excluded by the root `.gitignore`.
   `Hearthcast.Data.Persistence.Configurations`, and so on.
 - Entities use singular names. Services describe the feature they operate on.
   EF mappings use `<Entity>Configuration`; tests use `<Subject>Tests`.
+- Shared argument-validation functions live under Validation. RequiredText.Trim
+  validates and trims required text, preserving the caller's argument name.
+  RequiredAlphabeticCode handles required uppercase letter codes. AllocationShareRules
+  defines the basis-point range and the shared 100% value used by validation,
+  default allocations and the database check. Household eligibility and allocation
+  totals stay in their domain features.
+  Entity methods such as Rename retain responsibility for changing entity state.
 - Tests mirror the feature folders. Database integration tests identify their
   purpose explicitly, as in `HouseholdPersistenceTests`.
 - Keep the DbContext, EF mappings, migration tooling and migrations under

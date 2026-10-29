@@ -1,10 +1,11 @@
 # Hearthcast — schema proposal
 
 Discussion draft, updated 29 October 2026. Proposed data model for Hearthcast.
-The Household/Person and Classification persistence slices are in place;
+The Household/Person, Classification and TrackedItem persistence slices are in place;
 remaining entity definitions will be implemented in small, reviewed steps.
-This document describes the model; see [Household/Person](household-person-slice.md)
-and [Classification](classification-slice.md) for the currently implemented subset.
+This document describes the model; see [Household/Person](household-person-slice.md),
+[Classification](classification-slice.md) and [Tracked items](tracked-items-slice.md)
+for the currently implemented subset.
 
 ## Model principles
 
@@ -43,15 +44,13 @@ and [Classification](classification-slice.md) for the currently implemented subs
 | Person | Id, HouseholdId, DisplayName, ParticipatesInHouseholdFinances | Membership does not require owning any items. |
 | Category | Id, HouseholdId, Name, FinancialType | FinancialType is Asset or Debt. |
 | ItemGroup | Id, HouseholdId, CategoryId, Name | User-defined grouping; inherits financial type. The composite category FK enforces the household. |
-| TrackedItem | Id, HouseholdId, GroupId, Name, CurrencyCode, CountryCode, IncludeInHousehold, IsRetired | Persistent identity and current entry settings. |
-| ItemHolder | TrackedItemId, PersonId, Share | Required; one row at 100% for ordinary items. Financed-asset ownership is recorded separately. |
-| ItemHouseholdAllocation | TrackedItemId, PersonId, Share | Required only for included items; totals 100%. |
+| TrackedItem | Id, HouseholdId, GroupId, HolderPersonId, Name, CurrencyCode, CountryCode, IncludeInHousehold, IsRetired | Persistent identity and current entry settings. Required single holder. |
+| TrackedItemHouseholdAllocation | HouseholdId, TrackedItemId, PersonId, ShareBasisPoints | Required only for included items; totals 10,000 basis points (100%). |
 
-Selecting an ordinary item's holder creates its 100% holder row. With shared
-financed assets handled separately, a single HolderPersonId on TrackedItem (and a
-copied holder reference on ItemSnapshot) may replace these ordinary holder
-tables in the final physical schema. This is a simplification to review, not an
-additional ownership workflow.
+An ordinary item's actual holder is recorded directly through HolderPersonId.
+There is no ordinary holder-share table: that person's held view receives the
+full item. Shared financed-asset ownership remains separate. ItemSnapshot will
+copy the single holder reference through HolderSnapshotPersonId.
 
 Household allocation is similarly defaulted to 100% for an eligible individual
 holder. If a nonparticipating holder's item is included, allocation to an eligible
@@ -72,8 +71,7 @@ a fund, pension, cash pot or other balance directly as a tracked item.
 | --- | --- | --- |
 | Snapshot | Id, HouseholdId, SnapshotDate, DatePrecision, HouseholdName, CreatedAtUtc, UpdatedAtUtc | One dated capture. HouseholdName is copied. |
 | SnapshotPerson | Id, SnapshotId, PersonId, DisplayName, ParticipatesInHouseholdFinances | Copied household roster, including people without items. |
-| ItemSnapshot | Id, SnapshotId, TrackedItemId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision, CarriedFromItemSnapshotId | One full value and copied reporting context per tracked item. |
-| ItemSnapshotHolder | ItemSnapshotId, SnapshotPersonId, Share | Copied holder attribution. |
+| ItemSnapshot | Id, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision, CarriedFromItemSnapshotId | One full value and copied reporting context per tracked item. |
 | ItemSnapshotHouseholdAllocation | ItemSnapshotId, SnapshotPersonId, Share | Copied household attribution for included entries. |
 
 Naming defines responsibilities: Snapshot is the shared dated capture; ItemSnapshot
@@ -191,7 +189,8 @@ applicable but unrecorded.
 
 ## Reporting and technical constraints
 
-- Held view: full entry amount attributed according to saved holder shares.
+- Held view: the ordinary entry's full amount belongs to its saved named holder;
+  financed assets have their separate copied owner shares.
 - Household view: each included full amount once; saved household shares supply
   the person breakdown. These are alternative perspectives over the same money.
 - Category/group reporting uses saved classification. Financed assets contribute
