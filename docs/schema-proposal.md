@@ -1,10 +1,11 @@
 # Hearthcast — schema proposal
 
 Discussion draft, updated 29 October 2026. Proposed data model for Hearthcast.
-The Household/Person, Classification and TrackedItem persistence slices are in place;
-remaining entity definitions will be implemented in small, reviewed steps.
+The Household/Person, Classification, TrackedItem and initial ordinary-snapshot
+capture/reload persistence slices are in place. The remaining entity definitions will be implemented in small, reviewed steps.
 This document describes the model; see [Household/Person](household-person-slice.md),
-[Classification](classification-slice.md) and [Tracked items](tracked-items-slice.md)
+[Classification](classification-slice.md), [Tracked items](tracked-items-slice.md)
+and [Ordinary snapshots](ordinary-snapshots-slice.md)
 for the currently implemented subset.
 
 ## Model principles
@@ -49,8 +50,8 @@ for the currently implemented subset.
 
 An ordinary item's actual holder is recorded directly through HolderPersonId.
 There is no ordinary holder-share table: that person's held view receives the
-full item. Shared financed-asset ownership remains separate. ItemSnapshot will
-copy the single holder reference through HolderSnapshotPersonId.
+full item. Shared financed-asset ownership remains separate. ItemSnapshot copies
+the single holder reference through HolderSnapshotPersonId.
 
 Household allocation is similarly defaulted to 100% for an eligible individual
 holder. If a nonparticipating holder's item is included, allocation to an eligible
@@ -70,9 +71,9 @@ a fund, pension, cash pot or other balance directly as a tracked item.
 | Table | Fields | Rules |
 | --- | --- | --- |
 | Snapshot | Id, HouseholdId, SnapshotDate, DatePrecision, HouseholdName, CreatedAtUtc, UpdatedAtUtc | One dated capture. HouseholdName is copied. |
-| SnapshotPerson | Id, SnapshotId, PersonId, DisplayName, ParticipatesInHouseholdFinances | Copied household roster, including people without items. |
-| ItemSnapshot | Id, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision, CarriedFromItemSnapshotId | One full value and copied reporting context per tracked item. |
-| ItemSnapshotHouseholdAllocation | ItemSnapshotId, SnapshotPersonId, Share | Copied household attribution for included entries. |
+| SnapshotPerson | Id, HouseholdId, SnapshotId, PersonId, DisplayName, ParticipatesInHouseholdFinances | Copied household roster, including people without items. |
+| ItemSnapshot | Id, HouseholdId, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision | One full value and copied reporting context per tracked item. |
+| ItemSnapshotHouseholdAllocation | SnapshotId, ItemSnapshotId, SnapshotPersonId, ShareBasisPoints | Copied household attribution for included entries. |
 
 Naming defines responsibilities: Snapshot is the shared dated capture; ItemSnapshot
 records one TrackedItem at that capture; FinancedAssetSnapshot records one
@@ -96,6 +97,10 @@ same snapshot. Current names and settings must not substitute for saved copies.
   agreed when seeing the first summaries; there is no monthly uniqueness constraint.
 
 ### Values and carrying forward
+
+Initial capture implements Unrecorded and Confirmed values. The following
+carry-forward/correction behaviours are agreed next steps, not yet implemented;
+CarriedForward and CarriedFromItemSnapshotId will be added with that workflow.
 
 - `Amount` is nullable and otherwise nonnegative. Null means unrecorded; zero is
   a known balance. Missing values make affected totals visibly incomplete.
@@ -121,7 +126,7 @@ same snapshot. Current names and settings must not substitute for saved copies.
 Backdated data is not expected to be a major manual workflow. Copied metadata is
 sufficient provided the entry records the intended historical settings.
 
-The entry/import process can supply historical metadata or use an existing
+The planned entry/import process can supply historical metadata or use an existing
 snapshot as a starting point and edit it. Current setup is a convenience default,
 not evidence that the same items, holders or splits existed in the past. There is
 no requirement for a separate timeline/versioning engine.
@@ -198,7 +203,8 @@ applicable but unrecorded.
   assets minus ordinary tracked debts plus included financed-asset equity.
   Different currencies remain separate until conversion rules are agreed.
 - Use exact decimal arithmetic and exact persistence for money, not binary
-  floating point. Physical encoding/scale will be specified before implementation.
+  floating point. Ordinary amounts now use invariant decimal TEXT in SQLite,
+  without fixed-scale rounding; see the ordinary-snapshot implementation guide.
 - Proposed share storage is integer basis points: 10,000 represents 100%.
   Avoid premature rounding of per-person money when aggregating totals.
 - Holder and household shares each total 100% within their own applicable set.
@@ -221,4 +227,5 @@ applicable but unrecorded.
 | Car (FinancedAsset, category Vehicles) | Person A 100%; loan holder recorded separately | Person A 100% of equity | Yes |
 
 Examples illustrate the model, not default assumptions about anyone's accounts.
-This draft plans data structure only; application implementation remains a later step.
+The implementation guides identify the completed persistence slices; API/UI workflows
+remain later steps.

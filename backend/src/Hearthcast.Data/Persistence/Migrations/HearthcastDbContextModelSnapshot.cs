@@ -109,6 +109,198 @@ namespace Hearthcast.Data.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Amount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CategoryName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FinancialType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HolderSnapshotPersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludeInHousehold")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("LastConfirmedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("LastConfirmedPrecision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TrackedItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ValueOrigin")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "CategoryId");
+
+                    b.HasIndex("HouseholdId", "GroupId");
+
+                    b.HasIndex("HouseholdId", "SnapshotId");
+
+                    b.HasIndex("HouseholdId", "TrackedItemId");
+
+                    b.HasIndex("SnapshotId", "HolderSnapshotPersonId");
+
+                    b.HasIndex("SnapshotId", "TrackedItemId")
+                        .IsUnique();
+
+                    b.ToTable("ItemSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ItemSnapshots_CountryCode", "\"CountryCode\" GLOB '[A-Z][A-Z]'");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_CurrencyCode", "\"CurrencyCode\" GLOB '[A-Z][A-Z][A-Z]'");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_FinancialType", "\"FinancialType\" IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_Inclusion_Boolean", "\"IncludeInHousehold\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_Names_NotBlank", "length(trim(\"ItemName\")) > 0 AND length(trim(\"GroupName\")) > 0 AND length(trim(\"CategoryName\")) > 0");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_ValueState", "(\"Amount\" IS NULL AND \"ValueOrigin\" = 1\n    AND \"LastConfirmedDate\" IS NULL AND \"LastConfirmedPrecision\" IS NULL)\nOR (\"Amount\" IS NOT NULL AND \"ValueOrigin\" = 2\n    AND \"LastConfirmedDate\" IS NOT NULL AND \"LastConfirmedPrecision\" IS NOT NULL\n    AND \"LastConfirmedPrecision\" IN (1, 2))");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshotHouseholdAllocation", b =>
+                {
+                    b.Property<Guid>("ItemSnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SnapshotPersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ShareBasisPoints")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ItemSnapshotId", "SnapshotPersonId");
+
+                    b.HasIndex("SnapshotId", "ItemSnapshotId");
+
+                    b.HasIndex("SnapshotId", "SnapshotPersonId");
+
+                    b.ToTable("ItemSnapshotHouseholdAllocations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ItemSnapshotHouseholdAllocations_Share", "\"ShareBasisPoints\" BETWEEN 1 AND 10000");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.Snapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DatePrecision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HouseholdName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SnapshotDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "SnapshotDate");
+
+                    b.ToTable("Snapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Snapshots_DatePrecision", "\"DatePrecision\" IN (1, 2)");
+
+                            t.HasCheckConstraint("CK_Snapshots_HouseholdName_NotBlank", "length(trim(\"HouseholdName\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.SnapshotPerson", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ParticipatesInHouseholdFinances")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "PersonId");
+
+                    b.HasIndex("HouseholdId", "SnapshotId");
+
+                    b.HasIndex("SnapshotId", "PersonId")
+                        .IsUnique();
+
+                    b.ToTable("SnapshotPeople", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SnapshotPeople_DisplayName_NotBlank", "length(trim(\"DisplayName\")) > 0");
+
+                            t.HasCheckConstraint("CK_SnapshotPeople_Participation_Boolean", "\"ParticipatesInHouseholdFinances\" IN (0, 1)");
+                        });
+                });
+
             modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -221,6 +413,91 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Household");
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Classification.Category", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "CategoryId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Classification.ItemGroup", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "GroupId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.Snapshot", null)
+                        .WithMany("ItemSnapshots")
+                        .HasForeignKey("HouseholdId", "SnapshotId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.TrackedItems.TrackedItem", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "TrackedItemId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.SnapshotPerson", "HolderSnapshotPerson")
+                        .WithMany()
+                        .HasForeignKey("SnapshotId", "HolderSnapshotPersonId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("HolderSnapshotPerson");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshotHouseholdAllocation", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Snapshots.ItemSnapshot", null)
+                        .WithMany("HouseholdAllocations")
+                        .HasForeignKey("SnapshotId", "ItemSnapshotId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.SnapshotPerson", "SnapshotPerson")
+                        .WithMany()
+                        .HasForeignKey("SnapshotId", "SnapshotPersonId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SnapshotPerson");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.Snapshot", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Households.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.SnapshotPerson", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Households.Person", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "PersonId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.Snapshot", null)
+                        .WithMany("People")
+                        .HasForeignKey("HouseholdId", "SnapshotId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Hearthcast.Data.TrackedItems.TrackedItem", b =>
                 {
                     b.HasOne("Hearthcast.Data.Classification.ItemGroup", "Group")
@@ -265,6 +542,18 @@ namespace Hearthcast.Data.Persistence.Migrations
 
             modelBuilder.Entity("Hearthcast.Data.Households.Household", b =>
                 {
+                    b.Navigation("People");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
+                {
+                    b.Navigation("HouseholdAllocations");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.Snapshot", b =>
+                {
+                    b.Navigation("ItemSnapshots");
+
                     b.Navigation("People");
                 });
 

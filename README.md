@@ -7,8 +7,9 @@ A household finance app built around configured items and dated snapshots.
 ## Current step
 
 The persistence model implements household setup, classification, tracked items
-and household allocations, with EF Core SQLite mappings, migrations and integration
-tests. The API still exposes only its health endpoint. Snapshots, financed assets
+and household allocations, plus the first ordinary-snapshot capture/reload workflow,
+with EF Core SQLite mappings, migrations and integration tests. The API still
+exposes only its health endpoint. Carry-forward and corrections, financed assets
 and the frontend follow in separate steps.
 
 The proposed data model is documented in [the schema proposal](docs/schema-proposal.md).
@@ -20,6 +21,8 @@ The [Classification slice](docs/classification-slice.md) adds user-defined
 categories/groups and the system Asset/Debt identifier.
 The [Tracked items slice](docs/tracked-items-slice.md) connects holders and groups
 to reusable items, with independent household allocations and participation guards.
+The [Ordinary snapshots slice](docs/ordinary-snapshots-slice.md) adds atomic dated
+captures, copied reporting metadata and exact decimal storage.
 
 ## Structure
 

@@ -58,6 +58,12 @@ public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> cont
                 throw new InvalidOperationException("A person who holds tracked items cannot be removed.");
             }
 
+            if (await context.SnapshotPeople.AnyAsync(
+                person => person.HouseholdId == householdId && person.PersonId == personId, token))
+            {
+                throw new InvalidOperationException("A person recorded in snapshot history cannot be removed.");
+            }
+
             context.People.Remove(household.RemovePerson(personId));
         }, cancellationToken);
     }

@@ -35,6 +35,15 @@ hearthcast/
           TrackedItemHouseholdAllocation.cs
           TrackedItemAllocationShare.cs
           TrackedItemService.cs
+        Snapshots/
+          Snapshot.cs
+          SnapshotPerson.cs
+          ItemSnapshot.cs
+          ItemSnapshotHouseholdAllocation.cs
+          ItemSnapshotValue.cs
+          DatePrecision.cs
+          SnapshotValueOrigin.cs
+          SnapshotService.cs
         Validation/
           AllocationShareRules.cs
           RequiredAlphabeticCode.cs
@@ -48,6 +57,12 @@ hearthcast/
             PersonConfiguration.cs
             TrackedItemConfiguration.cs
             TrackedItemHouseholdAllocationConfiguration.cs
+            SnapshotConfiguration.cs
+            SnapshotPersonConfiguration.cs
+            ItemSnapshotConfiguration.cs
+            ItemSnapshotHouseholdAllocationConfiguration.cs
+          Conversions/
+            DecimalTextConverter.cs
           DesignTime/
             HearthcastDbContextFactory.cs
           Migrations/
@@ -57,6 +72,8 @@ hearthcast/
             <timestamp>_CreateCategoriesAndItemGroups.Designer.cs
             <timestamp>_CreateTrackedItemsAndHouseholdAllocations.cs
             <timestamp>_CreateTrackedItemsAndHouseholdAllocations.Designer.cs
+            <timestamp>_CreateOrdinarySnapshots.cs
+            <timestamp>_CreateOrdinarySnapshots.Designer.cs
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
@@ -69,6 +86,9 @@ hearthcast/
           TrackedItemPersistenceTests.cs
           TrackedItemAllocationTests.cs
           TrackedItemTestSetup.cs
+        Snapshots/
+          SnapshotPersistenceTests.cs
+          SnapshotIntegrityTests.cs
         Infrastructure/
           SqliteTestDatabase.cs
         Hearthcast.Data.Tests.csproj
@@ -78,6 +98,7 @@ hearthcast/
     household-person-slice.md
     classification-slice.md
     tracked-items-slice.md
+    ordinary-snapshots-slice.md
     project-layout.md
 ```
 

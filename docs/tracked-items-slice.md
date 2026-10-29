@@ -99,12 +99,13 @@ two new tables and their indexes. It does not edit the first two migrations or
 seed user data. Upgrade coverage verifies that existing people and classification
 records survive; the full migration chain is also rolled back and reapplied.
 
-The full SQLite suite passes 94 cases: the preceding 49 plus 22 tracked-item
+At this checkpoint the SQLite suite passed 94 cases: the preceding 49 plus 22 tracked-item
 persistence cases and 23 allocation cases. It covers personal/shared/excluded
 items, metadata, same-household FKs, totals and ranges, replacement and exclusion,
 participation/deletion guards, concurrent changes and creation rollback after a
 failed allocation insert. All database files are isolated temporary test files.
 
 The API still serves only `/health`; no persistent application database was
-created or updated. This slice remains separate from the pushed Classification
-checkpoint.
+created or updated. This slice and the shared validation helpers are committed and pushed as
+`3cb76ea`. The subsequent ordinary-snapshot capture/reload slice is documented
+[separately](ordinary-snapshots-slice.md).

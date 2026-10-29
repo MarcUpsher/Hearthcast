@@ -1,9 +1,10 @@
 # Hearthcast relational schema and implementation plan
 
 Updated 29 October 2026. This translates the [logical model](schema-proposal.md)
-into proposed tables and constraints. The [Household/Person slice](household-person-slice.md)
-[Classification slice](classification-slice.md) and
-[Tracked items slice](tracked-items-slice.md) are implemented. Other tables and
+into proposed tables and constraints. The [Household/Person](household-person-slice.md),
+[Classification](classification-slice.md), [Tracked items](tracked-items-slice.md)
+and initial [Ordinary snapshots](ordinary-snapshots-slice.md) slices are implemented.
+Other tables and
 recommendations remain a plan for review before their entities and migrations
 are created.
 
@@ -168,7 +169,7 @@ are independent copies.
 
 ## Exact numbers and dates
 
-- Proposed money mapping: .NET decimal with invariant decimal text in SQLite,
+- Ordinary amount mapping: .NET decimal with invariant decimal text in SQLite,
   preserving exact values. Start with decimal aggregation in application code;
   avoid implicit floating-point conversion or SQL lexical sorting of amounts.
 - Verify the converter with representative amounts and round trips when it is
@@ -215,8 +216,11 @@ logic must also enforce:
    Implemented locally with 45 new cases; all 94 SQLite cases pass. Participation
    and membership writes now guard existing allocations and holder references.
 5. **Ordinary snapshots.** Snapshot, SnapshotPerson, ItemSnapshot and allocations.
-   Verify complete saves, carried values, null versus zero and preservation of
-   saved metadata after current setup changes.
+   First review point implemented locally: atomic capture/reload, exact amounts,
+   date precision, null versus zero and preservation of saved metadata after
+   current setup changes. There are 42 new SQLite cases, with all 136 passing.
+   Second review point remains: subsequent capture/carry-forward and corrections,
+   preserving confirmation provenance without changing later saved copies.
 6. **Financed assets and their snapshots.** Add the dedicated setup, person links,
    independent balance fields and equity calculations. Verify shared allocations,
    missing/inapplicable withdrawal balances, and no double counting.

@@ -1,6 +1,7 @@
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.TrackedItems;
+using Hearthcast.Data.Snapshots;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hearthcast.Data.Persistence;
@@ -13,6 +14,11 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<ItemGroup> ItemGroups => Set<ItemGroup>();
     public DbSet<TrackedItem> TrackedItems => Set<TrackedItem>();
     public DbSet<TrackedItemHouseholdAllocation> TrackedItemHouseholdAllocations => Set<TrackedItemHouseholdAllocation>();
+
+    public DbSet<Snapshot> Snapshots => Set<Snapshot>();
+    public DbSet<SnapshotPerson> SnapshotPeople => Set<SnapshotPerson>();
+    public DbSet<ItemSnapshot> ItemSnapshots => Set<ItemSnapshot>();
+    public DbSet<ItemSnapshotHouseholdAllocation> ItemSnapshotHouseholdAllocations => Set<ItemSnapshotHouseholdAllocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
