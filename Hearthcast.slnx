@@ -1,5 +1,9 @@
 <Solution>
-  <Folder Name="/backend/">
-    <Project Path="backend/Hearthcast.Api/Hearthcast.Api.csproj" />
+  <Folder Name="/backend/src/">
+    <Project Path="backend/src/Hearthcast.Api/Hearthcast.Api.csproj" />
+    <Project Path="backend/src/Hearthcast.Data/Hearthcast.Data.csproj" />
+  </Folder>
+  <Folder Name="/backend/tests/">
+    <Project Path="backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj" />
   </Folder>
 </Solution>

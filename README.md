@@ -6,20 +6,32 @@ A household finance app built around configured items and dated snapshots.
 
 ## Current step
 
-A fresh .NET 10 backend shell with a health endpoint. Entity mapping is the next
-step, starting with Household and Person. Persistence, migrations and the
-frontend will follow in separate steps.
+The first persistence slice implements Household and Person, with EF Core SQLite
+mapping, a migration and integration tests. The API still exposes only its health
+endpoint. Categories, tracked items, snapshots and the frontend follow in separate
+steps.
 
 The proposed data model is documented in [the schema proposal](docs/schema-proposal.md).
+The [relational schema plan](docs/relational-schema-plan.md) maps the proposed
+relationships, constraints and implementation slices for review before entity mapping.
+See the [Household and Person slice](docs/household-person-slice.md) for the code
+to review and the rules implemented so far.
 
 ## Structure
 
 ```text
 Hearthcast.slnx
 backend/
-  Hearthcast.Api/
+  src/
+    Hearthcast.Api/
+    Hearthcast.Data/
+  tests/
+    Hearthcast.Data.Tests/
 frontend/                 # Planned Angular Material app; not created yet
 ```
+
+See [project layout and naming](docs/project-layout.md) for the feature folders,
+persistence folders and conventions to follow as the app grows.
 
 ## Build and run
 
@@ -27,8 +39,10 @@ Requires the .NET 10 SDK specified in `global.json`.
 
 ```sh
 dotnet restore Hearthcast.slnx
+dotnet tool restore
 dotnet build Hearthcast.slnx --no-restore
-dotnet run --project backend/Hearthcast.Api
+dotnet test Hearthcast.slnx --no-build --no-restore
+dotnet run --project backend/src/Hearthcast.Api
 ```
 
 The local launch profile listens at `http://127.0.0.1:5190` without opening a
@@ -37,9 +51,12 @@ browser. `GET /health` returns `Healthy` when the application is running.
 Stop the API with Ctrl+C. To use another port:
 
 ```sh
-dotnet run --project backend/Hearthcast.Api --no-launch-profile --urls http://127.0.0.1:5191
+dotnet run --project backend/src/Hearthcast.Api --no-launch-profile --urls http://127.0.0.1:5191
 ```
 
 Keep financial files and local configuration outside tracked source. The root
 `.gitignore` excludes build output, local credentials, SQLite files and financial
 imports/exports.
+
+Tests apply the migration to isolated temporary SQLite databases and remove them
+afterwards. API startup does not create, seed or migrate an application database.

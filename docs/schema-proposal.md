@@ -1,9 +1,10 @@
 # Hearthcast — schema proposal
 
 Discussion draft, updated 27 October 2026. Proposed data model for Hearthcast.
-The backend shell is in place; entity definitions and persistence will be
-implemented in small, reviewed steps. This document describes the model, not
-the current implementation.
+The backend shell and first Household/Person persistence slice are in place;
+remaining entity definitions will be implemented in small, reviewed steps.
+This document describes the model; see [the first slice](household-person-slice.md)
+for the currently implemented subset.
 
 ## Model principles
 
@@ -145,21 +146,21 @@ with copied equivalents for saved financed-asset snapshots, in the final schema 
 | Table | Fields | Rules |
 | --- | --- | --- |
 | FinancedAsset | Id, HouseholdId, GroupId, Name, CurrencyCode, CountryCode, PurchaseDate, PurchasePrice, OriginalLoanAmount, owners and shares, loan holder(s), IncludeInHousehold, household allocation, IsRetired | Current setup; purchase price and original borrowing are distinct. |
-| FinancedAssetSnapshot | Id, SnapshotId, FinancedAssetId, CurrentValuation, OutstandingLoanBalance, AvailableRedrawAmount, confirmation/carry-forward information for each balance, copied asset metadata and person associations | One financed-asset entry per main snapshot, independent of ordinary ItemSnapshot rows. |
+| FinancedAssetSnapshot | Id, SnapshotId, FinancedAssetId, CurrentValuation, OutstandingLoanBalance, AvailableToWithdraw, confirmation/carry-forward information for each balance, copied asset metadata and person associations | One financed-asset entry per main snapshot, independent of ordinary ItemSnapshot rows. |
 
 - Shared assets have their actual owners and explicit shares recorded.
 - Record the loan's named holder(s) separately from asset ownership and
   household allocation. The repayment account does not determine the reporting split.
 - The three changing inputs are current valuation, outstanding loan balance and
-  optional available redraw. Each has independent confirmation/carry-forward metadata.
-- Available redraw may be labelled Access bond for a mortgage where that term is
+  optional amount available to withdraw. Each has independent confirmation/carry-forward metadata.
+- AvailableToWithdraw may be labelled Access bond for a mortgage where that term is
   appropriate; it is not required for loans without this facility.
 - Saved entries copy the original loan amount, category/group IDs and names,
   financial type, and other relevant setup, so changing current setup cannot
   rewrite historical reporting or derived figures.
 - Relationships stay within the household and snapshot, with at most one entry
   for each `(SnapshotId, FinancedAssetId)` pair.
-- Where overpayments have already reduced outstanding debt, available redraw is
+- Where overpayments have already reduced outstanding debt, the amount available to withdraw is
   informational. It does not become another asset or a second deduction.
 - The calculation is a snapshot of balances, not a record of transactions or
   cumulative cash payments including interest. Do not clamp unexpected derived
@@ -169,7 +170,7 @@ Calculated figures:
 
 | Figure | Formula |
 | --- | --- |
-| Principal reduction excluding redraw, where applicable | Original loan amount - available redraw - outstanding loan balance |
+| Principal reduction excluding withdrawable funds, where applicable | Original loan amount - amount available to withdraw - outstanding loan balance |
 | Total loan balance reduction | Original loan amount - outstanding loan balance |
 | Current equity | Current valuation - outstanding loan balance |
 
@@ -182,10 +183,11 @@ Household reporting includes financed-asset equity once, applying the saved hous
 allocation for its person breakdown. A future gross asset/debt presentation can
 show asset value and loan separately as the components of that same equity.
 Do not add equity again alongside those components. Missing inputs make only the
-dependent calculations incomplete; missing or inapplicable redraw does not prevent
+dependent calculations incomplete; an unknown or inapplicable withdrawal balance does not prevent
 calculating equity or total loan balance reduction when their inputs are known.
-For a loan without redraw, there is no need to calculate a separate reduction
-excluding redraw. An applicable but unrecorded redraw amount remains unknown.
+For a loan without a withdrawal facility, there is no need to calculate a separate
+reduction excluding withdrawable funds. AvailableToWithdraw stays unknown when
+applicable but unrecorded.
 
 ## Reporting and technical constraints
 
