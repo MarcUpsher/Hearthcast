@@ -5,4 +5,3 @@ namespace Hearthcast.Data.Summaries;
 
 internal sealed record SnapshotReportData(Snapshot Header, IReadOnlyList<SnapshotPersonSummary> People,
     IReadOnlyList<SnapshotReportGroup> Groups);
-

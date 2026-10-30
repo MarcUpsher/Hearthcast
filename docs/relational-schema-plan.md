@@ -236,7 +236,8 @@ logic must also enforce:
 7. **Bulk API workflow and calculated summaries.** Build entry and reporting around
    the verified persistence model. The [full snapshot summary](snapshot-summary-slice.md)
    calculates all-recorded totals on demand. [Individual holdings](individual-holdings-summary-slice.md)
-   now use saved holders and ownership shares; household reporting and
+   now use saved holders and ownership shares. [Household summaries](household-summary-slice.md)
+   count included entries once and use saved allocations for person contributions;
    bulk finance endpoints remain subsequent work. Frontend and historical import remain separate
    steps; no spreadsheet-specific fields enter this core schema.
 

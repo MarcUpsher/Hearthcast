@@ -7,11 +7,11 @@ namespace Hearthcast.Data.Summaries;
 // Projects saved entries once, without calculating totals for any report scope.
 internal static class SnapshotReportProjector
 {
-    public static SnapshotReportData Project(Snapshot snapshot)
+    public static SnapshotReportData Project(Snapshot snapshot, bool includedInHouseholdOnly = false)
     {
-        var items = snapshot.ItemSnapshots.ToLookup(item => new GroupKey(item.CurrencyCode,
+        var items = snapshot.ItemSnapshots.Where(item => !includedInHouseholdOnly || item.IncludeInHousehold).ToLookup(item => new GroupKey(item.CurrencyCode,
             item.CategoryId, item.CategoryName, item.FinancialType, item.GroupId, item.GroupName));
-        var assets = snapshot.FinancedAssetSnapshots.ToLookup(asset => new GroupKey(asset.CurrencyCode,
+        var assets = snapshot.FinancedAssetSnapshots.Where(asset => !includedInHouseholdOnly || asset.IncludeInHousehold).ToLookup(asset => new GroupKey(asset.CurrencyCode,
             asset.CategoryId, asset.CategoryName, asset.FinancialType, asset.GroupId, asset.GroupName));
         var groups = items.Select(group => group.Key).Union(assets.Select(group => group.Key))
             .OrderBy(key => key.CurrencyCode, StringComparer.Ordinal)

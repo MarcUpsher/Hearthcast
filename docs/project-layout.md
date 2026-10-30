@@ -78,8 +78,18 @@ hearthcast/
           SnapshotReportProjector.cs
           IndividualHoldingsSummaryService.cs
           IndividualHoldingsSummaryCalculator.cs
-          OwnershipEquityAllocator.cs
+          SnapshotShareAllocator.cs
+          HouseholdSummaryService.cs
+          HouseholdSummaryCalculator.cs
           Models/
+            Household/
+              SnapshotHouseholdSummary.cs
+              HouseholdPersonSummary.cs
+              HouseholdCurrencySummary.cs
+              HouseholdCategorySummary.cs
+              HouseholdGroupSummary.cs
+              HouseholdItemContribution.cs
+              HouseholdFinancedAssetContribution.cs
             IndividualHoldings/
               SnapshotIndividualHoldingsSummary.cs
               PersonHoldingsSummary.cs
@@ -162,6 +172,7 @@ hearthcast/
         Summaries/
           SnapshotSummaryTests.cs
           IndividualHoldingsSummaryTests.cs
+          HouseholdSummaryTests.cs
         Infrastructure/
           PostgresTestDatabase.cs
           InterceptingContextFactory.cs
@@ -177,6 +188,7 @@ hearthcast/
     snapshot-lifecycle-slice.md
     snapshot-summary-slice.md
     individual-holdings-summary-slice.md
+    household-summary-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md

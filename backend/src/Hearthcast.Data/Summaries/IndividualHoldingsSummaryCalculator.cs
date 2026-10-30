@@ -12,7 +12,7 @@ internal static class IndividualHoldingsSummaryCalculator
         var originalPersonIds = snapshot.People.ToDictionary(person => person.SnapshotPersonId, person => person.PersonId);
         var equity = snapshot.Groups
             .SelectMany(group => group.FinancedAssets).ToDictionary(asset => asset.FinancedAssetSnapshotId,
-                asset => OwnershipEquityAllocator.Allocate(asset, originalPersonIds));
+                asset => SnapshotShareAllocator.Allocate(asset.CurrentEquity, asset.Owners, originalPersonIds));
         var people = snapshot.People.Select(person =>
         {
             var currencies = snapshot.Groups.GroupBy(group => group.CurrencyCode).Select(currency =>
