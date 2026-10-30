@@ -13,7 +13,7 @@ public sealed class Category
     {
         if (!Enum.IsDefined(financialType))
         {
-            throw new ArgumentOutOfRangeException(nameof(financialType), "Select Asset or Debt.");
+            throw new InvalidValueException("Select Asset or Debt.", nameof(financialType));
         }
 
         Id = Guid.NewGuid();

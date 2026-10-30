@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Tests.Infrastructure;
@@ -55,7 +56,7 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
     {
         var household = await _households.CreateAsync("Household A", "Person A");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+        await Assert.ThrowsAsync<InvalidValueException>(() =>
             _classification.CreateCategoryAsync(household.Id, "Category A", (FinancialType)financialType));
 
         await using var context = _database.CreateDbContext();
@@ -96,7 +97,7 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
     [Fact]
     public async Task ACategoryRequiresAnExistingHousehold()
     {
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() =>
             _classification.CreateCategoryAsync(Guid.NewGuid(), "Category A", FinancialType.Asset));
 
         await using var context = _database.CreateDbContext();
@@ -108,7 +109,7 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
     {
         var household = await _households.CreateAsync("Household A", "Person A");
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() =>
             _classification.CreateGroupAsync(household.Id, Guid.NewGuid(), "Group A"));
 
         await using var context = _database.CreateDbContext();
@@ -122,7 +123,7 @@ public sealed class ClassificationPersistenceTests : IAsyncLifetime
         var second = await _households.CreateAsync("Household B", "Person B");
         var category = await _classification.CreateCategoryAsync(second.Id, "Category B", FinancialType.Asset);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() =>
             _classification.CreateGroupAsync(first.Id, category.Id, "Group A"));
 
         await using var context = _database.CreateDbContext();

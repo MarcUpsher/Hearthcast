@@ -78,6 +78,7 @@ frontend/                 # Planned Angular Material app; not created yet
 - [Individual holdings summary slice](docs/individual-holdings-summary-slice.md)
 - [Household summary slice](docs/household-summary-slice.md)
 - [Household and people API slice](docs/household-api-slice.md)
+- [Classification API slice](docs/classification-api-slice.md)
 - [Synthetic household history specification](docs/household-history-tests.md)
 - [Project layout and naming](docs/project-layout.md)
 

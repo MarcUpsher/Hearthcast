@@ -13,8 +13,9 @@ The [full snapshot summary](snapshot-summary-slice.md) now calculates all-record
 totals on demand without adding tables. [Individual holdings](individual-holdings-summary-slice.md)
 use saved holders and ownership shares. [Household summaries](household-summary-slice.md)
 use saved inclusion and allocation shares; all three views are calculated on demand.
-The [household/people API](household-api-slice.md) exposes the first setup endpoints;
-other finance endpoints remain later slices.
+The [household/people API](household-api-slice.md) and
+[classification API](classification-api-slice.md) expose the initial setup endpoints;
+tracked-item and snapshot endpoints remain later slices.
 
 ## Model principles
 

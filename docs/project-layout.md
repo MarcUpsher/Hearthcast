@@ -32,6 +32,17 @@ hearthcast/
             UpdatePersonRequest.cs
             HouseholdResponse.cs
             PersonResponse.cs
+        Classification/
+          CategoriesController.cs
+          GroupsController.cs
+          Contracts/
+            CreateCategoryRequest.cs
+            CreateGroupRequest.cs
+            RenameCategoryRequest.cs
+            RenameGroupRequest.cs
+            CategoryResponse.cs
+            GroupResponse.cs
+            FinancialTypeJsonConverter.cs
         Properties/
           launchSettings.json
         Hearthcast.Api.csproj
@@ -159,6 +170,8 @@ hearthcast/
         Hearthcast.Data.csproj
     tests/
       Hearthcast.Api.Tests/
+        Classification/
+          ClassificationApiTests.cs
         Households/
           HouseholdApiTests.cs
         Infrastructure/
@@ -212,6 +225,7 @@ hearthcast/
     individual-holdings-summary-slice.md
     household-summary-slice.md
     household-api-slice.md
+    classification-api-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md
