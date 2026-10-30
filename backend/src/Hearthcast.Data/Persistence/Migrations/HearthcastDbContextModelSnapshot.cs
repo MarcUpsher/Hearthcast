@@ -72,6 +72,137 @@ namespace Hearthcast.Data.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAsset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("HasWithdrawalFacility")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IncludeInHousehold")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRetired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("OriginalLoanAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateOnly?>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("PurchasePrice")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "GroupId");
+
+                    b.ToTable("FinancedAssets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancedAssets_CountryCode", "\"CountryCode\" ~ '^[A-Z]{2}$'");
+
+                            t.HasCheckConstraint("CK_FinancedAssets_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_FinancedAssets_Name_NotBlank", "length(trim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_FinancedAssets_OriginalLoanAmount", "\"OriginalLoanAmount\" >= 0 AND \"OriginalLoanAmount\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_FinancedAssets_PurchasePrice", "\"PurchasePrice\" >= 0 AND \"PurchasePrice\" < 'Infinity'::numeric");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAssetHouseholdAllocation", b =>
+                {
+                    b.Property<Guid>("FinancedAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShareBasisPoints")
+                        .HasColumnType("integer");
+
+                    b.HasKey("FinancedAssetId", "PersonId");
+
+                    b.HasIndex("HouseholdId", "FinancedAssetId");
+
+                    b.HasIndex("HouseholdId", "PersonId");
+
+                    b.ToTable("FinancedAssetHouseholdAllocations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancedAssetHouseholdAllocations_Share", "\"ShareBasisPoints\" BETWEEN 1 AND 10000");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAssetLoanHolder", b =>
+                {
+                    b.Property<Guid>("FinancedAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("FinancedAssetId", "PersonId");
+
+                    b.HasIndex("HouseholdId", "FinancedAssetId");
+
+                    b.HasIndex("HouseholdId", "PersonId");
+
+                    b.ToTable("FinancedAssetLoanHolders", (string)null);
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAssetOwner", b =>
+                {
+                    b.Property<Guid>("FinancedAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShareBasisPoints")
+                        .HasColumnType("integer");
+
+                    b.HasKey("FinancedAssetId", "PersonId");
+
+                    b.HasIndex("HouseholdId", "FinancedAssetId");
+
+                    b.HasIndex("HouseholdId", "PersonId");
+
+                    b.ToTable("FinancedAssetOwners", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancedAssetOwners_Share", "\"ShareBasisPoints\" BETWEEN 1 AND 10000");
+                        });
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Households.Household", b =>
                 {
                     b.Property<Guid>("Id")
@@ -412,6 +543,81 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAsset", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Classification.ItemGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "GroupId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAssetHouseholdAllocation", b =>
+                {
+                    b.HasOne("Hearthcast.Data.FinancedAssets.FinancedAsset", "FinancedAsset")
+                        .WithMany("HouseholdAllocations")
+                        .HasForeignKey("HouseholdId", "FinancedAssetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Households.Person", "Person")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "PersonId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FinancedAsset");
+
+                    b.Navigation("Person");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAssetLoanHolder", b =>
+                {
+                    b.HasOne("Hearthcast.Data.FinancedAssets.FinancedAsset", "FinancedAsset")
+                        .WithMany("LoanHolders")
+                        .HasForeignKey("HouseholdId", "FinancedAssetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Households.Person", "Person")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "PersonId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FinancedAsset");
+
+                    b.Navigation("Person");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAssetOwner", b =>
+                {
+                    b.HasOne("Hearthcast.Data.FinancedAssets.FinancedAsset", "FinancedAsset")
+                        .WithMany("Owners")
+                        .HasForeignKey("HouseholdId", "FinancedAssetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Households.Person", "Person")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "PersonId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FinancedAsset");
+
+                    b.Navigation("Person");
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Households.Person", b =>
                 {
                     b.HasOne("Hearthcast.Data.Households.Household", "Household")
@@ -554,6 +760,15 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Person");
 
                     b.Navigation("TrackedItem");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAsset", b =>
+                {
+                    b.Navigation("HouseholdAllocations");
+
+                    b.Navigation("LoanHolders");
+
+                    b.Navigation("Owners");
                 });
 
             modelBuilder.Entity("Hearthcast.Data.Households.Household", b =>

@@ -126,10 +126,15 @@ public sealed class SnapshotCarryIntegrityTests : IAsyncLifetime
         var original = await snapshots.CreateAsync(setup.HouseholdId, new DateOnly(2023, 1, 1), [new(item.Id, 10m)]);
         var carried = await snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1));
         await using var context = _database.CreateDbContext();
+        // Test this migration's rollback boundary independently of later setup migrations.
+        await context.GetService<IMigrator>().MigrateAsync("20261030112256_AddSnapshotCarryForwardAndCorrections");
+        var appliedBefore = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
         await Assert.ThrowsAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync("20261029230521_CreateInitialPostgresSchema"));
         var retained = await snapshots.GetAsync(setup.HouseholdId, carried.Id);
         Assert.Equal(original.ItemSnapshots.Single().Id, Assert.Single(retained.ItemSnapshots).CarriedFromItemSnapshotId);
         Assert.Equal(10m, Assert.Single(retained.ItemSnapshots).Amount);
+        Assert.Equal(appliedBefore, (await context.Database.GetAppliedMigrationsAsync()).ToArray());
+        await context.Database.MigrateAsync();
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
     }
 

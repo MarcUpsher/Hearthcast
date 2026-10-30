@@ -57,6 +57,12 @@ public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> cont
                 throw new InvalidOperationException("A person who holds tracked items cannot be removed.");
             }
 
+            if (await context.FinancedAssetOwners.AnyAsync(row => row.HouseholdId == householdId && row.PersonId == personId, token)
+                || await context.FinancedAssetLoanHolders.AnyAsync(row => row.HouseholdId == householdId && row.PersonId == personId, token))
+            {
+                throw new InvalidOperationException("Resolve the person's financed-asset ownership and loan-holder links before removing them.");
+            }
+
             if (await context.SnapshotPeople.AnyAsync(
                 person => person.HouseholdId == householdId && person.PersonId == personId, token))
             {
@@ -98,7 +104,9 @@ public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> cont
         HearthcastDbContext context, Guid householdId, Guid personId, CancellationToken cancellationToken)
     {
         if (await context.TrackedItemHouseholdAllocations.AnyAsync(
-            allocation => allocation.HouseholdId == householdId && allocation.PersonId == personId, cancellationToken))
+            allocation => allocation.HouseholdId == householdId && allocation.PersonId == personId, cancellationToken)
+            || await context.FinancedAssetHouseholdAllocations.AnyAsync(
+                allocation => allocation.HouseholdId == householdId && allocation.PersonId == personId, cancellationToken))
         {
             throw new InvalidOperationException("Resolve the person's household allocations before changing participation or removing them.");
         }

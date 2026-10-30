@@ -1,4 +1,5 @@
 using Hearthcast.Data.Classification;
+using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.TrackedItems;
 using Hearthcast.Data.Snapshots;
@@ -14,6 +15,11 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<ItemGroup> ItemGroups => Set<ItemGroup>();
     public DbSet<TrackedItem> TrackedItems => Set<TrackedItem>();
     public DbSet<TrackedItemHouseholdAllocation> TrackedItemHouseholdAllocations => Set<TrackedItemHouseholdAllocation>();
+
+    public DbSet<FinancedAsset> FinancedAssets => Set<FinancedAsset>();
+    public DbSet<FinancedAssetOwner> FinancedAssetOwners => Set<FinancedAssetOwner>();
+    public DbSet<FinancedAssetLoanHolder> FinancedAssetLoanHolders => Set<FinancedAssetLoanHolder>();
+    public DbSet<FinancedAssetHouseholdAllocation> FinancedAssetHouseholdAllocations => Set<FinancedAssetHouseholdAllocation>();
 
     public DbSet<Snapshot> Snapshots => Set<Snapshot>();
     public DbSet<SnapshotPerson> SnapshotPeople => Set<SnapshotPerson>();

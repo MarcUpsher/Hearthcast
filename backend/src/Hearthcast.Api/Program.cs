@@ -1,4 +1,5 @@
 using Hearthcast.Api.Health;
+using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
@@ -16,6 +17,7 @@ builder.Services.AddDbContextFactory<HearthcastDbContext>(options => options.Use
 builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<TrackedItemService>();
+builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 

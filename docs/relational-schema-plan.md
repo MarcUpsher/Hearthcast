@@ -3,7 +3,8 @@
 Updated 30 October 2026. This translates the [logical model](schema-proposal.md)
 into proposed tables and constraints. The [Household/Person](household-person-slice.md),
 [Classification](classification-slice.md), [Tracked items](tracked-items-slice.md)
-and initial [Ordinary snapshots](ordinary-snapshots-slice.md) slices are implemented.
+[Ordinary snapshots](ordinary-snapshots-slice.md) and
+[Financed-asset setup](financed-asset-setup-slice.md) slices are implemented.
 Other tables and
 recommendations remain a plan for review before their entities and migrations
 are created.
@@ -153,9 +154,8 @@ are independent copies.
 
 - Names, current item group, actual holder/owners, currency, country, inclusion
   flags and participation flags are required. Blank names are invalid.
-- Proposed: purchase date and purchase price may be null when not known. Original
-  loan amount is required and nonnegative for the initial financed-asset setup.
-  Confirm this acquisition-metadata choice before implementing that slice.
+- Purchase date and purchase price may be null when not known. Original loan
+  amount is required and nonnegative in the financed-asset setup slice.
 - Snapshot date and Day/Month precision are required. Month-only dates are stored
   as the first day and displayed as a month.
 - An ordinary item amount can be null. The same applies independently to current
@@ -228,9 +228,10 @@ logic must also enforce:
    revision conflicts, preserving confirmation provenance and independent history.
    See the [snapshot lifecycle guide](snapshot-lifecycle-slice.md): 56 additional
    cases, with all 197 PostgreSQL integration cases passing.
-6. **Financed assets and their snapshots.** Add the dedicated setup, person links,
-   independent balance fields and equity calculations. Verify shared allocations,
-   missing/inapplicable withdrawal balances, and no double counting.
+6. **Financed assets and their snapshots.** Setup and person links are implemented
+   locally; see the [setup review guide](financed-asset-setup-slice.md).
+   Independent balance snapshots and equity calculations remain the next review
+   point, including missing/inapplicable withdrawal balances and no double counting.
 7. **Bulk API workflow and calculated summaries.** Build entry and reporting around
    the verified persistence model. Frontend and historical import remain separate
    steps; no spreadsheet-specific fields enter this core schema.

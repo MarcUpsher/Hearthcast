@@ -7,14 +7,16 @@ A household finance app built around configured items and dated snapshots.
 ## Current step
 
 The persistence model implements household setup, classification, tracked items,
-household allocations and ordinary-snapshot capture, carry-forward and corrections.
+household allocations, financed-asset setup and ordinary-snapshot capture, carry-forward and corrections.
 PostgreSQL is the only database provider, with EF Core migrations and real database integration
-tests. Financed assets, calculated summaries, finance endpoints and the Angular
+tests. Financed-asset snapshots, calculated summaries, finance endpoints and the Angular
 Material frontend follow in separate steps.
 
 The API and database run in separate Docker containers. A one-shot migration
 service applies the schema before the API starts. There is no user data seeded
 and no schema mutation during ordinary API startup.
+
+See the [financed-asset setup review guide](docs/financed-asset-setup-slice.md) for the latest slice.
 
 ## Run with Docker
 
