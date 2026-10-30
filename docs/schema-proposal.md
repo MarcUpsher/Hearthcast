@@ -10,7 +10,8 @@ This document describes the model; see [Household/Person](household-person-slice
 [Financed-asset setup](financed-asset-setup-slice.md),
 and [Financed-asset snapshots](financed-asset-snapshots-slice.md) for the currently implemented subset.
 The [full snapshot summary](snapshot-summary-slice.md) now calculates all-recorded
-totals on demand without adding tables. Person and household reports remain later work.
+totals on demand without adding tables. [Individual holdings](individual-holdings-summary-slice.md)
+use saved holders and ownership shares; household reports remain later work.
 
 ## Model principles
 

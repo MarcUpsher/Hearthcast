@@ -1,6 +1,6 @@
 namespace Hearthcast.Data.Summaries.Models;
 
-/// <summary>All recorded values in one currency. Debt is a positive subtotal subtracted from the net position.</summary>
+/// <summary>Totals within one report scope and currency. Debt is a positive subtotal subtracted from the net position.</summary>
 public sealed record SnapshotSummaryTotals
 {
     public SnapshotSummaryTotals(SnapshotAmountSubtotal ordinaryAssets,

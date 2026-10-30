@@ -97,8 +97,10 @@ at the largest representable net position.
 
 The service delegates loading to the existing `SnapshotService.GetAsync`, which
 uses a RepeatableRead transaction around its split queries. A pure internal
-calculator projects that complete graph and rolls up entries without database
-access. It reads no current setup, writes no rows and maintains no cache. A later
+`SnapshotReportProjector` projects that complete graph without aggregating values;
+the full-overview calculator rolls up its projected entries. The same projection
+supports individual holdings without requiring full-overview totals first.
+Neither component reads current setup, writes rows or maintains a cache. A later
 request sees the latest committed correction; an already returned summary remains
 an independent result with its original revision.
 
@@ -109,7 +111,9 @@ stored summaries, frontend and API contracts remain separate work.
 
 ## Verification
 
-The Docker test-image build passes with zero warnings/errors. All
-350 PostgreSQL integration cases pass, including 20 summary cases. Tests use
-disposable databases. No migration is added, and the running API is not rebuilt
-or deployed as part of this slice. Changes remain uncommitted for review.
+At the full-summary checkpoint, the Docker test-image build passed with zero
+warnings/errors and all 350 PostgreSQL integration cases passed, including 20
+summary cases. See the [individual holdings guide](individual-holdings-summary-slice.md)
+for the current suite result after introducing the shared entry projector.
+Tests use disposable databases. No migration is added, and the running API is not
+rebuilt or deployed as part of reporting work.

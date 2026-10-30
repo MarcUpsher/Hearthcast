@@ -21,6 +21,7 @@ builder.Services.AddScoped<TrackedItemService>();
 builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
 builder.Services.AddScoped<SnapshotSummaryService>();
+builder.Services.AddScoped<IndividualHoldingsSummaryService>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
 await using var app = builder.Build();

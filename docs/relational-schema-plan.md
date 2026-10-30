@@ -235,7 +235,8 @@ logic must also enforce:
    missing/inapplicable withdrawal balances and no double counting.
 7. **Bulk API workflow and calculated summaries.** Build entry and reporting around
    the verified persistence model. The [full snapshot summary](snapshot-summary-slice.md)
-   calculates all-recorded totals on demand; individual/household reporting and
+   calculates all-recorded totals on demand. [Individual holdings](individual-holdings-summary-slice.md)
+   now use saved holders and ownership shares; household reporting and
    bulk finance endpoints remain subsequent work. Frontend and historical import remain separate
    steps; no spreadsheet-specific fields enter this core schema.
 
