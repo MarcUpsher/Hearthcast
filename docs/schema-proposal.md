@@ -9,6 +9,8 @@ This document describes the model; see [Household/Person](household-person-slice
 [Ordinary snapshots](ordinary-snapshots-slice.md) and [Snapshot lifecycle](snapshot-lifecycle-slice.md),
 [Financed-asset setup](financed-asset-setup-slice.md),
 and [Financed-asset snapshots](financed-asset-snapshots-slice.md) for the currently implemented subset.
+The [full snapshot summary](snapshot-summary-slice.md) now calculates all-recorded
+totals on demand without adding tables. Person and household reports remain later work.
 
 ## Model principles
 

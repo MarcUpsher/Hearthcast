@@ -69,6 +69,21 @@ hearthcast/
           AllocationShareRules.cs
           RequiredAlphabeticCode.cs
           RequiredText.cs
+        Summaries/
+          SnapshotSummaryService.cs
+          SnapshotSummaryCalculator.cs
+          Models/
+            SnapshotSummary.cs
+            SnapshotPersonSummary.cs
+            SnapshotPersonShare.cs
+            SnapshotBalanceSummary.cs
+            SnapshotAmountSubtotal.cs
+            SnapshotSummaryTotals.cs
+            SnapshotCurrencySummary.cs
+            SnapshotCategorySummary.cs
+            SnapshotGroupSummary.cs
+            ItemSnapshotSummary.cs
+            FinancedAssetSnapshotSummary.cs
         Persistence/
           HearthcastDbContext.cs
           SerializableTransaction.cs
@@ -130,6 +145,8 @@ hearthcast/
           FinancedAssetTestSetup.cs
           FinancedAssetPersistenceTests.cs
           FinancedAssetIntegrityTests.cs
+        Summaries/
+          SnapshotSummaryTests.cs
         Infrastructure/
           PostgresTestDatabase.cs
           InterceptingContextFactory.cs
@@ -143,6 +160,7 @@ hearthcast/
     tracked-items-slice.md
     ordinary-snapshots-slice.md
     snapshot-lifecycle-slice.md
+    snapshot-summary-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md

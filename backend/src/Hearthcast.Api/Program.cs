@@ -4,6 +4,7 @@ using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Snapshots;
+using Hearthcast.Data.Summaries;
 using Hearthcast.Data.TrackedItems;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<TrackedItemService>();
 builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
+builder.Services.AddScoped<SnapshotSummaryService>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
 await using var app = builder.Build();
