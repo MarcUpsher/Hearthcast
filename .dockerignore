@@ -2,6 +2,7 @@
 **
 !Dockerfile
 !global.json
+!Hearthcast.slnx
 !backend/
 !backend/src/
 !backend/src/**

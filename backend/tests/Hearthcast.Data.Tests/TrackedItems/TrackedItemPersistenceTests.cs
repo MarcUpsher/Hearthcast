@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
@@ -146,7 +147,7 @@ public sealed class TrackedItemPersistenceTests : IAsyncLifetime
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         await setup.CreateItemAsync(_items, false);
         var households = new HouseholdService(_database);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             households.RemovePersonAsync(setup.HouseholdId, setup.HolderPersonId));
 
         await using var context = _database.CreateDbContext();

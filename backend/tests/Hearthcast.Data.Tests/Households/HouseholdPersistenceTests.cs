@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Tests.Infrastructure;
@@ -80,7 +81,7 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     {
         var household = await _service.CreateAsync("Household A", "Person A");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             _service.RemovePersonAsync(household.Id, Assert.Single(household.People).Id));
 
         await using var context = CreateContext();
@@ -93,7 +94,7 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
         var household = await _service.CreateAsync("Household A", "Person A");
         await _service.CreateAsync("Household B", "Person B");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             _service.SetPersonParticipationAsync(household.Id, Assert.Single(household.People).Id, false));
 
         await using var context = CreateContext();
@@ -107,7 +108,7 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
         var household = await _service.CreateAsync("Household A", "Person A");
         await _service.AddPersonAsync(household.Id, "Person B", false);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             _service.RemovePersonAsync(household.Id, Assert.Single(household.People).Id));
 
         await using var context = CreateContext();
@@ -137,7 +138,7 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
         var household = await _service.CreateAsync("Household A", "Person A");
         var other = await _service.CreateAsync("Household B", "Person B");
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() =>
             _service.SetPersonParticipationAsync(household.Id, Assert.Single(other.People).Id, false));
 
         await using var context = CreateContext();
@@ -156,7 +157,7 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
         var outcomes = await Task.WhenAll(changes);
         Assert.Equal(2, barrier.Arrivals);
         Assert.Single(outcomes, exception => exception is null);
-        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, exception => exception is not null));
+        Assert.IsType<BusinessRuleViolationException>(Assert.Single(outcomes, exception => exception is not null));
 
         await using var context = CreateContext();
         Assert.Equal(1, await context.People.CountAsync(person => person.ParticipatesInHouseholdFinances));

@@ -1,4 +1,5 @@
 using Hearthcast.Api.Health;
+using Hearthcast.Api.Errors;
 using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.Households;
@@ -15,6 +16,10 @@ var connectionString = builder.Configuration.GetConnectionString("Hearthcast")
     ?? throw new InvalidOperationException("Configure ConnectionStrings__Hearthcast before starting Hearthcast.");
 
 builder.Services.AddDbContextFactory<HearthcastDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddControllers();
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+    context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<TrackedItemService>();
@@ -35,6 +40,12 @@ if (migrateOnly)
     return;
 }
 
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+app.MapControllers();
 app.MapHealthChecks("/health");
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 await app.RunAsync();
+
+// Entry point for WebApplicationFactory integration tests.
+public partial class Program;

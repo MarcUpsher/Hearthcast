@@ -8,7 +8,14 @@ internal static class RequiredText
         string? value,
         [CallerArgumentExpression(nameof(value))] string? parameterName = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidValueException("A nonblank value is required.", parameterName);
+        }
+        if (value.Contains('\0'))
+        {
+            throw new InvalidValueException("Text cannot contain null characters.", parameterName);
+        }
         return value.Trim();
     }
 }

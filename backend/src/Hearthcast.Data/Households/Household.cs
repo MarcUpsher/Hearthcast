@@ -27,10 +27,14 @@ public sealed class Household
         return household;
     }
 
-    internal void AddPerson(string displayName, bool participatesInHouseholdFinances)
+    internal Person AddPerson(string displayName, bool participatesInHouseholdFinances)
     {
-        _people.Add(new Person(this, displayName, participatesInHouseholdFinances));
+        var person = new Person(this, displayName, participatesInHouseholdFinances);
+        _people.Add(person);
+        return person;
     }
+
+    internal void RenamePerson(Guid personId, string displayName) => FindPerson(personId).Rename(displayName);
 
     internal void SetPersonParticipation(Guid personId, bool participatesInHouseholdFinances)
     {
@@ -48,7 +52,7 @@ public sealed class Household
         var person = FindPerson(personId);
         if (_people.Count == 1)
         {
-            throw new InvalidOperationException("A household must contain at least one person.");
+            throw new BusinessRuleViolationException("A household must contain at least one person.");
         }
 
         EnsureAnotherParticipant(person);
@@ -58,14 +62,14 @@ public sealed class Household
 
     private Person FindPerson(Guid personId) =>
         _people.SingleOrDefault(person => person.Id == personId)
-        ?? throw new KeyNotFoundException("The person does not belong to this household.");
+        ?? throw new ResourceNotFoundException("The person does not belong to this household.");
 
     private void EnsureAnotherParticipant(Person person)
     {
         if (person.ParticipatesInHouseholdFinances
             && !_people.Any(other => other.Id != person.Id && other.ParticipatesInHouseholdFinances))
         {
-            throw new InvalidOperationException(
+            throw new BusinessRuleViolationException(
                 "A household must have at least one person participating in its finances.");
         }
     }

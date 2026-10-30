@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Tests.Infrastructure;
 using Hearthcast.Data.TrackedItems;
@@ -214,9 +215,9 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         var item = await setup.CreateItemAsync(_items, allocations: [new(setup.OtherPersonId, 10_000)]);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             _households.SetPersonParticipationAsync(setup.HouseholdId, setup.OtherPersonId, false));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             _households.RemovePersonAsync(setup.HouseholdId, setup.OtherPersonId));
 
         await _items.SetHouseholdAllocationAsync(setup.HouseholdId, item.Id, true);
@@ -258,7 +259,14 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
         var outcomes = await Task.WhenAll(allocate, stopParticipating);
         Assert.Equal(2, barrier.Arrivals);
         Assert.Single(outcomes, exception => exception is null);
-        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, exception => exception is not null));
+        if (outcomes[0] is not null)
+        {
+            Assert.IsType<InvalidOperationException>(outcomes[0]);
+        }
+        else
+        {
+            Assert.IsType<BusinessRuleViolationException>(outcomes[1]);
+        }
 
         await using var context = _database.CreateDbContext();
         var recipient = await context.People.SingleAsync(person => person.Id == setup.OtherPersonId);

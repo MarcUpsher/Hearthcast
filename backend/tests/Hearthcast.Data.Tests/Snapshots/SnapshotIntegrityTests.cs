@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Snapshots;
 using Hearthcast.Data.Tests.Infrastructure;
@@ -170,7 +171,7 @@ public sealed class SnapshotIntegrityTests : IAsyncLifetime
         var snapshot = await _snapshots.CreateAsync(setup.HouseholdId);
         var households = new HouseholdService(_database);
         await households.SetPersonParticipationAsync(setup.HouseholdId, setup.OtherPersonId, false);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<BusinessRuleViolationException>(() =>
             households.RemovePersonAsync(setup.HouseholdId, setup.OtherPersonId));
         Assert.Contains("snapshot history", exception.Message);
 

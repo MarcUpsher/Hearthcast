@@ -21,6 +21,17 @@ hearthcast/
         Program.cs
         Health/
           DatabaseHealthCheck.cs
+        Errors/
+          ApiExceptionHandler.cs
+        Households/
+          HouseholdsController.cs
+          Contracts/
+            CreateHouseholdRequest.cs
+            RenameHouseholdRequest.cs
+            CreatePersonRequest.cs
+            UpdatePersonRequest.cs
+            HouseholdResponse.cs
+            PersonResponse.cs
         Properties/
           launchSettings.json
         Hearthcast.Api.csproj
@@ -66,6 +77,9 @@ hearthcast/
           SnapshotPeriod.cs
           SnapshotConflictException.cs
         Validation/
+          BusinessRuleViolationException.cs
+          InvalidValueException.cs
+          ResourceNotFoundException.cs
           AllocationShareRules.cs
           RequiredAlphabeticCode.cs
           RequiredText.cs
@@ -144,6 +158,14 @@ hearthcast/
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
+      Hearthcast.Api.Tests/
+        Households/
+          HouseholdApiTests.cs
+        Infrastructure/
+          ApiTestFactory.cs
+          ApiErrorTestController.cs
+          PostgresTestDatabase.cs               # Linked from Data.Tests, not duplicated
+        Hearthcast.Api.Tests.csproj
       Hearthcast.Data.Tests/
         Classification/
           ClassificationPersistenceTests.cs
@@ -189,6 +211,7 @@ hearthcast/
     snapshot-summary-slice.md
     individual-holdings-summary-slice.md
     household-summary-slice.md
+    household-api-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md
@@ -232,5 +255,7 @@ The container workflow and optional host-build commands are documented in
 [containers and PostgreSQL](containers-and-postgres.md). Run them from the
 repository root. Keep new migrations under Persistence/Migrations.
 
-The API currently exposes liveness/readiness endpoints only. A separate migration
-process applies schema changes; the ordinary API does not migrate or seed data.
+The API exposes liveness/readiness and household/people setup endpoints. Other
+finance endpoints remain subsequent slices. A separate migration process applies
+schema changes; the ordinary API does not migrate or seed data. API tests use
+WebApplicationFactory with an isolated PostgreSQL database.

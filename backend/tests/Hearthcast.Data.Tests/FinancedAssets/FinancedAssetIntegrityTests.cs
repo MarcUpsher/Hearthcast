@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.Tests.Infrastructure;
@@ -25,7 +26,7 @@ public sealed class FinancedAssetIntegrityTests : IAsyncLifetime
             allocations: [new(data.FirstPersonId, 10_000)]);
         var households = new HouseholdService(_database);
         await households.SetPersonParticipationAsync(data.HouseholdId, data.SecondPersonId, false);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => households.RemovePersonAsync(data.HouseholdId, data.SecondPersonId));
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() => households.RemovePersonAsync(data.HouseholdId, data.SecondPersonId));
         await using var context = _database.CreateDbContext();
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"DELETE FROM \"People\" WHERE \"Id\" = {data.SecondPersonId}"));
@@ -40,7 +41,7 @@ public sealed class FinancedAssetIntegrityTests : IAsyncLifetime
         var asset = await data.CreateAssetAsync(service);
         await service.SetRetiredAsync(data.HouseholdId, asset.Id, true);
         var households = new HouseholdService(_database);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => households.SetPersonParticipationAsync(data.HouseholdId, data.SecondPersonId, false));
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() => households.SetPersonParticipationAsync(data.HouseholdId, data.SecondPersonId, false));
         await service.SetPersonAssociationsAsync(data.HouseholdId, asset.Id,
             [new(data.FirstPersonId, 10_000)], [], true, [new(data.FirstPersonId, 10_000)]);
         await households.SetPersonParticipationAsync(data.HouseholdId, data.SecondPersonId, false);
@@ -209,7 +210,14 @@ public sealed class FinancedAssetIntegrityTests : IAsyncLifetime
         var outcomes = await Task.WhenAll(allocation, participation);
         Assert.Equal(2, barrier.Arrivals);
         Assert.Single(outcomes, error => error is null);
-        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, error => error is not null));
+        if (outcomes[0] is not null)
+        {
+            Assert.IsType<InvalidOperationException>(outcomes[0]);
+        }
+        else
+        {
+            Assert.IsType<BusinessRuleViolationException>(outcomes[1]);
+        }
         await using var context = _database.CreateDbContext();
         var person = await context.People.SingleAsync(person => person.Id == data.SecondPersonId);
         var included = await context.FinancedAssets.AnyAsync(asset => asset.IncludeInHousehold);

@@ -13,7 +13,10 @@ COPY backend/tests/ backend/tests/
 RUN dotnet restore backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj
 RUN dotnet build backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj \
     --configuration Release --no-restore
-ENTRYPOINT ["dotnet", "test", "backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj", "--configuration", "Release", "--no-build", "--no-restore"]
+RUN dotnet restore backend/tests/Hearthcast.Api.Tests/Hearthcast.Api.Tests.csproj \
+    && dotnet build backend/tests/Hearthcast.Api.Tests/Hearthcast.Api.Tests.csproj --configuration Release --no-restore
+COPY Hearthcast.slnx ./
+ENTRYPOINT ["dotnet", "test", "Hearthcast.slnx", "--configuration", "Release", "--no-build", "--no-restore"]
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 USER root

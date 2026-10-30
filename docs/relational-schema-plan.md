@@ -238,7 +238,8 @@ logic must also enforce:
    calculates all-recorded totals on demand. [Individual holdings](individual-holdings-summary-slice.md)
    now use saved holders and ownership shares. [Household summaries](household-summary-slice.md)
    count included entries once and use saved allocations for person contributions;
-   bulk finance endpoints remain subsequent work. Frontend and historical import remain separate
+   [household/people REST endpoints](household-api-slice.md) now expose the first
+   setup workflow. Remaining finance endpoints, frontend and historical import remain separate
    steps; no spreadsheet-specific fields enter this core schema.
 
 For each code slice: review the small set of entities, inspect the migration and

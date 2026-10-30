@@ -12,14 +12,16 @@ PostgreSQL is the only database provider, with EF Core migrations and real datab
 tests. A full-snapshot summary service calculates totals by currency, category and
 group, with completeness and carry-forward information. Individual holdings use
 saved holders and ownership shares. Household summaries count included values once
-and show person contributions using saved allocations. Finance endpoints and the
-Angular Material frontend follow in separate steps.
+and show person contributions using saved allocations. Household/people REST
+endpoints now provide the first setup workflow. Classification, item, snapshot and
+summary endpoints and the Angular Material frontend follow in separate steps.
 
 The API and database run in separate Docker containers. A one-shot migration
 service applies the schema before the API starts. There is no user data seeded
 and no schema mutation during ordinary API startup.
 
-See the [household summary review guide](docs/household-summary-slice.md) for the latest slice.
+See the [household API review guide](docs/household-api-slice.md) for the latest slice
+and its local-only access assumptions (no authentication or sessions).
 
 ## Run with Docker
 
@@ -75,6 +77,7 @@ frontend/                 # Planned Angular Material app; not created yet
 - [Full snapshot summary slice](docs/snapshot-summary-slice.md)
 - [Individual holdings summary slice](docs/individual-holdings-summary-slice.md)
 - [Household summary slice](docs/household-summary-slice.md)
+- [Household and people API slice](docs/household-api-slice.md)
 - [Synthetic household history specification](docs/household-history-tests.md)
 - [Project layout and naming](docs/project-layout.md)
 
