@@ -1,3 +1,4 @@
+using System.Data;
 using Hearthcast.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,14 +6,73 @@ namespace Hearthcast.Data.Snapshots;
 
 public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> contextFactory)
 {
-    public async Task<Snapshot> CreateAsync(
+    public Task<Snapshot> CreateAsync(
         Guid householdId,
         DateOnly? snapshotDate = null,
         IReadOnlyCollection<ItemSnapshotValue>? values = null,
         DatePrecision datePrecision = DatePrecision.Day,
         CancellationToken cancellationToken = default)
     {
-        return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        return CaptureAsync(householdId, snapshotDate, values, datePrecision, false, null, cancellationToken);
+    }
+
+    public Task<Snapshot> CreateNextAsync(
+        Guid householdId,
+        DateOnly? snapshotDate = null,
+        IReadOnlyCollection<ItemSnapshotValue>? values = null,
+        DatePrecision datePrecision = DatePrecision.Day,
+        Guid? sourceSnapshotId = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CaptureAsync(householdId, snapshotDate, values, datePrecision, true, sourceSnapshotId, cancellationToken);
+    }
+
+    public async Task<Snapshot> CorrectValuesAsync(
+        Guid householdId,
+        Guid snapshotId,
+        Guid expectedRevision,
+        IReadOnlyCollection<ItemSnapshotValue> values,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        try
+        {
+            return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+            {
+                var snapshot = await SnapshotGraph(context)
+                    .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, token)
+                    ?? throw new KeyNotFoundException("The snapshot does not belong to this household.");
+                snapshot.CorrectValues(expectedRevision, values);
+                return snapshot;
+            }, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new SnapshotConflictException(exception);
+        }
+    }
+
+    public async Task<Snapshot> GetAsync(
+        Guid householdId, Guid snapshotId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // Split queries must share a database view when corrections can run concurrently.
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.RepeatableRead, cancellationToken);
+        var snapshot = await SnapshotGraph(context).AsNoTrackingWithIdentityResolution()
+            .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, cancellationToken)
+            ?? throw new KeyNotFoundException("The snapshot does not belong to this household.");
+        await transaction.CommitAsync(cancellationToken);
+        return snapshot;
+    }
+
+    private Task<Snapshot> CaptureAsync(
+        Guid householdId, DateOnly? snapshotDate, IReadOnlyCollection<ItemSnapshotValue>? values,
+        DatePrecision datePrecision, bool carryForward, Guid? sourceSnapshotId, CancellationToken cancellationToken)
+    {
+        var date = snapshotDate ?? DateOnly.FromDateTime(DateTime.Today);
+        var period = SnapshotPeriod.From(date, datePrecision);
+        return SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
         {
             var household = await context.Households.Include(household => household.People)
                 .SingleOrDefaultAsync(household => household.Id == householdId, token)
@@ -22,24 +82,58 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
                 .Include(item => item.Group).ThenInclude(group => group.Category)
                 .Include(item => item.HouseholdAllocations)
                 .ToArrayAsync(token);
-
-            var snapshot = new Snapshot(household, snapshotDate ?? DateOnly.FromDateTime(DateTime.Today),
-                datePrecision, items, values ?? []);
+            var source = carryForward
+                ? await ResolveSourceAsync(context, householdId, period, sourceSnapshotId, token)
+                : null;
+            var snapshot = new Snapshot(household, date, datePrecision, items, values ?? [], source);
             context.Snapshots.Add(snapshot);
             return snapshot;
         }, cancellationToken);
     }
 
-    public async Task<Snapshot> GetAsync(
-        Guid householdId, Guid snapshotId, CancellationToken cancellationToken = default)
+    private static async Task<Snapshot?> ResolveSourceAsync(
+        HearthcastDbContext context, Guid householdId, SnapshotPeriod target, Guid? sourceSnapshotId,
+        CancellationToken cancellationToken)
     {
-        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        return await context.Snapshots.AsNoTrackingWithIdentityResolution().AsSplitQuery()
+        if (!sourceSnapshotId.HasValue)
+        {
+            var candidates = await context.Snapshots.AsNoTracking()
+                .Where(snapshot => snapshot.HouseholdId == householdId && snapshot.SnapshotDate <= target.End)
+                .ToArrayAsync(cancellationToken);
+            if (candidates.Length == 0)
+            {
+                return null;
+            }
+
+            var periods = candidates.Select(snapshot =>
+                (snapshot.Id, Period: SnapshotPeriod.From(snapshot.SnapshotDate, snapshot.DatePrecision))).ToArray();
+            var latest = periods.MaxBy(candidate => candidate.Period.End);
+            if (latest.Period.End >= target.Start
+                || periods.Any(candidate => candidate.Id != latest.Id && candidate.Period.End >= latest.Period.Start))
+            {
+                throw new InvalidOperationException("Snapshot ordering is ambiguous. Select the source snapshot explicitly.");
+            }
+
+            sourceSnapshotId = latest.Id;
+        }
+
+        var source = await context.Snapshots.AsNoTracking().Include(snapshot => snapshot.ItemSnapshots)
+            .SingleOrDefaultAsync(snapshot => snapshot.Id == sourceSnapshotId && snapshot.HouseholdId == householdId, cancellationToken)
+            ?? throw new KeyNotFoundException("The source snapshot does not belong to this household.");
+        if (source.SnapshotDate > target.End)
+        {
+            throw new ArgumentException("A definitely future snapshot cannot be a carry source.", nameof(sourceSnapshotId));
+        }
+
+        return source;
+    }
+
+    private static IQueryable<Snapshot> SnapshotGraph(HearthcastDbContext context)
+    {
+        return context.Snapshots.AsSplitQuery()
             .Include(snapshot => snapshot.People)
             .Include(snapshot => snapshot.ItemSnapshots).ThenInclude(item => item.HolderSnapshotPerson)
             .Include(snapshot => snapshot.ItemSnapshots)
-                .ThenInclude(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.SnapshotPerson)
-            .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The snapshot does not belong to this household.");
+                .ThenInclude(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.SnapshotPerson);
     }
 }

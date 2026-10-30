@@ -1,11 +1,12 @@
 # Hearthcast — schema proposal
 
-Discussion draft, updated 29 October 2026. Proposed data model for Hearthcast.
+Discussion draft, updated 30 October 2026. Proposed data model for Hearthcast.
 The Household/Person, Classification, TrackedItem and initial ordinary-snapshot
-capture/reload persistence slices are in place. The remaining entity definitions will be implemented in small, reviewed steps.
+capture/carry-forward/correction persistence slices are in place. The remaining
+entity definitions will be implemented in small, reviewed steps.
 This document describes the model; see [Household/Person](household-person-slice.md),
-[Classification](classification-slice.md), [Tracked items](tracked-items-slice.md)
-and [Ordinary snapshots](ordinary-snapshots-slice.md)
+[Classification](classification-slice.md), [Tracked items](tracked-items-slice.md),
+[Ordinary snapshots](ordinary-snapshots-slice.md) and [Snapshot lifecycle](snapshot-lifecycle-slice.md)
 for the currently implemented subset.
 
 ## Model principles
@@ -70,9 +71,9 @@ a fund, pension, cash pot or other balance directly as a tracked item.
 
 | Table | Fields | Rules |
 | --- | --- | --- |
-| Snapshot | Id, HouseholdId, SnapshotDate, DatePrecision, HouseholdName, CreatedAtUtc, UpdatedAtUtc | One dated capture. HouseholdName is copied. |
+| Snapshot | Id, HouseholdId, SnapshotDate, DatePrecision, HouseholdName, CreatedAtUtc, UpdatedAtUtc, Revision | One dated capture. HouseholdName is copied. |
 | SnapshotPerson | Id, HouseholdId, SnapshotId, PersonId, DisplayName, ParticipatesInHouseholdFinances | Copied household roster, including people without items. |
-| ItemSnapshot | Id, HouseholdId, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision | One full value and copied reporting context per tracked item. |
+| ItemSnapshot | Id, HouseholdId, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision, CarriedFromItemSnapshotId | One full value and copied reporting context per tracked item. |
 | ItemSnapshotHouseholdAllocation | SnapshotId, ItemSnapshotId, SnapshotPersonId, ShareBasisPoints | Copied household attribution for included entries. |
 
 Naming defines responsibilities: Snapshot is the shared dated capture; ItemSnapshot
@@ -98,9 +99,10 @@ same snapshot. Current names and settings must not substitute for saved copies.
 
 ### Values and carrying forward
 
-Initial capture implements Unrecorded and Confirmed values. The following
-carry-forward/correction behaviours are agreed next steps, not yet implemented;
-CarriedForward and CarriedFromItemSnapshotId will be added with that workflow.
+Fresh capture, carry-forward and value corrections are implemented. See the
+[snapshot lifecycle guide](snapshot-lifecycle-slice.md) and
+[household history specification](household-history-tests.md) for the exact source
+selection, clear-versus-carry and stale-edit rules.
 
 - `Amount` is nullable and otherwise nonnegative. Null means unrecorded; zero is
   a known balance. Missing values make affected totals visibly incomplete.
@@ -117,8 +119,9 @@ CarriedForward and CarriedFromItemSnapshotId will be added with that workflow.
   into the new snapshot.
 - Retired items stay in older snapshots and stop appearing in new ordinary
   checklists. A replacement fund or account gets a new tracked-item identity.
-- A saved snapshot can be corrected deliberately. Correcting an earlier entry
-  does not silently change later saved copies of its amount.
+- A saved snapshot can be corrected deliberately, using its expected Revision.
+  A stale edit is rejected. Corrections confirm or clear saved entries without
+  changing their copied reporting context or later saved copies of their amounts.
 - Retain referenced identities and snapshots; avoid cascade deletion of history.
 
 ### Backdated captures

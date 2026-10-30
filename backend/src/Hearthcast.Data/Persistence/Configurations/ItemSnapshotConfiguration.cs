@@ -20,12 +20,18 @@ public sealed class ItemSnapshotConfiguration : IEntityTypeConfiguration<ItemSna
             table.HasCheckConstraint("CK_ItemSnapshots_Amount_Nonnegative",
                 "\"Amount\" >= 0 AND \"Amount\" < 'Infinity'::numeric");
             table.HasCheckConstraint("CK_ItemSnapshots_ValueState", """
-                ("Amount" IS NULL AND "ValueOrigin" = 1
+                ("Amount" IS NULL AND "ValueOrigin" = 1 AND "CarriedFromItemSnapshotId" IS NULL
                     AND "LastConfirmedDate" IS NULL AND "LastConfirmedPrecision" IS NULL)
-                OR ("Amount" IS NOT NULL AND "ValueOrigin" = 2
+                OR ("Amount" IS NOT NULL AND "ValueOrigin" = 2 AND "CarriedFromItemSnapshotId" IS NULL
                     AND "LastConfirmedDate" IS NOT NULL AND "LastConfirmedPrecision" IS NOT NULL
                     AND "LastConfirmedPrecision" IN (1, 2))
+                OR ("Amount" IS NOT NULL AND "ValueOrigin" = 3 AND "CarriedFromItemSnapshotId" IS NOT NULL
+                    AND (("LastConfirmedDate" IS NULL AND "LastConfirmedPrecision" IS NULL)
+                        OR ("LastConfirmedDate" IS NOT NULL AND "LastConfirmedPrecision" IS NOT NULL
+                            AND "LastConfirmedPrecision" IN (1, 2))))
                 """);
+            table.HasCheckConstraint("CK_ItemSnapshots_NotSelfSource",
+                "\"CarriedFromItemSnapshotId\" IS NULL OR \"CarriedFromItemSnapshotId\" <> \"Id\"");
         });
         builder.HasKey(item => item.Id);
         builder.Property(item => item.Id).ValueGeneratedNever();
@@ -37,6 +43,11 @@ public sealed class ItemSnapshotConfiguration : IEntityTypeConfiguration<ItemSna
         builder.Property(item => item.CurrencyCode).IsRequired();
         builder.Property(item => item.CountryCode).IsRequired();
         builder.Property(item => item.Amount).HasColumnType("numeric");
+        builder.HasAlternateKey(item => new { item.TrackedItemId, item.CurrencyCode, item.Id });
+        builder.HasOne<ItemSnapshot>().WithMany()
+            .HasForeignKey(item => new { item.TrackedItemId, item.CurrencyCode, item.CarriedFromItemSnapshotId })
+            .HasPrincipalKey(item => new { item.TrackedItemId, item.CurrencyCode, item.Id })
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<Snapshot>().WithMany(snapshot => snapshot.ItemSnapshots)
             .HasForeignKey(item => new { item.HouseholdId, item.SnapshotId })

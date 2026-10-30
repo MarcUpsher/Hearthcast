@@ -18,6 +18,7 @@ public sealed class SnapshotConfiguration : IEntityTypeConfiguration<Snapshot>
         builder.Property(snapshot => snapshot.Id).ValueGeneratedNever();
         builder.HasAlternateKey(snapshot => new { snapshot.HouseholdId, snapshot.Id });
         builder.Property(snapshot => snapshot.HouseholdName).IsRequired();
+        builder.Property(snapshot => snapshot.Revision).HasDefaultValueSql("gen_random_uuid()").IsConcurrencyToken();
         builder.HasIndex(snapshot => new { snapshot.HouseholdId, snapshot.SnapshotDate });
         builder.HasOne<Household>().WithMany().HasForeignKey(snapshot => snapshot.HouseholdId)
             .OnDelete(DeleteBehavior.Restrict);

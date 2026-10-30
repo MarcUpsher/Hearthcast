@@ -149,16 +149,12 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
     {
         var household = await _service.CreateAsync("Household A", "Person A");
         var updated = await _service.AddPersonAsync(household.Id, "Person B", true);
-        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var changes = updated.People.Select(person => Task.Run(async () =>
-        {
-            await start.Task;
-            return await Record.ExceptionAsync(() =>
-                _service.SetPersonParticipationAsync(household.Id, person.Id, false));
-        })).ToArray();
-
-        start.SetResult();
+        var barrier = new ConcurrentSaveBarrier();
+        var service = new HouseholdService(new InterceptingContextFactory(_database, barrier));
+        var changes = updated.People.Select(person => Record.ExceptionAsync(() =>
+            service.SetPersonParticipationAsync(household.Id, person.Id, false))).ToArray();
         var outcomes = await Task.WhenAll(changes);
+        Assert.Equal(2, barrier.Arrivals);
         Assert.Single(outcomes, exception => exception is null);
         Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, exception => exception is not null));
 

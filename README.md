@@ -7,10 +7,10 @@ A household finance app built around configured items and dated snapshots.
 ## Current step
 
 The persistence model implements household setup, classification, tracked items,
-household allocations and ordinary-snapshot capture/reload. PostgreSQL is the
-only database provider, with EF Core migrations and real database integration
-tests. Carry-forward/corrections, financed assets, finance endpoints and the
-Angular Material frontend follow in separate steps.
+household allocations and ordinary-snapshot capture, carry-forward and corrections.
+PostgreSQL is the only database provider, with EF Core migrations and real database integration
+tests. Financed assets, calculated summaries, finance endpoints and the Angular
+Material frontend follow in separate steps.
 
 The API and database run in separate Docker containers. A one-shot migration
 service applies the schema before the API starts. There is no user data seeded
@@ -66,6 +66,8 @@ frontend/                 # Planned Angular Material app; not created yet
 - [Classification slice](docs/classification-slice.md)
 - [Tracked items slice](docs/tracked-items-slice.md)
 - [Ordinary snapshots slice](docs/ordinary-snapshots-slice.md)
+- [Snapshot lifecycle slice](docs/snapshot-lifecycle-slice.md)
+- [Synthetic household history specification](docs/household-history-tests.md)
 - [Project layout and naming](docs/project-layout.md)
 
 Source builds on the host use the .NET 10 SDK specified in `global.json`.

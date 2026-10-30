@@ -1,6 +1,6 @@
 # Hearthcast relational schema and implementation plan
 
-Updated 29 October 2026. This translates the [logical model](schema-proposal.md)
+Updated 30 October 2026. This translates the [logical model](schema-proposal.md)
 into proposed tables and constraints. The [Household/Person](household-person-slice.md),
 [Classification](classification-slice.md), [Tracked items](tracked-items-slice.md)
 and initial [Ordinary snapshots](ordinary-snapshots-slice.md) slices are implemented.
@@ -223,8 +223,11 @@ logic must also enforce:
    First review point implemented locally: atomic capture/reload, exact amounts,
    date precision, null versus zero and preservation of saved metadata after
    current setup changes. There are 42 new SQLite cases, with all 136 passing.
-   Second review point remains: subsequent capture/carry-forward and corrections,
-   preserving confirmation provenance without changing later saved copies.
+   Second review point is implemented locally: subsequent capture/carry-forward,
+   explicit source selection for ambiguous dates, atomic value corrections and
+   revision conflicts, preserving confirmation provenance and independent history.
+   See the [snapshot lifecycle guide](snapshot-lifecycle-slice.md): 56 additional
+   cases, with all 197 PostgreSQL integration cases passing.
 6. **Financed assets and their snapshots.** Add the dedicated setup, person links,
    independent balance fields and equity calculations. Verify shared allocations,
    missing/inapplicable withdrawal balances, and no double counting.

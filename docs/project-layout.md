@@ -50,6 +50,8 @@ hearthcast/
           DatePrecision.cs
           SnapshotValueOrigin.cs
           SnapshotService.cs
+          SnapshotPeriod.cs
+          SnapshotConflictException.cs
         Validation/
           AllocationShareRules.cs
           RequiredAlphabeticCode.cs
@@ -73,6 +75,8 @@ hearthcast/
           Migrations/
             <timestamp>_CreateInitialPostgresSchema.cs
             <timestamp>_CreateInitialPostgresSchema.Designer.cs
+            <timestamp>_AddSnapshotCarryForwardAndCorrections.cs
+            <timestamp>_AddSnapshotCarryForwardAndCorrections.Designer.cs
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
@@ -89,8 +93,16 @@ hearthcast/
           SnapshotPersistenceTests.cs
           SnapshotIntegrityTests.cs
           PostgresTransactionTests.cs
+          HouseholdHistoryTestData.cs
+          HouseholdHistoryTests.cs
+          SnapshotCarryForwardTests.cs
+          SnapshotCarryIntegrityTests.cs
+          SnapshotCorrectionTests.cs
+          SnapshotConcurrencyTests.cs
         Infrastructure/
           PostgresTestDatabase.cs
+          InterceptingContextFactory.cs
+          ConcurrentSaveBarrier.cs
         Hearthcast.Data.Tests.csproj
   docs/
     schema-proposal.md
@@ -99,6 +111,8 @@ hearthcast/
     classification-slice.md
     tracked-items-slice.md
     ordinary-snapshots-slice.md
+    snapshot-lifecycle-slice.md
+    household-history-tests.md
     project-layout.md
     containers-and-postgres.md
 ```

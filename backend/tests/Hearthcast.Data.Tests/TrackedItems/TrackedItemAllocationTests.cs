@@ -247,21 +247,16 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         var item = await setup.CreateItemAsync(_items, false);
-        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var allocate = Task.Run(async () =>
-        {
-            await start.Task;
-            return await Record.ExceptionAsync(() => _items.SetHouseholdAllocationAsync(
-                setup.HouseholdId, item.Id, true, [new(setup.OtherPersonId, 10_000)]));
-        });
-        var stopParticipating = Task.Run(async () =>
-        {
-            await start.Task;
-            return await Record.ExceptionAsync(() => _households.SetPersonParticipationAsync(
-                setup.HouseholdId, setup.OtherPersonId, false));
-        });
-        start.SetResult();
+        var barrier = new ConcurrentSaveBarrier();
+        var factory = new InterceptingContextFactory(_database, barrier);
+        var items = new TrackedItemService(factory);
+        var households = new HouseholdService(factory);
+        var allocate = Record.ExceptionAsync(() => items.SetHouseholdAllocationAsync(
+            setup.HouseholdId, item.Id, true, [new(setup.OtherPersonId, 10_000)]));
+        var stopParticipating = Record.ExceptionAsync(() => households.SetPersonParticipationAsync(
+            setup.HouseholdId, setup.OtherPersonId, false));
         var outcomes = await Task.WhenAll(allocate, stopParticipating);
+        Assert.Equal(2, barrier.Arrivals);
         Assert.Single(outcomes, exception => exception is null);
         Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, exception => exception is not null));
 

@@ -130,7 +130,8 @@ run against PostgreSQL.
 ## Verified locally
 
 - API and test images build successfully; container test build has no warnings/errors.
-- All 141 integration cases pass inside Docker against PostgreSQL 18.6.
+- The container checkpoint passed 141 integration cases against PostgreSQL 18.6.
+  The local snapshot-lifecycle slice expands this to 197 passing cases.
 - The migration service exits successfully before the API becomes healthy.
 - The API runs as non-root UID 1654.
 - Stopping PostgreSQL makes readiness return 503 while liveness stays 200.

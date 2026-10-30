@@ -120,6 +120,9 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<decimal?>("Amount")
                         .HasColumnType("numeric");
 
+                    b.Property<Guid?>("CarriedFromItemSnapshotId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
 
@@ -188,6 +191,8 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.HasIndex("SnapshotId", "TrackedItemId")
                         .IsUnique();
 
+                    b.HasIndex("TrackedItemId", "CurrencyCode", "CarriedFromItemSnapshotId");
+
                     b.ToTable("ItemSnapshots", null, t =>
                         {
                             t.HasCheckConstraint("CK_ItemSnapshots_Amount_Nonnegative", "\"Amount\" >= 0 AND \"Amount\" < 'Infinity'::numeric");
@@ -200,7 +205,9 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_ItemSnapshots_Names_NotBlank", "length(trim(\"ItemName\")) > 0 AND length(trim(\"GroupName\")) > 0 AND length(trim(\"CategoryName\")) > 0");
 
-                            t.HasCheckConstraint("CK_ItemSnapshots_ValueState", "(\"Amount\" IS NULL AND \"ValueOrigin\" = 1\n    AND \"LastConfirmedDate\" IS NULL AND \"LastConfirmedPrecision\" IS NULL)\nOR (\"Amount\" IS NOT NULL AND \"ValueOrigin\" = 2\n    AND \"LastConfirmedDate\" IS NOT NULL AND \"LastConfirmedPrecision\" IS NOT NULL\n    AND \"LastConfirmedPrecision\" IN (1, 2))");
+                            t.HasCheckConstraint("CK_ItemSnapshots_NotSelfSource", "\"CarriedFromItemSnapshotId\" IS NULL OR \"CarriedFromItemSnapshotId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_ItemSnapshots_ValueState", "(\"Amount\" IS NULL AND \"ValueOrigin\" = 1 AND \"CarriedFromItemSnapshotId\" IS NULL\n    AND \"LastConfirmedDate\" IS NULL AND \"LastConfirmedPrecision\" IS NULL)\nOR (\"Amount\" IS NOT NULL AND \"ValueOrigin\" = 2 AND \"CarriedFromItemSnapshotId\" IS NULL\n    AND \"LastConfirmedDate\" IS NOT NULL AND \"LastConfirmedPrecision\" IS NOT NULL\n    AND \"LastConfirmedPrecision\" IN (1, 2))\nOR (\"Amount\" IS NOT NULL AND \"ValueOrigin\" = 3 AND \"CarriedFromItemSnapshotId\" IS NOT NULL\n    AND ((\"LastConfirmedDate\" IS NULL AND \"LastConfirmedPrecision\" IS NULL)\n        OR (\"LastConfirmedDate\" IS NOT NULL AND \"LastConfirmedPrecision\" IS NOT NULL\n            AND \"LastConfirmedPrecision\" IN (1, 2))))");
                         });
                 });
 
@@ -247,6 +254,12 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<string>("HouseholdName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<DateOnly>("SnapshotDate")
                         .HasColumnType("date");
@@ -446,6 +459,12 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .HasPrincipalKey("SnapshotId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.ItemSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("TrackedItemId", "CurrencyCode", "CarriedFromItemSnapshotId")
+                        .HasPrincipalKey("TrackedItemId", "CurrencyCode", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("HolderSnapshotPerson");
                 });

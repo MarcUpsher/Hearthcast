@@ -2,7 +2,8 @@
 
 Implemented locally, 29 October 2026. This is the first review point within the
 ordinary-snapshot slice: save and reload a complete dated capture. Carry-forward
-and corrections follow separately, before financed assets or the bulk API.
+and corrections are now implemented in the [second review point](snapshot-lifecycle-slice.md),
+before financed assets or the bulk API.
 
 ## Files to review
 
@@ -91,7 +92,7 @@ numeric and transaction-retry checks. The PostgreSQL baseline includes all four
 snapshot tables alongside the existing setup tables.
 
 Backdating currently copies **current setup**. It does not reconstruct historical
-items or allocations. Historical templates/import metadata, carry-forward,
-corrections, financed assets, summaries and finance API/UI workflows remain
+items or allocations. Historical templates/import metadata, financed assets,
+summaries and finance API/UI workflows remain
 subsequent work. Container startup applies migrations in a separate one-shot
 service; ordinary API startup does not migrate or seed data.
