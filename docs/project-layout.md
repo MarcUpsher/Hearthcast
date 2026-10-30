@@ -43,6 +43,11 @@ hearthcast/
             CategoryResponse.cs
             GroupResponse.cs
             FinancialTypeJsonConverter.cs
+        TrackedItems/
+          TrackedItemsController.cs
+          Contracts/
+            CreateTrackedItemRequest.cs
+            TrackedItemResponse.cs
         Properties/
           launchSettings.json
         Hearthcast.Api.csproj
@@ -172,6 +177,8 @@ hearthcast/
       Hearthcast.Api.Tests/
         Classification/
           ClassificationApiTests.cs
+        TrackedItems/
+          TrackedItemApiTests.cs
         Households/
           HouseholdApiTests.cs
         Infrastructure/
@@ -226,6 +233,7 @@ hearthcast/
     household-summary-slice.md
     household-api-slice.md
     classification-api-slice.md
+    tracked-item-api-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md

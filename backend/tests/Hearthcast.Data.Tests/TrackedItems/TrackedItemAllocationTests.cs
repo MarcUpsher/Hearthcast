@@ -47,7 +47,7 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
     public async Task ANonparticipatingHolderRequiresAnExplicitAllocationToParticipants()
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database, otherPersonParticipates: false);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _items.CreateAsync(
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() => _items.CreateAsync(
             setup.HouseholdId, setup.GroupId, setup.OtherPersonId, "Item A", "GBP", "GB", true));
 
         var item = await _items.CreateAsync(setup.HouseholdId, setup.GroupId, setup.OtherPersonId,
@@ -109,7 +109,7 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
     public async Task NonparticipantsCannotReceiveAnAllocation()
     {
         var setup = await TrackedItemTestSetup.CreateAsync(_database, otherPersonParticipates: false);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => setup.CreateItemAsync(_items, allocations:
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() => setup.CreateItemAsync(_items, allocations:
             [new(setup.HolderPersonId, 5_000), new(setup.OtherPersonId, 5_000)]));
     }
 
@@ -118,7 +118,7 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
     {
         var first = await TrackedItemTestSetup.CreateAsync(_database);
         var second = await TrackedItemTestSetup.CreateAsync(_database);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => first.CreateItemAsync(_items, allocations:
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => first.CreateItemAsync(_items, allocations:
             [new(second.OtherPersonId, 10_000)]));
     }
 
@@ -261,7 +261,7 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
         Assert.Single(outcomes, exception => exception is null);
         if (outcomes[0] is not null)
         {
-            Assert.IsType<InvalidOperationException>(outcomes[0]);
+            Assert.IsType<BusinessRuleViolationException>(outcomes[0]);
         }
         else
         {

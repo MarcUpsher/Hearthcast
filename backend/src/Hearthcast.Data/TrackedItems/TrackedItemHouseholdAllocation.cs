@@ -36,7 +36,7 @@ public sealed class TrackedItemHouseholdAllocation
 
         if (!person.ParticipatesInHouseholdFinances)
         {
-            throw new InvalidOperationException("Only household participants can receive an allocation.");
+            throw new BusinessRuleViolationException("Only household participants can receive an allocation.");
         }
 
         AllocationShareRules.EnsureValid(shareBasisPoints);

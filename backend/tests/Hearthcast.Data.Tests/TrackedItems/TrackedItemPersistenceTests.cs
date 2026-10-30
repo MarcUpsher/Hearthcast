@@ -94,7 +94,7 @@ public sealed class TrackedItemPersistenceTests : IAsyncLifetime
     {
         var first = await TrackedItemTestSetup.CreateAsync(_database);
         var second = await TrackedItemTestSetup.CreateAsync(_database);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _items.CreateAsync(first.HouseholdId,
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => _items.CreateAsync(first.HouseholdId,
             foreignGroup ? second.GroupId : first.GroupId,
             foreignGroup ? first.HolderPersonId : second.HolderPersonId, "Item A", "GBP", "GB", false));
 

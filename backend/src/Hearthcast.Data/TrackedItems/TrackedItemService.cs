@@ -22,10 +22,10 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
         {
             var group = await context.ItemGroups.Include(group => group.Category)
                 .SingleOrDefaultAsync(group => group.Id == groupId && group.HouseholdId == householdId, token)
-                ?? throw new KeyNotFoundException("The group does not belong to this household.");
+                ?? throw new ResourceNotFoundException("The group does not belong to this household.");
             var holder = await context.People.SingleOrDefaultAsync(
                 person => person.Id == holderPersonId && person.HouseholdId == householdId, token)
-                ?? throw new KeyNotFoundException("The holder does not belong to this household.");
+                ?? throw new ResourceNotFoundException("The holder does not belong to this household.");
 
             var item = new TrackedItem(group, holder, name, currencyCode, countryCode);
             var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, token);
@@ -33,6 +33,27 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
             context.TrackedItems.Add(item);
             return item;
         }, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TrackedItem>> ListAsync(Guid householdId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await context.Households.AnyAsync(household => household.Id == householdId, cancellationToken))
+        {
+            throw new ResourceNotFoundException("The household does not exist.");
+        }
+        return await context.TrackedItems.AsNoTracking().Include(item => item.HouseholdAllocations)
+            .Where(item => item.HouseholdId == householdId)
+            .OrderBy(item => item.Name).ThenBy(item => item.Id).ToArrayAsync(cancellationToken);
+    }
+
+    public async Task<TrackedItem> GetAsync(Guid householdId, Guid trackedItemId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await context.TrackedItems.AsNoTracking().Include(item => item.HouseholdAllocations)
+            .SingleOrDefaultAsync(item => item.HouseholdId == householdId && item.Id == trackedItemId, cancellationToken)
+            ?? throw new ResourceNotFoundException("The tracked item does not belong to this household.");
     }
 
     public async Task<TrackedItem> SetHouseholdAllocationAsync(
@@ -91,7 +112,7 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
             .ToDictionaryAsync(person => person.Id, cancellationToken);
         if (people.Count != personIds.Length)
         {
-            throw new KeyNotFoundException("An allocation recipient does not belong to this household.");
+            throw new ResourceNotFoundException("An allocation recipient does not belong to this household.");
         }
 
         return requested.Select(share =>

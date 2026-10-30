@@ -14,8 +14,9 @@ totals on demand without adding tables. [Individual holdings](individual-holding
 use saved holders and ownership shares. [Household summaries](household-summary-slice.md)
 use saved inclusion and allocation shares; all three views are calculated on demand.
 The [household/people API](household-api-slice.md) and
-[classification API](classification-api-slice.md) expose the initial setup endpoints;
-tracked-item and snapshot endpoints remain later slices.
+[classification API](classification-api-slice.md) expose the initial setup endpoints.
+The [tracked-item API](tracked-item-api-slice.md) adds creation and inventory;
+item changes and snapshot endpoints remain later slices.
 
 ## Model principles
 

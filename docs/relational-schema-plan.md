@@ -239,8 +239,9 @@ logic must also enforce:
    now use saved holders and ownership shares. [Household summaries](household-summary-slice.md)
    count included entries once and use saved allocations for person contributions;
    [household/people REST endpoints](household-api-slice.md) and
-   [classification endpoints](classification-api-slice.md) now expose initial setup. Remaining finance endpoints, frontend and historical import remain separate
-   steps; no spreadsheet-specific fields enter this core schema.
+   [classification endpoints](classification-api-slice.md) expose initial setup.
+   [Tracked-item creation and inventory](tracked-item-api-slice.md) is available;
+   item changes, other finance endpoints, frontend and historical import remain separate steps; no spreadsheet-specific fields enter this core schema.
 
 For each code slice: review the small set of entities, inspect the migration and
 run checks tied to actual rules. Keep the local diff visible for review before
