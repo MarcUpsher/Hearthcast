@@ -130,7 +130,8 @@ public sealed class SnapshotCarryIntegrityTests : IAsyncLifetime
         await context.GetService<IMigrator>().MigrateAsync("20261030112256_AddSnapshotCarryForwardAndCorrections");
         var appliedBefore = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
         await Assert.ThrowsAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync("20261029230521_CreateInitialPostgresSchema"));
-        var retained = await snapshots.GetAsync(setup.HouseholdId, carried.Id);
+        var retained = await context.Snapshots.AsNoTracking().Include(snapshot => snapshot.ItemSnapshots)
+            .SingleAsync(snapshot => snapshot.Id == carried.Id);
         Assert.Equal(original.ItemSnapshots.Single().Id, Assert.Single(retained.ItemSnapshots).CarriedFromItemSnapshotId);
         Assert.Equal(10m, Assert.Single(retained.ItemSnapshots).Amount);
         Assert.Equal(appliedBefore, (await context.Database.GetAppliedMigrationsAsync()).ToArray());

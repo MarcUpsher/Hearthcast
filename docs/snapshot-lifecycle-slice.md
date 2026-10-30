@@ -1,5 +1,8 @@
 # Snapshot lifecycle: carry-forward and corrections
 
+For the subsequent combined snapshot slice, see
+[Financed-asset snapshots](financed-asset-snapshots-slice.md).
+
 Implemented locally, 30 October 2026. This completes the second ordinary-snapshot
 review point. The [household history specification](household-history-tests.md)
 records the agreed synthetic data, expected behaviour and future financed-asset

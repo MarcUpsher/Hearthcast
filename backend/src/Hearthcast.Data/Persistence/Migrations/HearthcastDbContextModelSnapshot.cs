@@ -243,6 +243,239 @@ namespace Hearthcast.Data.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AssetName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("AvailableToWithdraw")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid?>("AvailableToWithdrawCarriedFromSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("AvailableToWithdrawLastConfirmedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("AvailableToWithdrawLastConfirmedPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AvailableToWithdrawValueOrigin")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CategoryName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("CurrentValuation")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid?>("CurrentValuationCarriedFromSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("CurrentValuationLastConfirmedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("CurrentValuationLastConfirmedPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CurrentValuationValueOrigin")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("FinancedAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("FinancialType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("HasWithdrawalFacility")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IncludeInHousehold")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("OriginalLoanAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("OutstandingLoanBalance")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid?>("OutstandingLoanBalanceCarriedFromSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("OutstandingLoanBalanceLastConfirmedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("OutstandingLoanBalanceLastConfirmedPrecision")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OutstandingLoanBalanceValueOrigin")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("PurchasePrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "CategoryId");
+
+                    b.HasIndex("HouseholdId", "FinancedAssetId");
+
+                    b.HasIndex("HouseholdId", "GroupId");
+
+                    b.HasIndex("HouseholdId", "SnapshotId");
+
+                    b.HasIndex("SnapshotId", "FinancedAssetId")
+                        .IsUnique();
+
+                    b.HasIndex("FinancedAssetId", "CurrencyCode", "AvailableToWithdrawCarriedFromSnapshotId")
+                        .HasDatabaseName("IX_FinancedAssetSnapshots_AvailableToWithdrawSource");
+
+                    b.HasIndex("FinancedAssetId", "CurrencyCode", "CurrentValuationCarriedFromSnapshotId")
+                        .HasDatabaseName("IX_FinancedAssetSnapshots_CurrentValuationSource");
+
+                    b.HasIndex("FinancedAssetId", "CurrencyCode", "OutstandingLoanBalanceCarriedFromSnapshotId")
+                        .HasDatabaseName("IX_FinancedAssetSnapshots_OutstandingLoanBalanceSource");
+
+                    b.ToTable("FinancedAssetSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_AvailableToWithdraw_Amount", "\"AvailableToWithdraw\" >= 0 AND \"AvailableToWithdraw\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_AvailableToWithdraw_Source", "\"AvailableToWithdrawCarriedFromSnapshotId\" IS NULL OR \"AvailableToWithdrawCarriedFromSnapshotId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_AvailableToWithdraw_State", "(\"AvailableToWithdraw\" IS NULL AND \"AvailableToWithdrawValueOrigin\" = 1 AND \"AvailableToWithdrawCarriedFromSnapshotId\" IS NULL\n    AND \"AvailableToWithdrawLastConfirmedDate\" IS NULL AND \"AvailableToWithdrawLastConfirmedPrecision\" IS NULL)\nOR (\"AvailableToWithdraw\" IS NOT NULL AND \"AvailableToWithdrawValueOrigin\" = 2 AND \"AvailableToWithdrawCarriedFromSnapshotId\" IS NULL\n    AND \"AvailableToWithdrawLastConfirmedDate\" IS NOT NULL AND \"AvailableToWithdrawLastConfirmedPrecision\" IS NOT NULL\n    AND \"AvailableToWithdrawLastConfirmedPrecision\" IN (1, 2))\nOR (\"AvailableToWithdraw\" IS NOT NULL AND \"AvailableToWithdrawValueOrigin\" = 3 AND \"AvailableToWithdrawCarriedFromSnapshotId\" IS NOT NULL\n    AND ((\"AvailableToWithdrawLastConfirmedDate\" IS NULL AND \"AvailableToWithdrawLastConfirmedPrecision\" IS NULL)\n        OR (\"AvailableToWithdrawLastConfirmedDate\" IS NOT NULL AND \"AvailableToWithdrawLastConfirmedPrecision\" IS NOT NULL\n            AND \"AvailableToWithdrawLastConfirmedPrecision\" IN (1, 2))))");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_Country", "\"CountryCode\" ~ '^[A-Z]{2}$'");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_CurrentValuation_Amount", "\"CurrentValuation\" >= 0 AND \"CurrentValuation\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_CurrentValuation_Source", "\"CurrentValuationCarriedFromSnapshotId\" IS NULL OR \"CurrentValuationCarriedFromSnapshotId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_CurrentValuation_State", "(\"CurrentValuation\" IS NULL AND \"CurrentValuationValueOrigin\" = 1 AND \"CurrentValuationCarriedFromSnapshotId\" IS NULL\n    AND \"CurrentValuationLastConfirmedDate\" IS NULL AND \"CurrentValuationLastConfirmedPrecision\" IS NULL)\nOR (\"CurrentValuation\" IS NOT NULL AND \"CurrentValuationValueOrigin\" = 2 AND \"CurrentValuationCarriedFromSnapshotId\" IS NULL\n    AND \"CurrentValuationLastConfirmedDate\" IS NOT NULL AND \"CurrentValuationLastConfirmedPrecision\" IS NOT NULL\n    AND \"CurrentValuationLastConfirmedPrecision\" IN (1, 2))\nOR (\"CurrentValuation\" IS NOT NULL AND \"CurrentValuationValueOrigin\" = 3 AND \"CurrentValuationCarriedFromSnapshotId\" IS NOT NULL\n    AND ((\"CurrentValuationLastConfirmedDate\" IS NULL AND \"CurrentValuationLastConfirmedPrecision\" IS NULL)\n        OR (\"CurrentValuationLastConfirmedDate\" IS NOT NULL AND \"CurrentValuationLastConfirmedPrecision\" IS NOT NULL\n            AND \"CurrentValuationLastConfirmedPrecision\" IN (1, 2))))");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_FinancialType", "\"FinancialType\" = 1");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_Names", "length(trim(\"AssetName\")) > 0 AND length(trim(\"GroupName\")) > 0 AND length(trim(\"CategoryName\")) > 0");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_OriginalLoan", "\"OriginalLoanAmount\" >= 0 AND \"OriginalLoanAmount\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_OutstandingLoanBalance_Amount", "\"OutstandingLoanBalance\" >= 0 AND \"OutstandingLoanBalance\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_OutstandingLoanBalance_Source", "\"OutstandingLoanBalanceCarriedFromSnapshotId\" IS NULL OR \"OutstandingLoanBalanceCarriedFromSnapshotId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_OutstandingLoanBalance_State", "(\"OutstandingLoanBalance\" IS NULL AND \"OutstandingLoanBalanceValueOrigin\" = 1 AND \"OutstandingLoanBalanceCarriedFromSnapshotId\" IS NULL\n    AND \"OutstandingLoanBalanceLastConfirmedDate\" IS NULL AND \"OutstandingLoanBalanceLastConfirmedPrecision\" IS NULL)\nOR (\"OutstandingLoanBalance\" IS NOT NULL AND \"OutstandingLoanBalanceValueOrigin\" = 2 AND \"OutstandingLoanBalanceCarriedFromSnapshotId\" IS NULL\n    AND \"OutstandingLoanBalanceLastConfirmedDate\" IS NOT NULL AND \"OutstandingLoanBalanceLastConfirmedPrecision\" IS NOT NULL\n    AND \"OutstandingLoanBalanceLastConfirmedPrecision\" IN (1, 2))\nOR (\"OutstandingLoanBalance\" IS NOT NULL AND \"OutstandingLoanBalanceValueOrigin\" = 3 AND \"OutstandingLoanBalanceCarriedFromSnapshotId\" IS NOT NULL\n    AND ((\"OutstandingLoanBalanceLastConfirmedDate\" IS NULL AND \"OutstandingLoanBalanceLastConfirmedPrecision\" IS NULL)\n        OR (\"OutstandingLoanBalanceLastConfirmedDate\" IS NOT NULL AND \"OutstandingLoanBalanceLastConfirmedPrecision\" IS NOT NULL\n            AND \"OutstandingLoanBalanceLastConfirmedPrecision\" IN (1, 2))))");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_Price", "\"PurchasePrice\" >= 0 AND \"PurchasePrice\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshots_WithdrawalFacility", "\"HasWithdrawalFacility\" OR (\"AvailableToWithdraw\" IS NULL AND \"AvailableToWithdrawValueOrigin\" = 1)");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshotHouseholdAllocation", b =>
+                {
+                    b.Property<Guid>("FinancedAssetSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SnapshotPersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShareBasisPoints")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("FinancedAssetSnapshotId", "SnapshotPersonId");
+
+                    b.HasIndex("SnapshotId", "FinancedAssetSnapshotId");
+
+                    b.HasIndex("SnapshotId", "SnapshotPersonId");
+
+                    b.ToTable("FinancedAssetSnapshotHouseholdAllocations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshotHouseholdAllocations_Share", "\"ShareBasisPoints\" BETWEEN 1 AND 10000");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshotLoanHolder", b =>
+                {
+                    b.Property<Guid>("FinancedAssetSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SnapshotPersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("FinancedAssetSnapshotId", "SnapshotPersonId");
+
+                    b.HasIndex("SnapshotId", "FinancedAssetSnapshotId");
+
+                    b.HasIndex("SnapshotId", "SnapshotPersonId");
+
+                    b.ToTable("FinancedAssetSnapshotLoanHolders", (string)null);
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshotOwner", b =>
+                {
+                    b.Property<Guid>("FinancedAssetSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SnapshotPersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ShareBasisPoints")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("FinancedAssetSnapshotId", "SnapshotPersonId");
+
+                    b.HasIndex("SnapshotId", "FinancedAssetSnapshotId");
+
+                    b.HasIndex("SnapshotId", "SnapshotPersonId");
+
+                    b.ToTable("FinancedAssetSnapshotOwners", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinancedAssetSnapshotOwners_Share", "\"ShareBasisPoints\" BETWEEN 1 AND 10000");
+                        });
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -629,6 +862,115 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Household");
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Classification.Category", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "CategoryId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.FinancedAssets.FinancedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "FinancedAssetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Classification.ItemGroup", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "GroupId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.Snapshot", null)
+                        .WithMany("FinancedAssetSnapshots")
+                        .HasForeignKey("HouseholdId", "SnapshotId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("FinancedAssetId", "CurrencyCode", "AvailableToWithdrawCarriedFromSnapshotId")
+                        .HasPrincipalKey("FinancedAssetId", "CurrencyCode", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_FinancedAssetSnapshots_AvailableToWithdrawSource");
+
+                    b.HasOne("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("FinancedAssetId", "CurrencyCode", "CurrentValuationCarriedFromSnapshotId")
+                        .HasPrincipalKey("FinancedAssetId", "CurrencyCode", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_FinancedAssetSnapshots_CurrentValuationSource");
+
+                    b.HasOne("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("FinancedAssetId", "CurrencyCode", "OutstandingLoanBalanceCarriedFromSnapshotId")
+                        .HasPrincipalKey("FinancedAssetId", "CurrencyCode", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_FinancedAssetSnapshots_OutstandingLoanBalanceSource");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshotHouseholdAllocation", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", null)
+                        .WithMany("HouseholdAllocations")
+                        .HasForeignKey("SnapshotId", "FinancedAssetSnapshotId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.SnapshotPerson", "SnapshotPerson")
+                        .WithMany()
+                        .HasForeignKey("SnapshotId", "SnapshotPersonId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SnapshotPerson");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshotLoanHolder", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", null)
+                        .WithMany("LoanHolders")
+                        .HasForeignKey("SnapshotId", "FinancedAssetSnapshotId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.SnapshotPerson", "SnapshotPerson")
+                        .WithMany()
+                        .HasForeignKey("SnapshotId", "SnapshotPersonId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SnapshotPerson");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshotOwner", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", null)
+                        .WithMany("Owners")
+                        .HasForeignKey("SnapshotId", "FinancedAssetSnapshotId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Snapshots.SnapshotPerson", "SnapshotPerson")
+                        .WithMany()
+                        .HasForeignKey("SnapshotId", "SnapshotPersonId")
+                        .HasPrincipalKey("SnapshotId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SnapshotPerson");
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
                 {
                     b.HasOne("Hearthcast.Data.Classification.Category", null)
@@ -776,6 +1118,15 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("People");
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", b =>
+                {
+                    b.Navigation("HouseholdAllocations");
+
+                    b.Navigation("LoanHolders");
+
+                    b.Navigation("Owners");
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Snapshots.ItemSnapshot", b =>
                 {
                     b.Navigation("HouseholdAllocations");
@@ -783,6 +1134,8 @@ namespace Hearthcast.Data.Persistence.Migrations
 
             modelBuilder.Entity("Hearthcast.Data.Snapshots.Snapshot", b =>
                 {
+                    b.Navigation("FinancedAssetSnapshots");
+
                     b.Navigation("ItemSnapshots");
 
                     b.Navigation("People");

@@ -11,9 +11,10 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         DateOnly? snapshotDate = null,
         IReadOnlyCollection<ItemSnapshotValue>? values = null,
         DatePrecision datePrecision = DatePrecision.Day,
+        IReadOnlyCollection<FinancedAssetSnapshotValue>? financedAssetValues = null,
         CancellationToken cancellationToken = default)
     {
-        return CaptureAsync(householdId, snapshotDate, values, datePrecision, false, null, cancellationToken);
+        return CaptureAsync(householdId, snapshotDate, values, datePrecision, false, null, financedAssetValues, cancellationToken);
     }
 
     public Task<Snapshot> CreateNextAsync(
@@ -22,19 +23,24 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         IReadOnlyCollection<ItemSnapshotValue>? values = null,
         DatePrecision datePrecision = DatePrecision.Day,
         Guid? sourceSnapshotId = null,
+        IReadOnlyCollection<FinancedAssetSnapshotValue>? financedAssetValues = null,
         CancellationToken cancellationToken = default)
     {
-        return CaptureAsync(householdId, snapshotDate, values, datePrecision, true, sourceSnapshotId, cancellationToken);
+        return CaptureAsync(householdId, snapshotDate, values, datePrecision, true, sourceSnapshotId, financedAssetValues, cancellationToken);
     }
 
     public async Task<Snapshot> CorrectValuesAsync(
         Guid householdId,
         Guid snapshotId,
         Guid expectedRevision,
-        IReadOnlyCollection<ItemSnapshotValue> values,
+        IReadOnlyCollection<ItemSnapshotValue>? values = null,
+        IReadOnlyCollection<FinancedAssetSnapshotValue>? financedAssetValues = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(values);
+        if (values is null && financedAssetValues is null)
+        {
+            throw new ArgumentNullException(nameof(values));
+        }
         try
         {
             return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
@@ -42,7 +48,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
                 var snapshot = await SnapshotGraph(context)
                     .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, token)
                     ?? throw new KeyNotFoundException("The snapshot does not belong to this household.");
-                snapshot.CorrectValues(expectedRevision, values);
+                snapshot.CorrectValues(expectedRevision, values ?? [], financedAssetValues ?? []);
                 return snapshot;
             }, cancellationToken);
         }
@@ -68,7 +74,8 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
 
     private Task<Snapshot> CaptureAsync(
         Guid householdId, DateOnly? snapshotDate, IReadOnlyCollection<ItemSnapshotValue>? values,
-        DatePrecision datePrecision, bool carryForward, Guid? sourceSnapshotId, CancellationToken cancellationToken)
+        DatePrecision datePrecision, bool carryForward, Guid? sourceSnapshotId,
+        IReadOnlyCollection<FinancedAssetSnapshotValue>? financedAssetValues, CancellationToken cancellationToken)
     {
         var date = snapshotDate ?? DateOnly.FromDateTime(DateTime.Today);
         var period = SnapshotPeriod.From(date, datePrecision);
@@ -82,10 +89,14 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
                 .Include(item => item.Group).ThenInclude(group => group.Category)
                 .Include(item => item.HouseholdAllocations)
                 .ToArrayAsync(token);
+            var assets = await context.FinancedAssets.Where(asset => asset.HouseholdId == householdId && !asset.IsRetired)
+                .AsSplitQuery().Include(asset => asset.Group).ThenInclude(group => group.Category)
+                .Include(asset => asset.Owners).Include(asset => asset.LoanHolders).Include(asset => asset.HouseholdAllocations)
+                .ToArrayAsync(token);
             var source = carryForward
                 ? await ResolveSourceAsync(context, householdId, period, sourceSnapshotId, token)
                 : null;
-            var snapshot = new Snapshot(household, date, datePrecision, items, values ?? [], source);
+            var snapshot = new Snapshot(household, date, datePrecision, items, values ?? [], assets, financedAssetValues ?? [], source);
             context.Snapshots.Add(snapshot);
             return snapshot;
         }, cancellationToken);
@@ -117,7 +128,8 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
             sourceSnapshotId = latest.Id;
         }
 
-        var source = await context.Snapshots.AsNoTracking().Include(snapshot => snapshot.ItemSnapshots)
+        var source = await context.Snapshots.AsNoTracking().AsSplitQuery().Include(snapshot => snapshot.ItemSnapshots)
+            .Include(snapshot => snapshot.FinancedAssetSnapshots)
             .SingleOrDefaultAsync(snapshot => snapshot.Id == sourceSnapshotId && snapshot.HouseholdId == householdId, cancellationToken)
             ?? throw new KeyNotFoundException("The source snapshot does not belong to this household.");
         if (source.SnapshotDate > target.End)
@@ -134,6 +146,9 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
             .Include(snapshot => snapshot.People)
             .Include(snapshot => snapshot.ItemSnapshots).ThenInclude(item => item.HolderSnapshotPerson)
             .Include(snapshot => snapshot.ItemSnapshots)
-                .ThenInclude(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.SnapshotPerson);
+                .ThenInclude(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.SnapshotPerson)
+            .Include(snapshot => snapshot.FinancedAssetSnapshots).ThenInclude(asset => asset.Owners).ThenInclude(row => row.SnapshotPerson)
+            .Include(snapshot => snapshot.FinancedAssetSnapshots).ThenInclude(asset => asset.LoanHolders).ThenInclude(row => row.SnapshotPerson)
+            .Include(snapshot => snapshot.FinancedAssetSnapshots).ThenInclude(asset => asset.HouseholdAllocations).ThenInclude(row => row.SnapshotPerson);
     }
 }

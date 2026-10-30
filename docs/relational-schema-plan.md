@@ -230,8 +230,9 @@ logic must also enforce:
    cases, with all 197 PostgreSQL integration cases passing.
 6. **Financed assets and their snapshots.** Setup and person links are implemented
    locally; see the [setup review guide](financed-asset-setup-slice.md).
-   Independent balance snapshots and equity calculations remain the next review
-   point, including missing/inapplicable withdrawal balances and no double counting.
+   Independent balance snapshots and equity calculations are implemented locally;
+   see the [snapshot review guide](financed-asset-snapshots-slice.md), including
+   missing/inapplicable withdrawal balances and no double counting.
 7. **Bulk API workflow and calculated summaries.** Build entry and reporting around
    the verified persistence model. Frontend and historical import remain separate
    steps; no spreadsheet-specific fields enter this core schema.

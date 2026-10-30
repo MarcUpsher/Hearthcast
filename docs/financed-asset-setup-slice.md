@@ -1,5 +1,8 @@
 # Financed-asset setup
 
+For the subsequent combined snapshot slice, see
+[Financed-asset snapshots](financed-asset-snapshots-slice.md).
+
 Implemented locally, 30 October 2026. This is the setup review point from the
 [relational plan](relational-schema-plan.md). Balance snapshots and calculations
 are the next review point.

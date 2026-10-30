@@ -2,12 +2,13 @@
 
 Discussion draft, updated 30 October 2026. Proposed data model for Hearthcast.
 The Household/Person, Classification, TrackedItem and initial ordinary-snapshot
-capture/carry-forward/correction and financed-asset setup persistence slices are in place. The remaining
+capture/carry-forward/correction and financed-asset setup/snapshot persistence slices are in place. The remaining
 entity definitions will be implemented in small, reviewed steps.
 This document describes the model; see [Household/Person](household-person-slice.md),
 [Classification](classification-slice.md), [Tracked items](tracked-items-slice.md),
 [Ordinary snapshots](ordinary-snapshots-slice.md) and [Snapshot lifecycle](snapshot-lifecycle-slice.md),
-and [Financed-asset setup](financed-asset-setup-slice.md) for the currently implemented subset.
+[Financed-asset setup](financed-asset-setup-slice.md),
+and [Financed-asset snapshots](financed-asset-snapshots-slice.md) for the currently implemented subset.
 
 ## Model principles
 

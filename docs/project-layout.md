@@ -49,6 +49,12 @@ hearthcast/
           FinancedAssetShare.cs
           FinancedAssetService.cs
         Snapshots/
+          FinancedAssetSnapshot.cs
+          FinancedAssetSnapshotOwner.cs
+          FinancedAssetSnapshotLoanHolder.cs
+          FinancedAssetSnapshotHouseholdAllocation.cs
+          FinancedAssetBalanceKind.cs
+          FinancedAssetSnapshotValue.cs
           Snapshot.cs
           SnapshotPerson.cs
           ItemSnapshot.cs
@@ -67,6 +73,10 @@ hearthcast/
           HearthcastDbContext.cs
           SerializableTransaction.cs
           Configurations/
+            FinancedAssetSnapshotConfiguration.cs
+            FinancedAssetSnapshotOwnerConfiguration.cs
+            FinancedAssetSnapshotLoanHolderConfiguration.cs
+            FinancedAssetSnapshotHouseholdAllocationConfiguration.cs
             FinancedAssetConfiguration.cs
             FinancedAssetOwnerConfiguration.cs
             FinancedAssetLoanHolderConfiguration.cs
@@ -90,6 +100,8 @@ hearthcast/
             <timestamp>_AddSnapshotCarryForwardAndCorrections.Designer.cs
             <timestamp>_AddFinancedAssetSetup.cs
             <timestamp>_AddFinancedAssetSetup.Designer.cs
+            <timestamp>_AddFinancedAssetSnapshots.cs
+            <timestamp>_AddFinancedAssetSnapshots.Designer.cs
             HearthcastDbContextModelSnapshot.cs
         Hearthcast.Data.csproj
     tests/
@@ -103,6 +115,8 @@ hearthcast/
           TrackedItemAllocationTests.cs
           TrackedItemTestSetup.cs
         Snapshots/
+          FinancedAssetSnapshotTests.cs
+          FinancedAssetSnapshotIntegrityTests.cs
           SnapshotPersistenceTests.cs
           SnapshotIntegrityTests.cs
           PostgresTransactionTests.cs

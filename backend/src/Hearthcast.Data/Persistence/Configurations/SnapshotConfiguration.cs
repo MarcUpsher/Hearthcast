@@ -24,6 +24,8 @@ public sealed class SnapshotConfiguration : IEntityTypeConfiguration<Snapshot>
             .OnDelete(DeleteBehavior.Restrict);
         builder.Navigation(snapshot => snapshot.People)
             .HasField("_people").UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(snapshot => snapshot.FinancedAssetSnapshots)
+            .HasField("_financedAssetSnapshots").UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(snapshot => snapshot.ItemSnapshots)
             .HasField("_itemSnapshots").UsePropertyAccessMode(PropertyAccessMode.Field);
     }

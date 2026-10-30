@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Hearthcast.Data.Persistence;
+using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Snapshots;
 using Hearthcast.Data.Tests.Infrastructure;
 using Hearthcast.Data.Tests.TrackedItems;
@@ -21,7 +22,11 @@ public sealed class SnapshotConcurrencyTests : IAsyncLifetime
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         var item = await setup.CreateItemAsync(new TrackedItemService(_database));
         var snapshots = new SnapshotService(_database);
-        var original = await snapshots.CreateAsync(setup.HouseholdId, values: [new(item.Id, 100m)]);
+        var asset = await new FinancedAssetService(_database).CreateAsync(setup.HouseholdId, setup.GroupId,
+            "Home", "GBP", "GB", null, null, 100m, false,
+            [new(setup.HolderPersonId, 10_000)], [], true, [new(setup.HolderPersonId, 10_000)]);
+        var original = await snapshots.CreateAsync(setup.HouseholdId, values: [new(item.Id, 100m)],
+            financedAssetValues: [new(asset.Id, FinancedAssetBalanceKind.CurrentValuation, 1_000m)]);
         await using var context = _database.CreateDbContext();
         var pause = new PauseBeforeSecondQuery();
         var options = new DbContextOptionsBuilder<HearthcastDbContext>()
@@ -33,7 +38,8 @@ public sealed class SnapshotConcurrencyTests : IAsyncLifetime
         try
         {
             await pause.HeaderRead.Task.WaitAsync(timeout.Token);
-            changed = await snapshots.CorrectValuesAsync(setup.HouseholdId, original.Id, original.Revision, [new(item.Id, 200m)], timeout.Token);
+            changed = await snapshots.CorrectValuesAsync(setup.HouseholdId, original.Id, original.Revision, [new(item.Id, 200m)],
+                [new(asset.Id, FinancedAssetBalanceKind.CurrentValuation, 2_000m)], cancellationToken: timeout.Token);
         }
         finally
         {
@@ -42,9 +48,11 @@ public sealed class SnapshotConcurrencyTests : IAsyncLifetime
         var consistent = await inFlightRead;
         Assert.Equal(original.Revision, consistent.Revision);
         Assert.Equal(100m, Assert.Single(consistent.ItemSnapshots).Amount);
+        Assert.Equal(1_000m, Assert.Single(consistent.FinancedAssetSnapshots).CurrentValuation);
         var current = await snapshots.GetAsync(setup.HouseholdId, original.Id);
         Assert.Equal(changed.Revision, current.Revision);
         Assert.Equal(200m, Assert.Single(current.ItemSnapshots).Amount);
+        Assert.Equal(2_000m, Assert.Single(current.FinancedAssetSnapshots).CurrentValuation);
     }
 
     [Fact]

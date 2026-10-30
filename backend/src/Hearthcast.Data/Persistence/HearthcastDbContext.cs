@@ -26,6 +26,11 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<ItemSnapshot> ItemSnapshots => Set<ItemSnapshot>();
     public DbSet<ItemSnapshotHouseholdAllocation> ItemSnapshotHouseholdAllocations => Set<ItemSnapshotHouseholdAllocation>();
 
+    public DbSet<FinancedAssetSnapshot> FinancedAssetSnapshots => Set<FinancedAssetSnapshot>();
+    public DbSet<FinancedAssetSnapshotOwner> FinancedAssetSnapshotOwners => Set<FinancedAssetSnapshotOwner>();
+    public DbSet<FinancedAssetSnapshotLoanHolder> FinancedAssetSnapshotLoanHolders => Set<FinancedAssetSnapshotLoanHolder>();
+    public DbSet<FinancedAssetSnapshotHouseholdAllocation> FinancedAssetSnapshotHouseholdAllocations => Set<FinancedAssetSnapshotHouseholdAllocation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HearthcastDbContext).Assembly);

@@ -267,20 +267,20 @@ public sealed class FinancedAssetPersistenceTests : IAsyncLifetime
         await using var context = _database.CreateDbContext();
         const string previous = "20261030112256_AddSnapshotCarryForwardAndCorrections";
         const string setupMigration = "20261030115628_AddFinancedAssetSetup";
-        await context.GetService<IMigrator>().MigrateAsync(previous);
         var data = await FinancedAssetTestSetup.CreateAsync(_database);
         var snapshots = new Hearthcast.Data.Snapshots.SnapshotService(_database);
         var snapshot = await snapshots.CreateAsync(data.HouseholdId);
+        await context.GetService<IMigrator>().MigrateAsync(previous);
         await context.GetService<IMigrator>().MigrateAsync(setupMigration);
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Equal(setupMigration, (await context.Database.GetAppliedMigrationsAsync()).Last());
-        Assert.Equal(snapshot.Revision, (await snapshots.GetAsync(data.HouseholdId, snapshot.Id)).Revision);
+        Assert.Equal(snapshot.Revision, (await context.Snapshots.AsNoTracking().SingleAsync(saved => saved.Id == snapshot.Id)).Revision);
         var asset = await data.CreateAssetAsync(new(_database));
         Assert.Equal(asset.Id, (await new FinancedAssetService(_database).GetAsync(data.HouseholdId, asset.Id)).Id);
         await context.GetService<IMigrator>().MigrateAsync(previous);
         await context.GetService<IMigrator>().MigrateAsync(setupMigration);
         Assert.Empty(await context.FinancedAssets.ToArrayAsync());
-        Assert.Equal(snapshot.Revision, (await snapshots.GetAsync(data.HouseholdId, snapshot.Id)).Revision);
+        Assert.Equal(snapshot.Revision, (await context.Snapshots.AsNoTracking().SingleAsync(saved => saved.Id == snapshot.Id)).Revision);
     }
 
     private async Task AssertNoAssetAsync()

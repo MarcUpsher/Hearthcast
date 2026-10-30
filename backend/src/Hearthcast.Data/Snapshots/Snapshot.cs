@@ -1,4 +1,5 @@
 using Hearthcast.Data.Households;
+using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.TrackedItems;
 
 namespace Hearthcast.Data.Snapshots;
@@ -7,6 +8,7 @@ public sealed class Snapshot
 {
     private readonly List<SnapshotPerson> _people = [];
     private readonly List<ItemSnapshot> _itemSnapshots = [];
+    private readonly List<FinancedAssetSnapshot> _financedAssetSnapshots = [];
 
     private Snapshot()
     {
@@ -14,6 +16,7 @@ public sealed class Snapshot
 
     internal Snapshot(Household household, DateOnly date, DatePrecision precision,
         IReadOnlyCollection<TrackedItem> items, IReadOnlyCollection<ItemSnapshotValue> values,
+        IReadOnlyCollection<FinancedAsset> assets, IReadOnlyCollection<FinancedAssetSnapshotValue> financedValues,
         Snapshot? carrySource = null)
     {
         var period = SnapshotPeriod.From(date, precision);
@@ -39,6 +42,13 @@ public sealed class Snapshot
             throw new ArgumentException("Values must refer to active tracked items in this household.", nameof(values));
         }
 
+        ValidateFinancedInputs(financedValues);
+        var assetIds = assets.Select(asset => asset.Id).ToHashSet();
+        if (financedValues.Any(value => !assetIds.Contains(value.FinancedAssetId)))
+        {
+            throw new ArgumentException("Values must refer to active financed assets in this household.", nameof(financedValues));
+        }
+
         Id = Guid.NewGuid();
         HouseholdId = household.Id;
         HouseholdName = household.Name;
@@ -57,16 +67,25 @@ public sealed class Snapshot
             var source = supplied ? null : previous?.GetValueOrDefault(item.Id);
             _itemSnapshots.Add(new ItemSnapshot(this, item, people, amount, source));
         }
+        var previousAssets = carrySource?.FinancedAssetSnapshots.ToDictionary(asset => asset.FinancedAssetId);
+        foreach (var asset in assets)
+        {
+            var supplied = financedValues.Where(value => value.FinancedAssetId == asset.Id)
+                .ToDictionary(value => value.Balance, value => value.Amount);
+            _financedAssetSnapshots.Add(new FinancedAssetSnapshot(this, asset, people, supplied,
+                previousAssets?.GetValueOrDefault(asset.Id)));
+        }
     }
 
-    internal void CorrectValues(Guid expectedRevision, IReadOnlyCollection<ItemSnapshotValue> values)
+    internal void CorrectValues(Guid expectedRevision, IReadOnlyCollection<ItemSnapshotValue> values,
+        IReadOnlyCollection<FinancedAssetSnapshotValue> financedValues)
     {
         if (Revision != expectedRevision)
         {
             throw new SnapshotConflictException();
         }
 
-        if (values.Count == 0 || values.Select(value => value.TrackedItemId).Distinct().Count() != values.Count)
+        if ((values.Count == 0 && financedValues.Count == 0) || values.Select(value => value.TrackedItemId).Distinct().Count() != values.Count)
         {
             throw new ArgumentException("Supply at least one value, with each tracked item appearing once.", nameof(values));
         }
@@ -82,13 +101,40 @@ public sealed class Snapshot
             throw new ArgumentOutOfRangeException(nameof(values), "Recorded amounts cannot be negative.");
         }
 
+        ValidateFinancedInputs(financedValues);
+        var assets = _financedAssetSnapshots.ToDictionary(asset => asset.FinancedAssetId);
+        foreach (var value in financedValues)
+        {
+            if (!assets.TryGetValue(value.FinancedAssetId, out var asset))
+            {
+                throw new ArgumentException("Corrections must refer to financed assets in this saved snapshot.", nameof(financedValues));
+            }
+            asset.ValidateValue(value.Balance, value.Amount);
+        }
+
         foreach (var value in values)
         {
             entries[value.TrackedItemId].RecordValue(this, value.Amount);
         }
 
+        foreach (var value in financedValues)
+        {
+            assets[value.FinancedAssetId].RecordValue(this, value.Balance, value.Amount);
+        }
         Revision = Guid.NewGuid();
         UpdatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    private static void ValidateFinancedInputs(IReadOnlyCollection<FinancedAssetSnapshotValue> values)
+    {
+        if (values.Select(value => (value.FinancedAssetId, value.Balance)).Distinct().Count() != values.Count)
+        {
+            throw new ArgumentException("Supply each financed-asset balance only once.", nameof(values));
+        }
+        if (values.Any(value => !Enum.IsDefined(value.Balance) || value.Amount < 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(values), "Select a valid balance with a nonnegative amount or null.");
+        }
     }
 
     public Guid Id { get; private set; }
@@ -101,4 +147,5 @@ public sealed class Snapshot
     public Guid Revision { get; private set; }
     public IReadOnlyCollection<SnapshotPerson> People => _people.AsReadOnly();
     public IReadOnlyCollection<ItemSnapshot> ItemSnapshots => _itemSnapshots.AsReadOnly();
+    public IReadOnlyCollection<FinancedAssetSnapshot> FinancedAssetSnapshots => _financedAssetSnapshots.AsReadOnly();
 }
