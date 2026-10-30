@@ -16,7 +16,8 @@ use saved inclusion and allocation shares; all three views are calculated on dem
 The [household/people API](household-api-slice.md) and
 [classification API](classification-api-slice.md) expose the initial setup endpoints.
 The [tracked-item API](tracked-item-api-slice.md) adds creation and inventory;
-item changes and snapshot endpoints remain later slices.
+[allocation and retirement changes](tracked-item-lifecycle-api-slice.md) are now exposed.
+Snapshot endpoints remain later slices.
 
 ## Model principles
 

@@ -271,6 +271,202 @@ public sealed class TrackedItemApiTests : IAsyncLifetime
         Assert.Empty((await _client.GetFromJsonAsync<TrackedItemResponse[]>(Items(other.Id)))!);
     }
 
+    [Fact]
+    public async Task AllocationAndRetirementChangesAffectFutureSnapshotsAndPreserveHistory()
+    {
+        var (household, groupId) = await Setup();
+        var holder = household.People[0].Id;
+        var other = await AddPerson(household.Id, "Morgan", true);
+        var creation = await _client.PostAsJsonAsync(Items(household.Id), Body(groupId, holder));
+        creation.EnsureSuccessStatusCode();
+        var item = (await creation.Content.ReadFromJsonAsync<TrackedItemResponse>())!;
+        var path = $"{Items(household.Id)}/{item.Id}";
+        var snapshots = new Hearthcast.Data.Snapshots.SnapshotService(_database);
+        var original = await snapshots.CreateAsync(household.Id, new DateOnly(2023, 1, 1));
+        var shared = await PutItem(path + "/household-allocation", new
+        {
+            includeInHousehold = true,
+            allocations = new[] { new { personId = holder, shareBasisPoints = 2500 },
+                new { personId = other.Id, shareBasisPoints = 7500 } }
+        });
+        Assert.Equal(holder, shared.HolderPersonId);
+        Assert.Equal(item.Id, shared.Id);
+        Assert.Equal(2, shared.Allocations.Count);
+        Assert.Contains(new AllocationShareResponse(other.Id, 7500), shared.Allocations);
+        var afterSharing = await snapshots.CreateAsync(household.Id, new DateOnly(2023, 2, 1));
+        // Repeating a replacement must not insert duplicate rows.
+        var repeated = await PutItem(path + "/household-allocation", new
+        {
+            includeInHousehold = true,
+            allocations = new[] { new { personId = holder, shareBasisPoints = 2500 },
+                new { personId = other.Id, shareBasisPoints = 7500 } }
+        });
+        Assert.Equivalent(shared, repeated);
+        var excluded = await PutItem(path + "/household-allocation", new { includeInHousehold = false });
+        Assert.False(excluded.IncludeInHousehold);
+        Assert.Empty(excluded.Allocations);
+        var afterExclusion = await snapshots.CreateAsync(household.Id, new DateOnly(2023, 3, 1));
+        var restored = await PutItem(path + "/household-allocation", new { includeInHousehold = true });
+        Assert.Equal(new AllocationShareResponse(holder, 10_000), Assert.Single(restored.Allocations));
+        var retired = await PutItem(path + "/retirement", new { isRetired = true });
+        Assert.True(retired.IsRetired);
+        Assert.Equivalent(restored.Allocations, retired.Allocations);
+        Assert.Equivalent(retired, await PutItem(path + "/retirement", new { isRetired = true }));
+        var afterRetirement = await snapshots.CreateAsync(household.Id, new DateOnly(2023, 4, 1));
+        Assert.Equivalent(retired, Assert.Single((await _client.GetFromJsonAsync<TrackedItemResponse[]>(Items(household.Id)))!));
+        var active = await PutItem(path + "/retirement", new { isRetired = false });
+        Assert.False(active.IsRetired);
+        Assert.Equivalent(restored, active);
+        var afterReactivation = await snapshots.CreateAsync(household.Id, new DateOnly(2023, 5, 1));
+        await using var context = _database.CreateDbContext();
+        var old = await context.ItemSnapshots.Include(row => row.HouseholdAllocations)
+            .ThenInclude(row => row.SnapshotPerson).SingleAsync(row => row.SnapshotId == original.Id);
+        Assert.True(old.IncludeInHousehold);
+        var oldShare = Assert.Single(old.HouseholdAllocations);
+        Assert.Equal(holder, oldShare.SnapshotPerson.PersonId);
+        Assert.Equal(10_000, oldShare.ShareBasisPoints);
+        var historicalShared = await context.ItemSnapshots.Include(row => row.HouseholdAllocations)
+            .ThenInclude(row => row.SnapshotPerson).SingleAsync(row => row.SnapshotId == afterSharing.Id);
+        Assert.Equal(2, historicalShared.HouseholdAllocations.Count);
+        Assert.Contains(historicalShared.HouseholdAllocations, share => share.SnapshotPerson.PersonId == other.Id && share.ShareBasisPoints == 7500);
+        var historicalExcluded = await context.ItemSnapshots.Include(row => row.HouseholdAllocations)
+            .SingleAsync(row => row.SnapshotId == afterExclusion.Id);
+        Assert.False(historicalExcluded.IncludeInHousehold);
+        Assert.Empty(historicalExcluded.HouseholdAllocations);
+        Assert.False(await context.ItemSnapshots.AnyAsync(row => row.SnapshotId == afterRetirement.Id));
+        Assert.Equal(item.Id, (await context.ItemSnapshots.SingleAsync(row => row.SnapshotId == afterReactivation.Id)).TrackedItemId);
+    }
+
+    [Fact]
+    public async Task RetirementAndReactivationPreserveCustomHouseholdShares()
+    {
+        var (household, groupId) = await Setup();
+        var holder = household.People[0].Id;
+        var other = await AddPerson(household.Id, "Morgan", true);
+        var creation = await _client.PostAsJsonAsync(Items(household.Id), Body(groupId, holder));
+        creation.EnsureSuccessStatusCode();
+        var item = (await creation.Content.ReadFromJsonAsync<TrackedItemResponse>())!;
+        var path = $"{Items(household.Id)}/{item.Id}";
+        var shared = await PutItem(path + "/household-allocation", new
+        {
+            includeInHousehold = true,
+            allocations = new[] { new { personId = holder, shareBasisPoints = 2500 },
+                new { personId = other.Id, shareBasisPoints = 7500 } }
+        });
+        Assert.Equal(2, shared.Allocations.Count);
+        var retired = await PutItem(path + "/retirement", new { isRetired = true });
+        Assert.Equivalent(shared with { IsRetired = true }, retired);
+        Assert.Equivalent(retired, await _client.GetFromJsonAsync<TrackedItemResponse>(path));
+        await using (var context = _database.CreateDbContext())
+        {
+            Assert.True((await context.TrackedItems.SingleAsync()).IsRetired);
+            var shares = await context.TrackedItemHouseholdAllocations.ToArrayAsync();
+            Assert.Equal(2, shares.Length);
+            Assert.Contains(shares, share => share.PersonId == holder && share.ShareBasisPoints == 2500);
+            Assert.Contains(shares, share => share.PersonId == other.Id && share.ShareBasisPoints == 7500);
+        }
+        var active = await PutItem(path + "/retirement", new { isRetired = false });
+        Assert.Equivalent(shared, active);
+        Assert.Equivalent(shared, await _client.GetFromJsonAsync<TrackedItemResponse>(path));
+        await using var verification = _database.CreateDbContext();
+        Assert.False((await verification.TrackedItems.SingleAsync()).IsRetired);
+        var activeShares = await verification.TrackedItemHouseholdAllocations.ToArrayAsync();
+        Assert.Equal(2, activeShares.Length);
+        Assert.Contains(activeShares, share => share.PersonId == holder && share.ShareBasisPoints == 2500);
+        Assert.Contains(activeShares, share => share.PersonId == other.Id && share.ShareBasisPoints == 7500);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OmittedOrNullAllocationsReplaceCustomSharesWithTheHolderDefault(bool explicitNull)
+    {
+        var (household, groupId) = await Setup();
+        var holder = household.People[0].Id;
+        var other = await AddPerson(household.Id, "Morgan", true);
+        var creation = await _client.PostAsJsonAsync(Items(household.Id), Body(groupId, holder));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<TrackedItemResponse>())!;
+        var path = $"{Items(household.Id)}/{original.Id}";
+        var shared = await PutItem(path + "/household-allocation", new
+        {
+            includeInHousehold = true,
+            allocations = new[] { new { personId = holder, shareBasisPoints = 2500 },
+                new { personId = other.Id, shareBasisPoints = 7500 } }
+        });
+        Assert.Equal(2, shared.Allocations.Count);
+        object body = explicitNull
+            ? new { includeInHousehold = true, allocations = (object?)null }
+            : new { includeInHousehold = true };
+        var restored = await PutItem(path + "/household-allocation", body);
+        Assert.Equal(new AllocationShareResponse(holder, 10_000), Assert.Single(restored.Allocations));
+        Assert.Equivalent(original, restored);
+        Assert.Equivalent(original, await _client.GetFromJsonAsync<TrackedItemResponse>(path));
+        await using var context = _database.CreateDbContext();
+        var saved = await context.TrackedItemHouseholdAllocations.SingleAsync();
+        Assert.Equal(original.Id, saved.TrackedItemId);
+        Assert.Equal(holder, saved.PersonId);
+        Assert.Equal(10_000, saved.ShareBasisPoints);
+    }
+
+    [Theory]
+    [InlineData("retirement", "{}", "IsRetired")]
+    [InlineData("retirement", "{\"isRetired\":null}", "IsRetired")]
+    [InlineData("household-allocation", "{}", "IncludeInHousehold")]
+    [InlineData("household-allocation", "{\"includeInHousehold\":null}", "IncludeInHousehold")]
+    [InlineData("household-allocation", "{\"includeInHousehold\":true,\"allocations\":[]}", "Allocations")]
+    [InlineData("household-allocation", "{\"includeInHousehold\":true,\"allocations\":[null]}", "Allocations")]
+    [InlineData("household-allocation", "{\"includeInHousehold\":true,\"allocations\":[{}]}", "Allocations")]
+    public async Task InvalidLifecycleRequestsIdentifyFieldsAndLeaveSavedItemUnchanged(string resource, string json, string field)
+    {
+        var (household, groupId) = await Setup();
+        var creation = await _client.PostAsJsonAsync(Items(household.Id), Body(groupId, household.People[0].Id));
+        creation.EnsureSuccessStatusCode();
+        var item = (await creation.Content.ReadFromJsonAsync<TrackedItemResponse>())!;
+        var path = $"{Items(household.Id)}/{item.Id}";
+        var problem = await AssertProblem(await _client.PutAsync(path + "/" + resource,
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json")), 400);
+        Assert.NotEmpty(problem.GetProperty("errors").GetProperty(field).EnumerateArray());
+        Assert.Equivalent(item, await _client.GetFromJsonAsync<TrackedItemResponse>(path));
+    }
+
+    [Fact]
+    public async Task LifecycleEndpointsEnforceScopeAndEligibleRecipientsAndRejectOtherEdits()
+    {
+        var (household, groupId) = await Setup();
+        var (other, _) = await Setup();
+        var child = await AddPerson(household.Id, "Child", false);
+        var creation = await _client.PostAsJsonAsync(Items(household.Id), Body(groupId, household.People[0].Id));
+        creation.EnsureSuccessStatusCode();
+        var item = (await creation.Content.ReadFromJsonAsync<TrackedItemResponse>())!;
+        var path = $"{Items(household.Id)}/{item.Id}";
+        foreach (var wrong in new[] { $"{Items(other.Id)}/{item.Id}", $"{Items(household.Id)}/{Guid.NewGuid()}", $"{Items(Guid.NewGuid())}/{item.Id}" })
+        {
+            await AssertProblem(await _client.PutAsJsonAsync(wrong + "/household-allocation", new { includeInHousehold = false }), 404);
+            await AssertProblem(await _client.PutAsJsonAsync(wrong + "/retirement", new { isRetired = true }), 404);
+        }
+        await AssertProblem(await _client.PutAsJsonAsync(path + "/household-allocation", new
+        {
+            includeInHousehold = true, allocations = new[] { new { personId = other.People[0].Id, shareBasisPoints = 10_000 } }
+        }), 404);
+        await AssertProblem(await _client.PutAsJsonAsync(path + "/household-allocation", new
+        {
+            includeInHousehold = true, allocations = new[] { new { personId = child.Id, shareBasisPoints = 10_000 } }
+        }), 409);
+        await AssertProblem(await _client.PutAsJsonAsync(path + "/household-allocation", new { includeInHousehold = false, holderPersonId = other.People[0].Id }), 400);
+        await AssertProblem(await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = true, name = "Changed" }), 400);
+        await AssertProblem(await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = "true" }), 400);
+        await AssertProblem(await _client.PutAsJsonAsync(path + "/household-allocation", new { includeInHousehold = "false" }), 400);
+        Assert.Equivalent(item, await _client.GetFromJsonAsync<TrackedItemResponse>(path));
+    }
+
+    private async Task<TrackedItemResponse> PutItem(string path, object body)
+    {
+        var result = await _client.PutAsJsonAsync(path, body);
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        return (await result.Content.ReadFromJsonAsync<TrackedItemResponse>())!;
+    }
+
     private async Task<(HouseholdResponse Household, Guid GroupId)> Setup()
     {
         var home = await _client.PostAsJsonAsync("/api/households", new { name = "Home", firstPersonDisplayName = "Alex" });

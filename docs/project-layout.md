@@ -47,6 +47,10 @@ hearthcast/
           TrackedItemsController.cs
           Contracts/
             CreateTrackedItemRequest.cs
+            SetHouseholdAllocationRequest.cs
+            SetRetirementRequest.cs
+            AllocationShareRequest.cs
+            AllocationRequestValidation.cs
             TrackedItemResponse.cs
         Properties/
           launchSettings.json
@@ -234,6 +238,7 @@ hearthcast/
     household-api-slice.md
     classification-api-slice.md
     tracked-item-api-slice.md
+    tracked-item-lifecycle-api-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md

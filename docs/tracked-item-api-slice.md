@@ -25,14 +25,15 @@ people can receive household shares.
 The response returns item ID, household ID, group ID, holder person ID, name,
 currency and country codes, inclusion and retirement flags, and the saved shares.
 Codes are normalized to uppercase. All items, including excluded or retired ones,
-are part of the inventory response; retirement will be exposed in a later slice.
+are part of the inventory response. Retirement changes are exposed separately.
 The request does not accept a starting amount: values belong to snapshots.
 
 Existing households with no items return `[]`; missing households and cross-household
 item/group/holder/allocation references return 404. Invalid fields or share totals
 return 400. Allocating to a nonparticipant returns 409. Responses use the shared
-problem JSON format on errors. There is no item update or delete endpoint here;
-changing allocations and retirement status are the next setup slice.
+problem JSON format on errors. There is no general item update or delete endpoint here;
+allocation and retirement changes are now covered by the
+[tracked-item lifecycle API](tracked-item-lifecycle-api-slice.md).
 
 ## Verification
 

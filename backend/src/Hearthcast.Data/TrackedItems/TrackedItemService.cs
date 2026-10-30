@@ -68,7 +68,7 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
             var item = await context.TrackedItems.Include(item => item.HolderPerson)
                 .Include(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.Person)
                 .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, token)
-                ?? throw new KeyNotFoundException("The tracked item does not belong to this household.");
+                ?? throw new ResourceNotFoundException("The tracked item does not belong to this household.");
 
             var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, token);
             var removed = item.SetHouseholdAllocation(includeInHousehold, shares);
@@ -83,14 +83,14 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
         bool isRetired,
         CancellationToken cancellationToken = default)
     {
-        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var item = await context.TrackedItems.SingleOrDefaultAsync(
-            item => item.Id == trackedItemId && item.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The tracked item does not belong to this household.");
-
-        item.SetRetired(isRetired);
-        await context.SaveChangesAsync(cancellationToken);
-        return item;
+        return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var item = await context.TrackedItems.Include(item => item.HouseholdAllocations)
+                .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The tracked item does not belong to this household.");
+            item.SetRetired(isRetired);
+            return item;
+        }, cancellationToken);
     }
 
     private static async Task<(Person Person, int ShareBasisPoints)[]> ResolveAllocationsAsync(
