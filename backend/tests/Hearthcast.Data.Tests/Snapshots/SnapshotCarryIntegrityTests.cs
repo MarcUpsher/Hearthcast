@@ -92,7 +92,7 @@ public sealed class SnapshotCarryIntegrityTests : IAsyncLifetime
         await snapshots.CreateAsync(setup.HouseholdId, new DateOnly(2023, 1, 1), [new(item.Id, 10m)]);
         await using var context = _database.CreateDbContext();
         await context.Database.ExecuteSqlRawAsync("UPDATE \"ItemSnapshots\" SET \"LastConfirmedDate\" = DATE '2024-01-01'");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1)));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.BusinessRuleViolationException>(() => snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1)));
         Assert.Equal(1, await context.Snapshots.CountAsync());
     }
 

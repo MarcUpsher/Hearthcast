@@ -71,7 +71,7 @@ public sealed class ItemSnapshot
     {
         if (source.TrackedItemId != TrackedItemId || source.CurrencyCode != CurrencyCode)
         {
-            throw new ArgumentException("A carry requires the same item and currency. Supply a fresh value or explicitly clear it.");
+            throw new Hearthcast.Data.Validation.InvalidValueException("A carry requires the same item and currency. Supply a fresh value or explicitly clear it.");
         }
 
         if (!source.Amount.HasValue)
@@ -83,7 +83,7 @@ public sealed class ItemSnapshot
         if (source.LastConfirmedDate.HasValue
             && source.LastConfirmedDate.Value > SnapshotPeriod.From(snapshot.SnapshotDate, snapshot.DatePrecision).End)
         {
-            throw new InvalidOperationException("A future confirmation cannot be carried into this snapshot.");
+            throw new Hearthcast.Data.Validation.BusinessRuleViolationException("A future confirmation cannot be carried into this snapshot.");
         }
 
         Amount = source.Amount;

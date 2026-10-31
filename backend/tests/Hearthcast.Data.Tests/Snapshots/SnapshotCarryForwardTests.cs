@@ -69,7 +69,7 @@ public sealed class SnapshotCarryForwardTests : IAsyncLifetime
         var date = DateOnly.Parse(targetDate, CultureInfo.InvariantCulture);
         if (outcome == "ambiguous")
         {
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, date, datePrecision: targetPrecision));
+            await Assert.ThrowsAsync<Hearthcast.Data.Validation.BusinessRuleViolationException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, date, datePrecision: targetPrecision));
             await using var context = _database.CreateDbContext();
             Assert.Equal(1, await context.Snapshots.CountAsync());
         }
@@ -87,7 +87,7 @@ public sealed class SnapshotCarryForwardTests : IAsyncLifetime
         var item = await setup.CreateItemAsync(_items);
         var dated = await _snapshots.CreateAsync(setup.HouseholdId, new DateOnly(2023, 1, 18), [new(item.Id, 20m)]);
         var month = await _snapshots.CreateAsync(setup.HouseholdId, new DateOnly(2023, 1, 1), [new(item.Id, 10m)], DatePrecision.Month);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1)));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.BusinessRuleViolationException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1)));
         var selected = await _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 1, 18), sourceSnapshotId: month.Id);
         Assert.Equal(10m, Assert.Single(selected.ItemSnapshots).Amount);
         Assert.Equal(Assert.Single(month.ItemSnapshots).Id, Assert.Single(selected.ItemSnapshots).CarriedFromItemSnapshotId);
@@ -104,7 +104,7 @@ public sealed class SnapshotCarryForwardTests : IAsyncLifetime
         var item = await setup.CreateItemAsync(_items);
         var first = await _snapshots.CreateAsync(setup.HouseholdId, new DateOnly(2023, 1, 1), [new(item.Id, 10m)]);
         await _snapshots.CreateAsync(setup.HouseholdId, new DateOnly(2023, 1, 1), [new(item.Id, 20m)]);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2024, 1, 1)));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.BusinessRuleViolationException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2024, 1, 1)));
         var selected = await _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2024, 1, 1), sourceSnapshotId: first.Id);
         Assert.Equal(10m, Assert.Single(selected.ItemSnapshots).Amount);
     }
@@ -120,7 +120,7 @@ public sealed class SnapshotCarryForwardTests : IAsyncLifetime
         var backdated = await _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1));
         Assert.Equal(past.ItemSnapshots.Single().Id, backdated.ItemSnapshots.Single(entry => entry.TrackedItemId == item.Id).CarriedFromItemSnapshotId);
         Assert.Null(backdated.ItemSnapshots.Single(entry => entry.TrackedItemId == added.Id).Amount);
-        await Assert.ThrowsAsync<ArgumentException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1), sourceSnapshotId: future.Id));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.InvalidValueException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1), sourceSnapshotId: future.Id));
     }
 
     [Theory]
@@ -131,7 +131,7 @@ public sealed class SnapshotCarryForwardTests : IAsyncLifetime
         var first = await TrackedItemTestSetup.CreateAsync(_database);
         var second = await TrackedItemTestSetup.CreateAsync(_database);
         var source = await _snapshots.CreateAsync(second.HouseholdId, new DateOnly(2023, 1, 1));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _snapshots.CreateNextAsync(first.HouseholdId,
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => _snapshots.CreateNextAsync(first.HouseholdId,
             new DateOnly(2023, 2, 1), sourceSnapshotId: foreign ? source.Id : Guid.NewGuid()));
         await using var context = _database.CreateDbContext();
         Assert.Equal(1, await context.Snapshots.CountAsync());
@@ -191,7 +191,7 @@ public sealed class SnapshotCarryForwardTests : IAsyncLifetime
         }
         if (!provideValue && !clear)
         {
-            await Assert.ThrowsAsync<ArgumentException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1)));
+            await Assert.ThrowsAsync<Hearthcast.Data.Validation.InvalidValueException>(() => _snapshots.CreateNextAsync(setup.HouseholdId, new DateOnly(2023, 2, 1)));
         }
         else
         {

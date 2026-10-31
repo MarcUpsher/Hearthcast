@@ -87,7 +87,7 @@ public sealed class FinancedAssetSnapshot
     {
         if (source.FinancedAssetId != FinancedAssetId || source.CurrencyCode != CurrencyCode)
         {
-            throw new ArgumentException("A carry requires the same asset and currency. Supply fresh balances or explicitly clear them.");
+            throw new Hearthcast.Data.Validation.InvalidValueException("A carry requires the same asset and currency. Supply fresh balances or explicitly clear them.");
         }
         var state = source.GetBalance(balance);
         if (!state.Amount.HasValue)
@@ -97,7 +97,7 @@ public sealed class FinancedAssetSnapshot
         }
         if (state.ConfirmedDate > SnapshotPeriod.From(snapshot.SnapshotDate, snapshot.DatePrecision).End)
         {
-            throw new InvalidOperationException("A future confirmation cannot be carried into this snapshot.");
+            throw new Hearthcast.Data.Validation.BusinessRuleViolationException("A future confirmation cannot be carried into this snapshot.");
         }
         SetBalance(balance, state with { Origin = SnapshotValueOrigin.CarriedForward, SourceId = source.Id });
     }

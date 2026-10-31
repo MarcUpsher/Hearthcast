@@ -122,8 +122,8 @@ public sealed class FinancedAssetSnapshotIntegrityTests : IAsyncLifetime
         var setup = await context.FinancedAssets.SingleAsync();
         context.Entry(setup).Property(row => row.CurrencyCode).CurrentValue = "GBP";
         await context.SaveChangesAsync();
-        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateNextAsync(data.HouseholdId, February));
-        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateNextAsync(data.HouseholdId, February,
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.InvalidValueException>(() => service.CreateNextAsync(data.HouseholdId, February));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.InvalidValueException>(() => service.CreateNextAsync(data.HouseholdId, February,
             financedAssetValues: [new(asset.Id, FinancedAssetBalanceKind.CurrentValuation, 10m)]));
         var supplied = Values(asset.Id).Select(value => value with { Amount = (decimal?)null }).ToArray();
         var changed = await service.CreateNextAsync(data.HouseholdId, February, financedAssetValues: supplied);
@@ -271,7 +271,7 @@ public sealed class FinancedAssetSnapshotIntegrityTests : IAsyncLifetime
             UPDATE "FinancedAssetSnapshots" SET "OutstandingLoanBalanceLastConfirmedDate" = {new DateOnly(2030, 1, 1)}
             WHERE "SnapshotId" = {next.Id}
             """);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateNextAsync(data.HouseholdId, new DateOnly(2023, 4, 1)));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.BusinessRuleViolationException>(() => service.CreateNextAsync(data.HouseholdId, new DateOnly(2023, 4, 1)));
     }
 
 }

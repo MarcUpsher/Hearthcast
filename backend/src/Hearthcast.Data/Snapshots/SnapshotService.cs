@@ -134,7 +134,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
             if (latest.Period.End >= target.Start
                 || periods.Any(candidate => candidate.Id != latest.Id && candidate.Period.End >= latest.Period.Start))
             {
-                throw new InvalidOperationException("Snapshot ordering is ambiguous. Select the source snapshot explicitly.");
+                throw new BusinessRuleViolationException("Snapshot ordering is ambiguous. Select the source snapshot explicitly.");
             }
 
             sourceSnapshotId = latest.Id;
@@ -143,10 +143,10 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         var source = await context.Snapshots.AsNoTracking().AsSplitQuery().Include(snapshot => snapshot.ItemSnapshots)
             .Include(snapshot => snapshot.FinancedAssetSnapshots)
             .SingleOrDefaultAsync(snapshot => snapshot.Id == sourceSnapshotId && snapshot.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The source snapshot does not belong to this household.");
+            ?? throw new ResourceNotFoundException("The source snapshot does not belong to this household.");
         if (source.SnapshotDate > target.End)
         {
-            throw new ArgumentException("A definitely future snapshot cannot be a carry source.", nameof(sourceSnapshotId));
+            throw new InvalidValueException("A definitely future snapshot cannot be a carry source.", nameof(sourceSnapshotId));
         }
 
         return source;

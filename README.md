@@ -90,3 +90,4 @@ Source builds on the host use the .NET 10 SDK specified in `global.json`.
 The container workflow builds and tests with the official .NET 10 SDK image.
 
 - [Snapshot API slice](docs/snapshot-api-slice.md)
+- [Snapshot lifecycle API slice](docs/snapshot-lifecycle-api-slice.md)

@@ -94,7 +94,7 @@ public sealed class Snapshot
         var entries = _itemSnapshots.ToDictionary(item => item.TrackedItemId);
         if (values.Any(value => !entries.ContainsKey(value.TrackedItemId)))
         {
-            throw new ArgumentException("Corrections must refer to existing items in this saved snapshot.", nameof(values));
+            throw new InvalidValueException("Corrections must refer to existing items in this saved snapshot.", nameof(values));
         }
 
         if (values.Any(value => value.Amount < 0))
@@ -108,7 +108,7 @@ public sealed class Snapshot
         {
             if (!assets.TryGetValue(value.FinancedAssetId, out var asset))
             {
-                throw new ArgumentException("Corrections must refer to financed assets in this saved snapshot.", nameof(financedValues));
+                throw new InvalidValueException("Corrections must refer to financed assets in this saved snapshot.", nameof(financedValues));
             }
             asset.ValidateValue(value.Balance, value.Amount);
         }
