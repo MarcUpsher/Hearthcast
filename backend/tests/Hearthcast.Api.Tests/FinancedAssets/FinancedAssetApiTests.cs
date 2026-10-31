@@ -268,6 +268,235 @@ public sealed class FinancedAssetApiTests : IAsyncLifetime
         await Problem(await _client.GetAsync(PathFor(Guid.NewGuid())), 404);
         await Problem(await _client.PostAsJsonAsync(PathFor(Guid.NewGuid()), Body(s)), 404);
     }
+
+    [Fact]
+    public async Task AssociationReplacementChangesFutureSnapshotsAndPreservesEarlierOnes()
+    {
+        var s = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var path = $"{PathFor(s.Home)}/{original.Id}/associations";
+        var snapshots = new Hearthcast.Data.Snapshots.SnapshotService(_database);
+        var first = await snapshots.CreateAsync(s.Home, new DateOnly(2023, 1, 1));
+
+        var replacement = AssociationBody(s);
+        replacement["owners"] = Shares(s.Second);
+        replacement["loanHolderPersonIds"] = JsonSerializer.SerializeToNode(new[] { s.First });
+        replacement["householdAllocations"] = Shares(s.Second);
+        var response = await _client.PutAsJsonAsync(path, replacement);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var changed = (await response.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        Assert.Equal(original.Id, changed.Id);
+        Assert.Equal(new FinancedAssetShareResponse(s.Second, 10_000), Assert.Single(changed.Owners));
+        Assert.Equal(s.First, Assert.Single(changed.LoanHolderPersonIds));
+        Assert.Equal(new FinancedAssetShareResponse(s.Second, 10_000), Assert.Single(changed.HouseholdAllocations));
+        Assert.Equivalent(changed, await _client.GetFromJsonAsync<FinancedAssetResponse>($"{PathFor(s.Home)}/{original.Id}"));
+        Assert.Equivalent(changed, (await (await _client.PutAsJsonAsync(path, replacement))
+            .Content.ReadFromJsonAsync<FinancedAssetResponse>())!);
+
+        var second = await snapshots.CreateAsync(s.Home, new DateOnly(2023, 2, 1));
+        var historical = Assert.Single((await snapshots.GetAsync(s.Home, first.Id)).FinancedAssetSnapshots);
+        Assert.Equal(2, historical.Owners.Count);
+        Assert.Equal(s.Second, Assert.Single(historical.LoanHolders).SnapshotPerson.PersonId);
+        Assert.Equal(s.First, Assert.Single(historical.HouseholdAllocations).SnapshotPerson.PersonId);
+        var updated = Assert.Single((await snapshots.GetAsync(s.Home, second.Id)).FinancedAssetSnapshots);
+        Assert.Equal(s.Second, Assert.Single(updated.Owners).SnapshotPerson.PersonId);
+        Assert.Equal(s.First, Assert.Single(updated.LoanHolders).SnapshotPerson.PersonId);
+        Assert.Equal(s.Second, Assert.Single(updated.HouseholdAllocations).SnapshotPerson.PersonId);
+
+        await using var context = _database.CreateDbContext();
+        Assert.Equal(1, await context.FinancedAssetOwners.CountAsync());
+        Assert.Equal(1, await context.FinancedAssetLoanHolders.CountAsync());
+        Assert.Equal(1, await context.FinancedAssetHouseholdAllocations.CountAsync());
+    }
+
+    [Fact]
+    public async Task ExclusionAndRetirementAreReversibleWithoutLosingAssociations()
+    {
+        var s = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var path = $"{PathFor(s.Home)}/{original.Id}";
+        var excludedBody = AssociationBody(s);
+        excludedBody["includeInHousehold"] = false;
+        excludedBody["householdAllocations"] = new JsonArray();
+        var excludedResponse = await _client.PutAsJsonAsync(path + "/associations", excludedBody);
+        Assert.Equal(HttpStatusCode.OK, excludedResponse.StatusCode);
+        var excluded = (await excludedResponse.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        Assert.False(excluded.IncludeInHousehold);
+        Assert.Empty(excluded.HouseholdAllocations);
+        Assert.Equal(original.Owners, excluded.Owners);
+
+        var retirement = await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = true });
+        Assert.Equal(HttpStatusCode.OK, retirement.StatusCode);
+        var retired = (await retirement.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        Assert.True(retired.IsRetired);
+        Assert.Equal(excluded.Owners, retired.Owners);
+        Assert.Equal(retired.Id, Assert.Single((await _client.GetFromJsonAsync<FinancedAssetResponse[]>(PathFor(s.Home)))!).Id);
+        var snapshots = new Hearthcast.Data.Snapshots.SnapshotService(_database);
+        var absent = await snapshots.CreateAsync(s.Home, new DateOnly(2023, 3, 1));
+        Assert.Empty(absent.FinancedAssetSnapshots);
+
+        var activation = await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = false });
+        Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
+        Assert.False((await activation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!.IsRetired);
+        var restored = await _client.PutAsJsonAsync(path + "/associations", AssociationBody(s));
+        Assert.Equal(HttpStatusCode.OK, restored.StatusCode);
+        Assert.Equivalent(original, await restored.Content.ReadFromJsonAsync<FinancedAssetResponse>());
+    }
+
+    [Fact]
+    public async Task RetirementAndReactivationPreserveCustomAssociationsInReadsAndFutureSnapshots()
+    {
+        var s = await Setup();
+        var body = Body(s);
+        body["householdAllocations"] = JsonSerializer.SerializeToNode(new[]
+        {
+            new { personId = s.First, shareBasisPoints = 2500 },
+            new { personId = s.Second, shareBasisPoints = 7500 }
+        });
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), body);
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var path = $"{PathFor(s.Home)}/{original.Id}";
+
+        var retirement = await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = true });
+        Assert.Equal(HttpStatusCode.OK, retirement.StatusCode);
+        Assert.Equivalent(original with { IsRetired = true },
+            await retirement.Content.ReadFromJsonAsync<FinancedAssetResponse>());
+        Assert.Equivalent(original with { IsRetired = true },
+            await _client.GetFromJsonAsync<FinancedAssetResponse>(path));
+
+        var activation = await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = false });
+        Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
+        Assert.Equivalent(original, await activation.Content.ReadFromJsonAsync<FinancedAssetResponse>());
+        Assert.Equivalent(original, await _client.GetFromJsonAsync<FinancedAssetResponse>(path));
+
+        var snapshots = new Hearthcast.Data.Snapshots.SnapshotService(_database);
+        var capture = await snapshots.CreateAsync(s.Home, new DateOnly(2023, 4, 1));
+        var saved = Assert.Single((await snapshots.GetAsync(s.Home, capture.Id)).FinancedAssetSnapshots);
+        Assert.Equal(original.Id, saved.FinancedAssetId);
+        Assert.True(saved.IncludeInHousehold);
+        Assert.Equal(original.Owners.OrderBy(share => share.PersonId), saved.Owners
+            .Select(share => new FinancedAssetShareResponse(share.SnapshotPerson.PersonId, share.ShareBasisPoints))
+            .OrderBy(share => share.PersonId));
+        Assert.Equal(original.LoanHolderPersonIds, saved.LoanHolders
+            .Select(holder => holder.SnapshotPerson.PersonId).OrderBy(id => id));
+        Assert.Equal(original.HouseholdAllocations.OrderBy(share => share.PersonId), saved.HouseholdAllocations
+            .Select(share => new FinancedAssetShareResponse(share.SnapshotPerson.PersonId, share.ShareBasisPoints))
+            .OrderBy(share => share.PersonId));
+    }
+
+    [Theory]
+    [InlineData("owners", "Owners")]
+    [InlineData("loanHolderPersonIds", "LoanHolderPersonIds")]
+    [InlineData("includeInHousehold", "IncludeInHousehold")]
+    [InlineData("householdAllocations", "HouseholdAllocations")]
+    public async Task ReplacementRequiresEveryFieldWhenOmittedOrNull(string field, string errorField)
+    {
+        var s = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var path = $"{PathFor(s.Home)}/{original.Id}";
+
+        foreach (var omitted in new[] { true, false })
+        {
+            var body = AssociationBody(s);
+            if (omitted)
+                body.Remove(field);
+            else
+                body[field] = null;
+
+            var problem = await Problem(await _client.PutAsJsonAsync(path + "/associations", body), 400);
+            Assert.NotEmpty(problem.GetProperty("errors").GetProperty(errorField).EnumerateArray());
+            Assert.Equivalent(original, await _client.GetFromJsonAsync<FinancedAssetResponse>(path));
+        }
+    }
+
+    [Fact]
+    public async Task AssociationReplacementRejectsUnrelatedMetadataWithoutChangingState()
+    {
+        var s = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var path = $"{PathFor(s.Home)}/{original.Id}";
+        var body = AssociationBody(s);
+        body["originalLoanAmount"] = 1;
+        // Include a valid association change so the rejected request also proves atomicity.
+        body["owners"] = Shares(s.Second);
+
+        await Problem(await _client.PutAsJsonAsync(path + "/associations", body), 400);
+        Assert.Equivalent(original, await _client.GetFromJsonAsync<FinancedAssetResponse>(path));
+    }
+
+    [Theory]
+    [InlineData("owners", "[]", "Owners")]
+    [InlineData("loanHolderPersonIds", "null", "LoanHolderPersonIds")]
+    [InlineData("householdAllocations", "[]", "HouseholdAllocations")]
+    [InlineData("includeInHousehold", "null", "IncludeInHousehold")]
+    [InlineData("owners", "[null]", "Owners")]
+    public async Task InvalidAssociationReplacementPreservesExistingState(string field, string value, string errorField)
+    {
+        var s = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var body = AssociationBody(s);
+        body[field] = JsonNode.Parse(value);
+        var problem = await Problem(await _client.PutAsJsonAsync($"{PathFor(s.Home)}/{original.Id}/associations", body), 400);
+        Assert.True(problem.GetProperty("errors").TryGetProperty(errorField, out _));
+        Assert.Equivalent(original, await _client.GetFromJsonAsync<FinancedAssetResponse>($"{PathFor(s.Home)}/{original.Id}"));
+    }
+
+    [Fact]
+    public async Task AssociationAndRetirementUpdatesRespectHouseholdScopeAndEligibility()
+    {
+        var s = await Setup();
+        var other = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        var path = $"{PathFor(s.Home)}/{original.Id}";
+        var foreign = AssociationBody(s);
+        foreign["owners"] = Shares(other.First);
+        await Problem(await _client.PutAsJsonAsync(path + "/associations", foreign), 404);
+        await Problem(await _client.PutAsJsonAsync($"{PathFor(other.Home)}/{original.Id}/associations", AssociationBody(s)), 404);
+        await Problem(await _client.PutAsJsonAsync($"{PathFor(other.Home)}/{original.Id}/retirement", new { isRetired = true }), 404);
+        await new HouseholdService(_database).SetPersonParticipationAsync(s.Home, s.Second, false);
+        var ineligible = AssociationBody(s);
+        ineligible["householdAllocations"] = Shares(s.Second);
+        await Problem(await _client.PutAsJsonAsync(path + "/associations", ineligible), 409);
+        Assert.Equivalent(original, await _client.GetFromJsonAsync<FinancedAssetResponse>(path));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"isRetired\":null}")]
+    [InlineData("{\"isRetired\":\"true\"}")]
+    [InlineData("{\"isRetired\":true,\"name\":\"Changed\"}")]
+    public async Task InvalidRetirementRequestDoesNotChangeAsset(string json)
+    {
+        var s = await Setup();
+        var creation = await _client.PostAsJsonAsync(PathFor(s.Home), Body(s));
+        creation.EnsureSuccessStatusCode();
+        var original = (await creation.Content.ReadFromJsonAsync<FinancedAssetResponse>())!;
+        await Problem(await _client.PutAsJsonAsync($"{PathFor(s.Home)}/{original.Id}/retirement", JsonNode.Parse(json)), 400);
+        Assert.Equivalent(original, await _client.GetFromJsonAsync<FinancedAssetResponse>($"{PathFor(s.Home)}/{original.Id}"));
+    }
+
+    private static JsonObject AssociationBody((Guid Home, Guid Group, Guid First, Guid Second) s)
+    {
+        var body = Body(s);
+        foreach (var field in new[] { "groupId", "name", "currencyCode", "countryCode", "purchaseDate",
+                     "purchasePrice", "originalLoanAmount", "hasWithdrawalFacility" })
+            body.Remove(field);
+        return body;
+    }
+
     private async Task<(Guid Home, Guid Group, Guid First, Guid Second)> Setup()
     {
         var households = new HouseholdService(_database);

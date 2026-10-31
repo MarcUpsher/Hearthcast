@@ -82,6 +82,7 @@ frontend/                 # Planned Angular Material app; not created yet
 - [Tracked-item API slice](docs/tracked-item-api-slice.md)
 - [Tracked-item lifecycle API slice](docs/tracked-item-lifecycle-api-slice.md)
 - [Financed-asset API slice](docs/financed-asset-api-slice.md)
+- [Financed-asset lifecycle API slice](docs/financed-asset-lifecycle-api-slice.md)
 - [Synthetic household history specification](docs/household-history-tests.md)
 - [Project layout and naming](docs/project-layout.md)
 

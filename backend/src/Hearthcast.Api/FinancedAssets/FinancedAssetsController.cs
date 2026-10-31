@@ -27,6 +27,19 @@ public sealed class FinancedAssetsController(FinancedAssetService assets) : Cont
     public async Task<ActionResult<FinancedAssetResponse>> Get(Guid householdId, Guid financedAssetId, CancellationToken cancellationToken) =>
         FinancedAssetResponse.From(await assets.GetAsync(householdId, financedAssetId, cancellationToken));
 
+    [HttpPut("{financedAssetId:guid}/associations")]
+    public async Task<ActionResult<FinancedAssetResponse>> SetAssociations(Guid householdId, Guid financedAssetId,
+        SetFinancedAssetAssociationsRequest request, CancellationToken cancellationToken) =>
+        FinancedAssetResponse.From(await assets.SetPersonAssociationsAsync(householdId, financedAssetId,
+            Shares(request.Owners!), request.LoanHolderPersonIds!, request.IncludeInHousehold!.Value,
+            Shares(request.HouseholdAllocations!), cancellationToken));
+
+    [HttpPut("{financedAssetId:guid}/retirement")]
+    public async Task<ActionResult<FinancedAssetResponse>> SetRetirement(Guid householdId, Guid financedAssetId,
+        SetFinancedAssetRetirementRequest request, CancellationToken cancellationToken) =>
+        FinancedAssetResponse.From(await assets.SetRetiredAsync(householdId, financedAssetId,
+            request.IsRetired!.Value, cancellationToken));
+
     private static FinancedAssetShare[] Shares(IReadOnlyList<FinancedAssetShareRequest?> shares) =>
         shares.Select(share => new FinancedAssetShare(share!.PersonId!.Value, share.ShareBasisPoints!.Value)).ToArray();
 }

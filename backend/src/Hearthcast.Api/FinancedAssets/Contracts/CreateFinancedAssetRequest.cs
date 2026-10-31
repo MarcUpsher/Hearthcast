@@ -39,28 +39,8 @@ public sealed record CreateFinancedAssetRequest : IValidatableObject
             yield return new ValidationResult("Original loan amount cannot be negative.", [nameof(OriginalLoanAmount)]);
         if (PurchasePrice < 0)
             yield return new ValidationResult("Purchase price cannot be negative.", [nameof(PurchasePrice)]);
-        if (LoanHolderPersonIds is { } loans
-            && (loans.Contains(Guid.Empty) || loans.Distinct().Count() != loans.Count))
-            yield return new ValidationResult("Loan holders must be distinct people with nonempty IDs.", [nameof(LoanHolderPersonIds)]);
-        foreach (var error in ValidateShares(Owners, true, nameof(Owners))) yield return error;
-        if (IncludeInHousehold.HasValue)
-            foreach (var error in ValidateShares(HouseholdAllocations, IncludeInHousehold.Value, nameof(HouseholdAllocations)))
-                yield return error;
-    }
-
-    private static IEnumerable<ValidationResult> ValidateShares(IReadOnlyList<FinancedAssetShareRequest?>? shares,
-        bool requireFullShare, string field)
-    {
-        if (shares is null) yield break; // Required handles missing/null collections.
-        if (shares.Any(share => share is null || !share.PersonId.HasValue || share.PersonId == Guid.Empty
-            || !share.ShareBasisPoints.HasValue || share.ShareBasisPoints.Value is < 1 or > 10_000))
-        {
-            yield return new ValidationResult("Each share needs a person and 1 to 10000 basis points.", [field]);
-            yield break;
-        }
-        if (shares.Select(share => share!.PersonId).Distinct().Count() != shares.Count)
-            yield return new ValidationResult("People must be unique within each association.", [field]);
-        if (requireFullShare ? shares.Sum(share => (long)share!.ShareBasisPoints!.Value) != 10_000 : shares.Count != 0)
-            yield return new ValidationResult("Ownership and included household shares must total 100%; excluded household shares must be empty.", [field]);
+        foreach (var error in FinancedAssetAssociationValidation.Validate(IncludeInHousehold,
+                     Owners, LoanHolderPersonIds, HouseholdAllocations))
+            yield return error;
     }
 }
