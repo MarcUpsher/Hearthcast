@@ -91,3 +91,4 @@ The container workflow builds and tests with the official .NET 10 SDK image.
 
 - [Snapshot API slice](docs/snapshot-api-slice.md)
 - [Snapshot lifecycle API slice](docs/snapshot-lifecycle-api-slice.md)
+- [Snapshot summary API slice](docs/snapshot-summary-api-slice.md)
