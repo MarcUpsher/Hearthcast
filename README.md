@@ -7,21 +7,24 @@ A household finance app built around configured items and dated snapshots.
 ## Current step
 
 The persistence model implements household setup, classification, tracked items,
-household allocations, financed-asset setup and snapshots, plus ordinary-snapshot capture, carry-forward and corrections.
+household allocations, financed-asset setup and snapshots, plus ordinary and
+financed-asset snapshot capture, carry-forward and corrections.
 PostgreSQL is the only database provider, with EF Core migrations and real database integration
 tests. A full-snapshot summary service calculates totals by currency, category and
 group, with completeness and carry-forward information. Individual holdings use
 saved holders and ownership shares. Household summaries count included values once
-and show person contributions using saved allocations. Household/people REST
-endpoints now provide the first setup workflow. Classification, item, snapshot and
-summary endpoints and the Angular Material frontend follow in separate steps.
+and show person contributions using saved allocations. REST endpoints cover
+households and people, classification, tracked items, financed assets, snapshot
+capture/carry-forward/corrections, and all three summary views. The Angular
+Material frontend is planned.
 
 The API and database run in separate Docker containers. A one-shot migration
 service applies the schema before the API starts. There is no user data seeded
 and no schema mutation during ordinary API startup.
 
-See the [household API review guide](docs/household-api-slice.md) for the latest slice
-and its local-only access assumptions (no authentication or sessions).
+See the [HTTP workflow verification guide](docs/http-workflow-verification.md) for
+the complete setup-to-reporting scenario. The API is intended for local-only access;
+it currently has no authentication or sessions.
 
 ## Run with Docker
 
@@ -92,3 +95,6 @@ The container workflow builds and tests with the official .NET 10 SDK image.
 - [Snapshot API slice](docs/snapshot-api-slice.md)
 - [Snapshot lifecycle API slice](docs/snapshot-lifecycle-api-slice.md)
 - [Snapshot summary API slice](docs/snapshot-summary-api-slice.md)
+- [Individual holdings summary API slice](docs/individual-holdings-summary-api-slice.md)
+- [Household summary API slice](docs/household-summary-api-slice.md)
+- [HTTP workflow verification](docs/http-workflow-verification.md)
