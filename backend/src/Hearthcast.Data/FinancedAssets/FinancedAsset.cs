@@ -19,7 +19,7 @@ public sealed class FinancedAsset
     {
         if (group.Category.FinancialType != FinancialType.Asset)
         {
-            throw new ArgumentException("A financed asset requires a group in an Asset category.", nameof(group));
+            throw new InvalidValueException("A financed asset requires a group in an Asset category.", nameof(group));
         }
         ArgumentOutOfRangeException.ThrowIfNegative(originalLoanAmount);
         if (purchasePrice < 0)
@@ -73,7 +73,7 @@ public sealed class FinancedAsset
         }
         if (allocations.Any(share => !share.Person.ParticipatesInHouseholdFinances))
         {
-            throw new InvalidOperationException("Only household participants can receive an allocation.");
+            throw new BusinessRuleViolationException("Only household participants can receive an allocation.");
         }
 
         // Validate the complete change before modifying any association.

@@ -242,6 +242,7 @@ logic must also enforce:
    [classification endpoints](classification-api-slice.md) expose initial setup.
    [Tracked-item creation and inventory](tracked-item-api-slice.md) is available;
    [allocation and retirement changes](tracked-item-lifecycle-api-slice.md) are also exposed.
+   [Financed-asset creation and inventory](financed-asset-api-slice.md) is available.
    Other finance endpoints, frontend and historical import remain separate steps; no spreadsheet-specific fields enter this core schema.
 
 For each code slice: review the small set of entities, inspect the migration and

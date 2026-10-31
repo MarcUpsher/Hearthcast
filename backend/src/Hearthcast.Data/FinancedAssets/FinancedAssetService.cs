@@ -1,4 +1,5 @@
 using Hearthcast.Data.Persistence;
+using Hearthcast.Data.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hearthcast.Data.FinancedAssets;
@@ -16,7 +17,7 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
         {
             var group = await context.ItemGroups.Include(group => group.Category)
                 .SingleOrDefaultAsync(group => group.Id == groupId && group.HouseholdId == householdId, token)
-                ?? throw new KeyNotFoundException("The group does not belong to this household.");
+                ?? throw new ResourceNotFoundException("The group does not belong to this household.");
             var asset = new FinancedAsset(group, name, currencyCode, countryCode,
                 purchaseDate, purchasePrice, originalLoanAmount, hasWithdrawalFacility);
             await ApplyAssociationsAsync(context, asset, owners, loanHolderPersonIds,
@@ -35,7 +36,7 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
         {
             var asset = await AssetGraph(context).SingleOrDefaultAsync(
                 asset => asset.HouseholdId == householdId && asset.Id == financedAssetId, token)
-                ?? throw new KeyNotFoundException("The financed asset does not belong to this household.");
+                ?? throw new ResourceNotFoundException("The financed asset does not belong to this household.");
             var oldOwners = asset.Owners.ToArray();
             var oldLoanHolders = asset.LoanHolders.ToArray();
             var oldAllocations = asset.HouseholdAllocations.ToArray();
@@ -48,13 +49,23 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
         }, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<FinancedAsset>> ListAsync(Guid householdId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await context.Households.AnyAsync(household => household.Id == householdId, cancellationToken))
+            throw new ResourceNotFoundException("The household does not exist.");
+        return await AssetGraph(context).AsNoTrackingWithIdentityResolution()
+            .Where(asset => asset.HouseholdId == householdId)
+            .OrderBy(asset => asset.Name).ThenBy(asset => asset.Id).ToArrayAsync(cancellationToken);
+    }
+
     public async Task<FinancedAsset> GetAsync(Guid householdId, Guid financedAssetId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         // One SQL statement keeps associations and metadata in the same database view.
         return await AssetGraph(context).AsNoTrackingWithIdentityResolution().SingleOrDefaultAsync(
             asset => asset.HouseholdId == householdId && asset.Id == financedAssetId, cancellationToken)
-            ?? throw new KeyNotFoundException("The financed asset does not belong to this household.");
+            ?? throw new ResourceNotFoundException("The financed asset does not belong to this household.");
     }
 
     public async Task<FinancedAsset> SetRetiredAsync(
@@ -63,7 +74,7 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var asset = await AssetGraph(context).SingleOrDefaultAsync(
             asset => asset.HouseholdId == householdId && asset.Id == financedAssetId, cancellationToken)
-            ?? throw new KeyNotFoundException("The financed asset does not belong to this household.");
+            ?? throw new ResourceNotFoundException("The financed asset does not belong to this household.");
         asset.SetRetired(isRetired);
         await context.SaveChangesAsync(cancellationToken);
         return asset;
@@ -89,7 +100,7 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
             .ToDictionaryAsync(person => person.Id, cancellationToken);
         if (people.Count != ids.Length)
         {
-            throw new KeyNotFoundException("Every associated person must belong to this household.");
+            throw new ResourceNotFoundException("Every associated person must belong to this household.");
         }
         asset.SetPersonAssociations(
             owners.Select(share => (people[share.PersonId], share.ShareBasisPoints)).ToArray(),

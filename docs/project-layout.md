@@ -52,6 +52,13 @@ hearthcast/
             AllocationShareRequest.cs
             AllocationRequestValidation.cs
             TrackedItemResponse.cs
+        FinancedAssets/
+          FinancedAssetsController.cs
+          Contracts/
+            CreateFinancedAssetRequest.cs
+            FinancedAssetShareRequest.cs
+            FinancedAssetResponse.cs
+            FinancedAssetShareResponse.cs
         Properties/
           launchSettings.json
         Hearthcast.Api.csproj
@@ -179,6 +186,8 @@ hearthcast/
         Hearthcast.Data.csproj
     tests/
       Hearthcast.Api.Tests/
+        FinancedAssets/
+          FinancedAssetApiTests.cs
         Classification/
           ClassificationApiTests.cs
         TrackedItems/
@@ -239,6 +248,7 @@ hearthcast/
     classification-api-slice.md
     tracked-item-api-slice.md
     tracked-item-lifecycle-api-slice.md
+    financed-asset-api-slice.md
     household-history-tests.md
     project-layout.md
     containers-and-postgres.md

@@ -55,7 +55,7 @@ public sealed class FinancedAssetIntegrityTests : IAsyncLifetime
     {
         var data = await FinancedAssetTestSetup.CreateAsync(_database, secondParticipates: false);
         var service = new FinancedAssetService(_database);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => data.CreateAssetAsync(service));
+        await Assert.ThrowsAsync<BusinessRuleViolationException>(() => data.CreateAssetAsync(service));
         var asset = await data.CreateAssetAsync(service, allocations: [new(data.FirstPersonId, 10_000)]);
         Assert.Equal(2, asset.Owners.Count);
         Assert.Equal(data.SecondPersonId, Assert.Single(asset.LoanHolders).PersonId);
@@ -212,7 +212,7 @@ public sealed class FinancedAssetIntegrityTests : IAsyncLifetime
         Assert.Single(outcomes, error => error is null);
         if (outcomes[0] is not null)
         {
-            Assert.IsType<InvalidOperationException>(outcomes[0]);
+            Assert.IsType<BusinessRuleViolationException>(outcomes[0]);
         }
         else
         {

@@ -1,3 +1,4 @@
+using Hearthcast.Data.Validation;
 using System.Globalization;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.FinancedAssets;
@@ -142,7 +143,7 @@ public sealed class FinancedAssetPersistenceTests : IAsyncLifetime
         var data = await FinancedAssetTestSetup.CreateAsync(_database);
         var other = await FinancedAssetTestSetup.CreateAsync(_database);
         if (role == "group") data = data with { GroupId = other.GroupId };
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => data.CreateAssetAsync(new(_database),
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => data.CreateAssetAsync(new(_database),
             owners: role == "owner" ? [new(other.FirstPersonId, 10_000)] : null,
             loanHolders: role == "loan-holder" ? [other.FirstPersonId] : null,
             allocations: role == "allocation" ? [new(other.FirstPersonId, 10_000)] : null));
@@ -156,9 +157,9 @@ public sealed class FinancedAssetPersistenceTests : IAsyncLifetime
         var other = await FinancedAssetTestSetup.CreateAsync(_database);
         var service = new FinancedAssetService(_database);
         var asset = await data.CreateAssetAsync(service);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(other.HouseholdId, asset.Id));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.SetRetiredAsync(other.HouseholdId, asset.Id, true));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.SetPersonAssociationsAsync(other.HouseholdId, asset.Id,
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => service.GetAsync(other.HouseholdId, asset.Id));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => service.SetRetiredAsync(other.HouseholdId, asset.Id, true));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => service.SetPersonAssociationsAsync(other.HouseholdId, asset.Id,
             [new(other.FirstPersonId, 10_000)], [], false, []));
         Assert.False((await service.GetAsync(data.HouseholdId, asset.Id)).IsRetired);
     }
