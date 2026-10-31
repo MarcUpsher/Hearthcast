@@ -266,7 +266,7 @@ public sealed class FinancedAssetSnapshotTests : IAsyncLifetime
         Assert.Null(entry.AvailableToWithdraw);
         Assert.Equal(800_000m, entry.CurrentEquity);
         Assert.Null(entry.LoanBalanceReductionExcludingWithdrawableFunds);
-        await Assert.ThrowsAsync<ArgumentException>(() => service.CorrectValuesAsync(data.HouseholdId, without.Id, without.Revision,
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.InvalidValueException>(() => service.CorrectValuesAsync(data.HouseholdId, without.Id, without.Revision,
             financedAssetValues: [Value(asset.Id, FinancedAssetBalanceKind.AvailableToWithdraw, 1m)]));
         var corrected = await service.CorrectValuesAsync(data.HouseholdId, original.Id, original.Revision,
             financedAssetValues: [Value(asset.Id, FinancedAssetBalanceKind.AvailableToWithdraw, 240_000m)]);

@@ -72,7 +72,7 @@ public sealed class FinancedAssetSnapshot
         if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), "Recorded balances cannot be negative.");
         if (balance == FinancedAssetBalanceKind.AvailableToWithdraw && !HasWithdrawalFacility && amount.HasValue)
         {
-            throw new ArgumentException("This asset has no withdrawal facility.", nameof(amount));
+            throw new Hearthcast.Data.Validation.InvalidValueException("This asset has no withdrawal facility.", nameof(amount));
         }
     }
 

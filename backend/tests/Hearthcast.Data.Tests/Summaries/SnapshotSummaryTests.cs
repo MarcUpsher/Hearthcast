@@ -291,8 +291,8 @@ public sealed class SnapshotSummaryTests : IAsyncLifetime
         var other = await new HouseholdService(_database).CreateAsync("Two", "Person");
         var capture = await new SnapshotService(_database).CreateAsync(household.Id, January);
         var service = new SnapshotSummaryService(_database);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(other.Id, capture.Id));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(household.Id, Guid.NewGuid()));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => service.GetAsync(other.Id, capture.Id));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => service.GetAsync(household.Id, Guid.NewGuid()));
     }
 
     [Fact]

@@ -295,8 +295,8 @@ public sealed class IndividualHoldingsSummaryTests : IAsyncLifetime
         Assert.Equal(2, report.People.Count);
         Assert.All(report.People, person => Assert.Empty(person.Currencies));
         var other = await new HouseholdService(_database).CreateAsync("Other", "Other person");
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(other.Id, capture.Id));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(data.HouseholdId, Guid.NewGuid()));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => service.GetAsync(other.Id, capture.Id));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => service.GetAsync(data.HouseholdId, Guid.NewGuid()));
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetAsync(data.HouseholdId, capture.Id, cancellation.Token));

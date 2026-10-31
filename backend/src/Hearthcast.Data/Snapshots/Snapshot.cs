@@ -1,4 +1,5 @@
 using Hearthcast.Data.Households;
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.TrackedItems;
 
@@ -39,14 +40,14 @@ public sealed class Snapshot
         var itemIds = items.Select(item => item.Id).ToHashSet();
         if (values.Any(value => !itemIds.Contains(value.TrackedItemId)))
         {
-            throw new ArgumentException("Values must refer to active tracked items in this household.", nameof(values));
+            throw new InvalidValueException("Values must refer to active tracked items in this household.", nameof(values));
         }
 
         ValidateFinancedInputs(financedValues);
         var assetIds = assets.Select(asset => asset.Id).ToHashSet();
         if (financedValues.Any(value => !assetIds.Contains(value.FinancedAssetId)))
         {
-            throw new ArgumentException("Values must refer to active financed assets in this household.", nameof(financedValues));
+            throw new InvalidValueException("Values must refer to active financed assets in this household.", nameof(financedValues));
         }
 
         Id = Guid.NewGuid();

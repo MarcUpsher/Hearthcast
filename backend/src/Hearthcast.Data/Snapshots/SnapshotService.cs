@@ -1,4 +1,5 @@
 using System.Data;
+using Hearthcast.Data.Validation;
 using Hearthcast.Data.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,7 +48,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
             {
                 var snapshot = await SnapshotGraph(context)
                     .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, token)
-                    ?? throw new KeyNotFoundException("The snapshot does not belong to this household.");
+                    ?? throw new ResourceNotFoundException("The snapshot does not belong to this household.");
                 snapshot.CorrectValues(expectedRevision, values ?? [], financedAssetValues ?? []);
                 return snapshot;
             }, cancellationToken);
@@ -67,9 +68,20 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
             IsolationLevel.RepeatableRead, cancellationToken);
         var snapshot = await SnapshotGraph(context).AsNoTrackingWithIdentityResolution()
             .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, cancellationToken)
-            ?? throw new KeyNotFoundException("The snapshot does not belong to this household.");
+            ?? throw new ResourceNotFoundException("The snapshot does not belong to this household.");
         await transaction.CommitAsync(cancellationToken);
         return snapshot;
+    }
+
+    public async Task<IReadOnlyList<SnapshotInventoryEntry>> ListAsync(Guid householdId, CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await context.Households.AnyAsync(row => row.Id == householdId, cancellationToken))
+            throw new ResourceNotFoundException("The household does not exist.");
+        return await context.Snapshots.AsNoTracking().Where(row => row.HouseholdId == householdId)
+            .OrderByDescending(row => row.SnapshotDate).ThenBy(row => row.Id)
+            .Select(row => new SnapshotInventoryEntry(row.Id, row.SnapshotDate, row.DatePrecision, row.Revision))
+            .ToArrayAsync(cancellationToken);
     }
 
     private Task<Snapshot> CaptureAsync(
@@ -83,7 +95,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         {
             var household = await context.Households.Include(household => household.People)
                 .SingleOrDefaultAsync(household => household.Id == householdId, token)
-                ?? throw new KeyNotFoundException("The household does not exist.");
+                ?? throw new ResourceNotFoundException("The household does not exist.");
             var items = await context.TrackedItems
                 .Where(item => item.HouseholdId == householdId && !item.IsRetired)
                 .Include(item => item.Group).ThenInclude(group => group.Category)

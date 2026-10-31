@@ -99,9 +99,9 @@ public sealed class SnapshotCorrectionTests : IAsyncLifetime
         var item = await first.CreateItemAsync(_items);
         var otherItem = await second.CreateItemAsync(_items);
         var capture = await _snapshots.CreateAsync(first.HouseholdId, values: [new(item.Id, 100m)]);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _snapshots.CorrectValuesAsync(second.HouseholdId, capture.Id, capture.Revision, [new(item.Id, 1m)]));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => _snapshots.CorrectValuesAsync(second.HouseholdId, capture.Id, capture.Revision, [new(item.Id, 1m)]));
         await Assert.ThrowsAsync<ArgumentException>(() => _snapshots.CorrectValuesAsync(first.HouseholdId, capture.Id, capture.Revision, [new(otherItem.Id, 1m)]));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _snapshots.CorrectValuesAsync(first.HouseholdId, Guid.NewGuid(), capture.Revision, [new(item.Id, 1m)]));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => _snapshots.CorrectValuesAsync(first.HouseholdId, Guid.NewGuid(), capture.Revision, [new(item.Id, 1m)]));
         Assert.Equal(100m, Assert.Single((await _snapshots.GetAsync(first.HouseholdId, capture.Id)).ItemSnapshots).Amount);
     }
 

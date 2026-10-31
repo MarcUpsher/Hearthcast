@@ -238,9 +238,9 @@ public sealed class SnapshotPersistenceTests : IAsyncLifetime
         var setup = await TrackedItemTestSetup.CreateAsync(_database);
         var created = await _snapshots.CreateAsync(setup.HouseholdId);
         var other = await new HouseholdService(_database).CreateAsync("Household B", "Person C");
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _snapshots.CreateAsync(Guid.NewGuid()));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _snapshots.GetAsync(other.Id, created.Id));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _snapshots.GetAsync(setup.HouseholdId, Guid.NewGuid()));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => _snapshots.CreateAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => _snapshots.GetAsync(other.Id, created.Id));
+        await Assert.ThrowsAsync<Hearthcast.Data.Validation.ResourceNotFoundException>(() => _snapshots.GetAsync(setup.HouseholdId, Guid.NewGuid()));
     }
 
     [Fact]
