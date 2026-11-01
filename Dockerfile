@@ -9,6 +9,7 @@ RUN dotnet publish backend/src/Hearthcast.Api/Hearthcast.Api.csproj \
     --configuration Release --no-restore --output /app/publish /p:UseAppHost=false
 
 FROM build AS test
+COPY backend/tools/ backend/tools/
 COPY backend/tests/ backend/tests/
 RUN dotnet restore backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj
 RUN dotnet build backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj \

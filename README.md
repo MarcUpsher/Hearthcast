@@ -26,6 +26,9 @@ See the [HTTP workflow verification guide](docs/http-workflow-verification.md) f
 the complete setup-to-reporting scenario. The API is intended for local-only access;
 it currently has no authentication or sessions.
 
+The [historical import command](docs/historical-import.md) loads prepared history
+into an empty database and verifies the saved summaries in the same transaction.
+
 ## Run with Docker
 
 Requires Docker Engine and Docker Compose.
@@ -67,6 +70,8 @@ backend/
     Hearthcast.Data/
   tests/
     Hearthcast.Data.Tests/
+  tools/
+    Hearthcast.HistoryImport/
 frontend/                 # Planned Angular Material app; not created yet
 ```
 

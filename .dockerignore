@@ -8,6 +8,8 @@
 !backend/src/**
 !backend/tests/
 !backend/tests/**
+!backend/tools/
+!backend/tools/**
 **/bin/
 **/obj/
 **/appsettings.local.json

@@ -7,4 +7,7 @@
     <Project Path="backend/tests/Hearthcast.Data.Tests/Hearthcast.Data.Tests.csproj" />
     <Project Path="backend/tests/Hearthcast.Api.Tests/Hearthcast.Api.Tests.csproj" />
   </Folder>
+  <Folder Name="/backend/tools/">
+    <Project Path="backend/tools/Hearthcast.HistoryImport/Hearthcast.HistoryImport.csproj" />
+  </Folder>
 </Solution>

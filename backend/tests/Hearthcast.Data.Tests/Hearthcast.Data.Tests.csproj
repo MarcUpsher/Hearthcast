@@ -18,6 +18,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="../../src/Hearthcast.Data/Hearthcast.Data.csproj" />
+    <ProjectReference Include="../../tools/Hearthcast.HistoryImport/Hearthcast.HistoryImport.csproj" />
   </ItemGroup>
 
 </Project>
