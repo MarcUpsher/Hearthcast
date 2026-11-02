@@ -23,7 +23,7 @@ public sealed record ItemSnapshotResponse(
     DateOnly? LastConfirmedDate,
     DatePrecision? LastConfirmedPrecision,
     Guid? CarriedFromItemSnapshotId,
-    IReadOnlyList<SnapshotShareResponse> HouseholdAllocations)
+    IReadOnlyList<SnapshotShareResponse> HouseholdAllocations, string? InstitutionName = null, string? FundName = null)
 {
     internal static ItemSnapshotResponse From(ItemSnapshot value) => new(
         value.Id,
@@ -45,5 +45,6 @@ public sealed record ItemSnapshotResponse(
         value.LastConfirmedDate,
         value.LastConfirmedPrecision,
         value.CarriedFromItemSnapshotId,
-        value.HouseholdAllocations.OrderBy(row => row.SnapshotPersonId).Select(row => new SnapshotShareResponse(row.SnapshotPersonId, row.ShareBasisPoints)).ToArray());
+        value.HouseholdAllocations.OrderBy(row => row.SnapshotPersonId).Select(row => new SnapshotShareResponse(row.SnapshotPersonId, row.ShareBasisPoints)).ToArray(),
+        value.InstitutionName, value.FundName);
 }

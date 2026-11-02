@@ -6,6 +6,13 @@ namespace Hearthcast.Data.Households;
 
 public sealed class HouseholdService(IDbContextFactory<HearthcastDbContext> contextFactory)
 {
+    public async Task<IReadOnlyList<Household>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await context.Households.AsNoTracking().Include(h => h.People)
+            .OrderBy(h => h.Name).ThenBy(h => h.Id).ToArrayAsync(cancellationToken);
+    }
+
     public async Task<Household> GetAsync(Guid householdId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);

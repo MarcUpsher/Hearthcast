@@ -14,6 +14,8 @@ public sealed record CreateTrackedItemRequest : IValidatableObject
 
     [Required]
     public string? Name { get; init; }
+    public string? InstitutionName { get; init; }
+    public string? FundName { get; init; }
 
     [Required]
     [RegularExpression(@"^\s*[A-Za-z]{3}\s*$", ErrorMessage = "Use a three-letter currency code.")]

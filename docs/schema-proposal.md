@@ -57,7 +57,7 @@ Snapshot endpoints remain later slices.
 | Person | Id, HouseholdId, DisplayName, ParticipatesInHouseholdFinances | Membership does not require owning any items. |
 | Category | Id, HouseholdId, Name, FinancialType | FinancialType is Asset or Debt. |
 | ItemGroup | Id, HouseholdId, CategoryId, Name | User-defined grouping; inherits financial type. The composite category FK enforces the household. |
-| TrackedItem | Id, HouseholdId, GroupId, HolderPersonId, Name, CurrencyCode, CountryCode, IncludeInHousehold, IsRetired | Persistent identity and current entry settings. Required single holder. |
+| TrackedItem | Id, HouseholdId, GroupId, HolderPersonId, Name, InstitutionName, FundName, CurrencyCode, CountryCode, IncludeInHousehold, IsRetired | Persistent identity and current entry settings. Required single holder. InstitutionName and FundName are optional descriptive text. |
 | TrackedItemHouseholdAllocation | HouseholdId, TrackedItemId, PersonId, ShareBasisPoints | Required only for included items; totals 10,000 basis points (100%). |
 
 An ordinary item's actual holder is recorded directly through HolderPersonId.
@@ -84,7 +84,7 @@ a fund, pension, cash pot or other balance directly as a tracked item.
 | --- | --- | --- |
 | Snapshot | Id, HouseholdId, SnapshotDate, DatePrecision, HouseholdName, CreatedAtUtc, UpdatedAtUtc, Revision | One dated capture. HouseholdName is copied. |
 | SnapshotPerson | Id, HouseholdId, SnapshotId, PersonId, DisplayName, ParticipatesInHouseholdFinances | Copied household roster, including people without items. |
-| ItemSnapshot | Id, HouseholdId, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision, CarriedFromItemSnapshotId | One full value and copied reporting context per tracked item. |
+| ItemSnapshot | Id, HouseholdId, SnapshotId, TrackedItemId, HolderSnapshotPersonId, ItemName, InstitutionName, FundName, CategoryId, CategoryName, FinancialType, GroupId, GroupName, CurrencyCode, CountryCode, IncludeInHousehold, Amount, ValueOrigin, LastConfirmedDate, LastConfirmedPrecision, CarriedFromItemSnapshotId | One full value and copied reporting context per tracked item. Optional institution/fund metadata is copied at capture; existing history is not backfilled. |
 | ItemSnapshotHouseholdAllocation | SnapshotId, ItemSnapshotId, SnapshotPersonId, ShareBasisPoints | Copied household attribution for included entries. |
 
 Naming defines responsibilities: Snapshot is the shared dated capture; ItemSnapshot

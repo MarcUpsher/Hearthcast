@@ -1,0 +1,189 @@
+<h1>
+  {{ mode === "correct" ? "Edit a saved snapshot" : "Record a snapshot" }}
+</h1>
+<p class="muted">
+  Record current values together. Keep a previous reading, confirm a new value,
+  or explicitly mark it unknown.
+</p>
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+  <button mat-button (click)="load()">Reload source and discard edits</button>
+}
+@if (!w.current()) {
+  <a mat-flat-button routerLink="/setup">Set up a household first</a>
+} @else {
+  <div class="toolbar">
+    <mat-form-field
+      ><mat-label>Action</mat-label
+      ><mat-select
+        [value]="mode"
+        [disabled]="busy()"
+        (selectionChange)="changeMode($event.value, $event.source)"
+        ><mat-option value="next"
+          >Next snapshot · carry unchanged values</mat-option
+        ><mat-option value="new">Fresh snapshot · no carry</mat-option
+        ><mat-option value="correct"
+          >Edit existing snapshot</mat-option
+        ></mat-select
+      ></mat-form-field
+    >
+    @if (mode !== "new") {
+      <mat-form-field
+        ><mat-label>{{
+          mode === "correct" ? "Saved snapshot" : "Carry source"
+        }}</mat-label
+        ><mat-select
+          [value]="sourceId"
+          (selectionChange)="changeSource($event.value, $event.source)"
+          [disabled]="busy()"
+        >
+          @for (s of inventory(); track s.id) {
+            <mat-option [value]="s.id">{{ s.snapshotDate }}</mat-option>
+          }
+        </mat-select></mat-form-field
+      >
+    }
+    <mat-form-field
+      ><mat-label>Date</mat-label
+      ><input
+        matInput
+        type="date"
+        [(ngModel)]="date"
+        [disabled]="mode === 'correct' || busy()" /></mat-form-field
+    ><mat-form-field
+      ><mat-label>Date precision</mat-label
+      ><mat-select
+        [(ngModel)]="precision"
+        [disabled]="mode === 'correct' || busy()"
+        ><mat-option [value]="2">Month</mat-option
+        ><mat-option [value]="1">Exact day</mat-option></mat-select
+      ></mat-form-field
+    >
+  </div>
+  @if (mode === "correct") {
+    <p class="notice">
+      Corrections update this saved snapshot only. Later snapshots retain their
+      recorded or carried values. If another edit has changed this snapshot,
+      reload before saving again.
+    </p>
+  }
+  @if (!rows().length && !busy()) {
+    <p class="notice">
+      No items are available for this action. Activate the current items in
+      household setup, or choose a saved snapshot to correct.
+    </p>
+    <a mat-button routerLink="/setup">Manage active items</a>
+  }
+  @if (busy()) {
+    <p role="status">Loading or saving…</p>
+  }
+  <form (ngSubmit)="save()">
+    @for (person of groupedRows(); track person.key) {
+      <section [attr.aria-label]="person.name">
+        <h2>{{ person.name }}</h2>
+        @for (category of person.categories; track category.key) {
+          <section class="panel scroll">
+            <h3>{{ category.name }}</h3>
+            @for (group of category.groups; track group.key) {
+              <h4>{{ group.name }}</h4>
+              <table
+                [attr.aria-label]="
+                  person.name + ' · ' + category.name + ' · ' + group.name
+                "
+              >
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Previous reading</th>
+                    <th>Action</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of group.rows; track r.id + ":" + r.kind) {
+                    <tr>
+                      <td>
+                        {{ r.name }}<br /><small>{{ r.currency }}</small>
+                        @if (r.institutionName) {
+                          <div>
+                            <small>Institution: {{ r.institutionName }}</small>
+                          </div>
+                        }
+                        @if (r.fundName) {
+                          <div>
+                            <small>Fund: {{ r.fundName }}</small>
+                          </div>
+                        }
+                      </td>
+                      <td>
+                        {{ r.previous === null ? "Unknown" : r.previous
+                        }}<br /><small>{{ r.confirmed }}</small>
+                      </td>
+                      <td>
+                        <mat-select
+                          [name]="r.id + ':' + r.kind + ':mode'"
+                          [(ngModel)]="r.mode"
+                          [disabled]="busy()"
+                          [attr.aria-label]="r.name + ' action'"
+                          ><mat-option
+                            value="keep"
+                            [disabled]="mode === 'new'"
+                            >{{
+                              mode === "correct"
+                                ? "Leave unchanged"
+                                : "Carry previous
+                reading"
+                            }}</mat-option
+                          ><mat-option value="record">Confirm value</mat-option
+                          ><mat-option value="clear"
+                            >Unknown</mat-option
+                          ></mat-select
+                        >
+                      </td>
+                      <td>
+                        @if (r.mode === "record") {
+                          <input
+                            class="money"
+                            inputmode="decimal"
+                            [name]="r.id + ':' + r.kind + ':amount'"
+                            [(ngModel)]="r.amount"
+                            [attr.aria-label]="r.name + ' amount'"
+                            [disabled]="busy()"
+                            required
+                          />
+                        } @else {
+                          <small>{{
+                            r.mode === "clear" ? "Unknown" : "Unchanged"
+                          }}</small>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </section>
+        }
+      </section>
+    }
+    <button
+      mat-flat-button
+      type="submit"
+      [disabled]="
+        !ready() ||
+        busy() ||
+        !rows().length ||
+        !date ||
+        (mode === 'correct' && !source())
+      "
+    >
+      {{
+        busy()
+          ? "Saving…"
+          : mode === "correct"
+            ? "Save corrections"
+            : "Save snapshot"
+      }}
+    </button>
+  </form>
+}

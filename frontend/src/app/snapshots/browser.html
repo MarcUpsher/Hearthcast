@@ -1,0 +1,249 @@
+<h1>Snapshots</h1>
+<p class="muted">Your household finances, one recorded moment at a time.</p>
+@if (!w.current()) {
+  <p class="notice">Create a household to begin.</p>
+  <a mat-flat-button routerLink="/setup">Set up household</a>
+}
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+  <button mat-button (click)="load()">Retry</button>
+}
+@if (inventory().length) {
+  <div class="toolbar">
+    <mat-form-field
+      ><mat-label>Year</mat-label
+      ><mat-select [(ngModel)]="year" (selectionChange)="changeYear()">
+        @for (y of years(); track y) {
+          <mat-option [value]="y">{{ y }}</mat-option>
+        }
+      </mat-select></mat-form-field
+    >
+    <mat-form-field
+      ><mat-label>Month / date</mat-label
+      ><mat-select [(ngModel)]="selected" (selectionChange)="open()">
+        @for (s of months(); track s.id) {
+          <mat-option [value]="s.id">{{
+            s.snapshotDate + "T00:00:00Z"
+              | date
+                : (s.datePrecision === 2
+                    ? "MMMM"
+                    : "d
+        MMMM")
+                : "UTC"
+          }}</mat-option>
+        }
+      </mat-select></mat-form-field
+    >
+    <mat-form-field
+      ><mat-label>View</mat-label
+      ><mat-select
+        aria-label="Summary view"
+        [(ngModel)]="view"
+        (selectionChange)="changeView()"
+        ><mat-option [value]="0">Household contributions</mat-option
+        ><mat-option [value]="1">Individual holdings</mat-option
+        ><mat-option [value]="2">All recorded</mat-option></mat-select
+      ></mat-form-field
+    >
+    @if (people().length) {
+      <mat-form-field
+        ><mat-label>Person</mat-label
+        ><mat-select [(ngModel)]="person">
+          @if (view === 0) {
+            <mat-option value="">Entire household</mat-option>
+          }
+          @for (p of people(); track p.person.personId) {
+            <mat-option [value]="p.person.personId">{{
+              p.person.displayName
+            }}</mat-option>
+          }
+        </mat-select></mat-form-field
+      >
+    }
+  </div>
+}
+@if (busy()) {
+  <p role="status">Loading snapshot…</p>
+}
+@if (!busy() && w.current() && !inventory().length && !error()) {
+  <p class="notice">
+    No snapshots yet. Configure your items, then record your first snapshot.
+  </p>
+  <a mat-flat-button routerLink="/record">Record snapshot</a>
+}
+@if (saved(); as s) {
+  <p class="notice">
+    Totals reflect the entries recorded or carried in this snapshot. Earlier
+    history may have incomplete household coverage. Currencies are kept
+    separate.
+  </p>
+  <div class="cards">
+    @for (c of currencies(); track c.currencyCode) {
+      <section class="panel">
+        <span class="badge">{{ c.currencyCode }}</span>
+        <div class="amount">
+          {{ money(totals(c).knownNetPosition, c.currencyCode) }}
+        </div>
+        <small>{{
+          view === 1
+            ? "Individual holdings"
+            : view === 2
+              ? "All recorded
+      balances"
+              : "Household contribution"
+        }}</small>
+        <p>
+          Assets
+          {{ money(totals(c).ordinaryAssets.knownSubtotal, c.currencyCode)
+          }}<br />Debts
+          {{ money(totals(c).ordinaryDebts.knownSubtotal, c.currencyCode)
+          }}<br />Financed equity
+          {{
+            money(totals(c).financedAssetEquity.knownSubtotal, c.currencyCode)
+          }}
+        </p>
+        <small
+          >{{
+            totals(c).ordinaryAssets.carriedForwardEntryCount +
+              totals(c).ordinaryDebts.carriedForwardEntryCount +
+              totals(c).financedAssetEquity.carriedForwardEntryCount
+          }}
+          carried entries ·
+          {{
+            totals(c).ordinaryAssets.missingEntryCount +
+              totals(c).ordinaryDebts.missingEntryCount +
+              totals(c).financedAssetEquity.missingEntryCount
+          }}
+          missing values</small
+        >
+      </section>
+    }
+  </div>
+  @for (c of currencies(); track c.currencyCode) {
+    <section class="panel">
+      <h2>{{ c.currencyCode }} breakdown</h2>
+      @for (category of c.categories; track category.categoryId) {
+        <details open>
+          <summary>
+            {{ category.categoryName }}
+            <strong style="float: right">{{
+              money(totals(category).knownNetPosition, c.currencyCode)
+            }}</strong>
+          </summary>
+          <table>
+            <tbody>
+              @for (group of category.groups; track group.groupId) {
+                <tr>
+                  <td>{{ group.groupName }}</td>
+                  <td class="numeric">
+                    {{ money(totals(group).knownNetPosition, c.currencyCode) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </details>
+      }
+    </section>
+  }
+  <section class="panel">
+    <div class="actions">
+      <h2>Entire snapshot · recorded entries</h2>
+      <a mat-button routerLink="/record" [queryParams]="{ correct: s.id }"
+        >Edit</a
+      >
+    </div>
+    <p class="muted">
+      The entries and financed assets below show the entire snapshot. The person
+      and view selectors apply to the summaries above.
+    </p>
+    <div class="toolbar">
+      <mat-form-field
+        ><mat-label>Find a tracked item or group</mat-label
+        ><input matInput [(ngModel)]="search" /></mat-form-field
+      ><mat-form-field
+        ><mat-label>Tracked-item currency</mat-label
+        ><mat-select [(ngModel)]="currency"
+          ><mat-option value="">All</mat-option>
+          @for (code of currencyOptions(); track code) {
+            <mat-option [value]="code">{{ code }}</mat-option>
+          }
+        </mat-select></mat-form-field
+      >
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Holder</th>
+            <th>Group</th>
+            <th>Value</th>
+            <th>Status / last confirmed</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (i of items(); track i.trackedItemId) {
+            <tr>
+              <td>
+                {{ i.itemName }}
+                @if (!i.includeInHousehold) {
+                  <small>Individual only</small>
+                }
+                @if (i.institutionName) {
+                  <div>
+                    <small>Institution: {{ i.institutionName }}</small>
+                  </div>
+                }
+                @if (i.fundName) {
+                  <div>
+                    <small>Fund: {{ i.fundName }}</small>
+                  </div>
+                }
+              </td>
+              <td>{{ holder(i.holderSnapshotPersonId) }}</td>
+              <td>{{ i.categoryName }} / {{ i.groupName }}</td>
+              <td class="numeric">
+                {{ money(i.amount, i.currencyCode) }}
+                <small>{{ i.currencyCode }}</small>
+              </td>
+              <td>
+                <span class="badge">{{ status(i.valueOrigin) }}</span
+                ><br /><small>{{
+                  i.lastConfirmedDate
+                    ? (i.lastConfirmedDate + "T00:00:00Z"
+                      | date: "MMM yyyy" : "UTC")
+                    : "No confirmed reading"
+                }}</small>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+  @for (a of s.financedAssetSnapshots; track a.financedAssetId) {
+    <section class="panel">
+      <h2>{{ a.assetName }}</h2>
+      <div class="toolbar">
+        <span
+          >Valuation
+          <strong>{{ money(a.currentValuation, a.currencyCode) }}</strong></span
+        ><span
+          >Outstanding loan
+          <strong>{{
+            money(a.outstandingLoanBalance, a.currencyCode)
+          }}</strong></span
+        >
+        @if (a.hasWithdrawalFacility) {
+          <span
+            >Available to withdraw
+            <strong>{{
+              money(a.availableToWithdraw, a.currencyCode)
+            }}</strong></span
+          >
+        }
+      </div>
+    </section>
+  }
+}

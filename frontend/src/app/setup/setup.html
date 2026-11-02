@@ -1,0 +1,507 @@
+<h1>Household setup</h1>
+<p class="muted">People, reporting groups and the items you want to track.</p>
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+}
+<div class="toolbar">
+  <button mat-stroked-button (click)="begin('household')">New household</button>
+  @if (w.current(); as h) {
+    <button mat-button (click)="begin('household', h)">Edit</button>
+  }
+</div>
+@if (w.current()) {
+  <div class="toolbar">
+    <mat-form-field
+      ><mat-label>Manage</mat-label
+      ><mat-select [(ngModel)]="tab" (selectionChange)="cancel()"
+        ><mat-option value="people">People</mat-option
+        ><mat-option value="classification">Categories & groups</mat-option
+        ><mat-option value="items">Tracked items</mat-option
+        ><mat-option value="assets">Financed assets</mat-option></mat-select
+      ></mat-form-field
+    >
+    @if (tab === "people") {
+      <button mat-flat-button (click)="begin('person')">Add person</button>
+    }
+    @if (tab === "classification") {
+      <button mat-flat-button (click)="begin('category')">Add category</button
+      ><button
+        mat-stroked-button
+        [disabled]="!categories().length"
+        (click)="begin('group')"
+      >
+        Add group
+      </button>
+    }
+    @if (tab === "items" || tab === "assets") {
+      <mat-form-field>
+        <mat-label>{{
+          tab === "assets" ? "Owner" : "Account holder"
+        }}</mat-label>
+        <mat-select aria-label="Holder filter" [(ngModel)]="holderFilter">
+          <mat-option value="">{{
+            tab === "assets" ? "All owners" : "All holders"
+          }}</mat-option>
+          @for (person of w.current()?.people; track person.id) {
+            <mat-option [value]="person.id">{{
+              person.displayName
+            }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <button
+        mat-flat-button
+        [disabled]="!groups().length"
+        (click)="begin(tab === 'items' ? 'item' : 'asset')"
+      >
+        Add {{ tab === "items" ? "item" : "financed asset" }}</button
+      ><mat-form-field
+        ><mat-label>Search</mat-label
+        ><input matInput [(ngModel)]="search" /></mat-form-field
+      ><mat-form-field
+        ><mat-label>Checklist status</mat-label
+        ><mat-select [(ngModel)]="status"
+          ><mat-option value="all">All</mat-option
+          ><mat-option value="active">Active</mat-option
+          ><mat-option value="retired">Retired</mat-option></mat-select
+        ></mat-form-field
+      >
+      <mat-form-field
+        ><mat-label>Snapshot history</mat-label
+        ><mat-select
+          aria-label="Snapshot history"
+          [(ngModel)]="historyFilter"
+          [disabled]="!activity()?.latestSnapshot"
+          ><mat-option value="all">All items</mat-option
+          ><mat-option value="latest"
+            >Present in latest snapshot</mat-option
+          ></mat-select
+        ></mat-form-field
+      >
+    }
+  </div>
+  @if (tab === "items" || tab === "assets") {
+    @if (activityLoading()) {
+      <p role="status">Loading snapshot activity…</p>
+    }
+    @if (activityError()) {
+      <p class="error" role="alert">
+        Snapshot activity could not be loaded: {{ activityError() }}
+      </p>
+      <button mat-button (click)="load()">Retry</button>
+    }
+    @if (activity(); as history) {
+      <p class="muted">
+        @if (history.latestSnapshot; as latest) {
+          Latest snapshot:
+          <strong>{{
+            activityDate(latest.snapshotDate, latest.datePrecision)
+          }}</strong
+          >. Presence includes carried and unknown readings; it does not mean
+          the item is active.
+        } @else {
+          No snapshots recorded yet.
+        }
+      </p>
+    }
+  }
+}
+@if (title && !editing) {
+  @if (formError()) {
+    <p class="error" role="alert">{{ formError() }}</p>
+  }
+  <section class="panel">
+    <h2>{{ title }}</h2>
+    <ng-container [ngTemplateOutlet]="setupForm" />
+  </section>
+}
+<ng-template #editPanel>
+  <h2 mat-dialog-title>{{ title }}</h2>
+  <div class="setup-edit-content">
+    <ng-container [ngTemplateOutlet]="setupForm" />
+  </div>
+</ng-template>
+<ng-template #setupForm>
+  <form
+    class="setup-form"
+    #form="ngForm"
+    (ngSubmit)="save()"
+    [attr.aria-busy]="busy()"
+  >
+    <div class="fields">
+      @if (editing) {
+        <p class="muted span">
+          Changes apply to future snapshots. Saved snapshots keep their original
+          details.
+        </p>
+        @if (formError()) {
+          <p class="error span" role="alert">{{ formError() }}</p>
+        }
+      }
+      @for (f of fields; track f.key) {
+        @if (f.type === "checkbox") {
+          <mat-checkbox
+            [name]="f.key"
+            [(ngModel)]="value[f.key]"
+            [disabled]="busy()"
+            >{{ f.label }}</mat-checkbox
+          >
+        } @else {
+          <mat-form-field
+            ><mat-label>{{ f.label }}</mat-label>
+            @if (f.options) {
+              <mat-select
+                [name]="f.key"
+                [(ngModel)]="value[f.key]"
+                [disabled]="busy()"
+                required
+              >
+                @for (o of f.options; track o.id) {
+                  <mat-option [value]="o.id">{{ o.name }}</mat-option>
+                }
+              </mat-select>
+            } @else {
+              <input
+                matInput
+                [name]="f.key"
+                [type]="f.type ?? 'text'"
+                [required]="!f.optional"
+                [(ngModel)]="value[f.key]"
+                [disabled]="busy()"
+              />
+            }
+          </mat-form-field>
+        }
+      }
+      @if (association) {
+        <div class="span">
+          <p class="muted">
+            Ownership and household contribution are independent. Each
+            applicable set of shares must total 100%.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  @if (financed) {
+                    <th>Owner %</th>
+                    <th>Named borrower</th>
+                  }
+                  @if (value["includeInHousehold"]) {
+                    <th>Household %</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of w.current()?.people; track p.id) {
+                  <tr>
+                    <td>{{ p.displayName }}</td>
+                    @if (financed) {
+                      <td>
+                        <input
+                          class="money"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          [attr.aria-label]="
+                            p.displayName + ' ownership percentage'
+                          "
+                          [name]="'owner_' + p.id"
+                          [(ngModel)]="value['owner_' + p.id]"
+                          [disabled]="busy()"
+                        />
+                      </td>
+                      <td>
+                        <mat-checkbox
+                          [name]="'loan_' + p.id"
+                          [(ngModel)]="value['loan_' + p.id]"
+                          [disabled]="busy()"
+                          [attr.aria-label]="p.displayName + ' borrower'"
+                        ></mat-checkbox>
+                      </td>
+                    }
+                    @if (value["includeInHousehold"]) {
+                      <td>
+                        @if (p.participatesInHouseholdFinances) {
+                          <input
+                            class="money"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            [name]="'household_' + p.id"
+                            [attr.aria-label]="
+                              p.displayName + ' household percentage'
+                            "
+                            [(ngModel)]="value['household_' + p.id]"
+                            [disabled]="busy()"
+                          />
+                        } @else {
+                          <small>Not a participant</small>
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    </div>
+    <div class="actions">
+      <button mat-button type="button" [disabled]="busy()" (click)="cancel()">
+        Cancel
+      </button>
+      <button mat-flat-button type="submit" [disabled]="form.invalid || busy()">
+        {{ busy() ? "Saving…" : "Save" }}
+      </button>
+    </div>
+  </form>
+</ng-template>
+@if (w.current(); as h) {
+  @if (tab === "people") {
+    <section class="panel">
+      <h2>{{ h.name }}</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Person</th>
+            <th>Household finances</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of h.people; track p.id) {
+            <tr>
+              <td>{{ p.displayName }}</td>
+              <td>
+                {{
+                  p.participatesInHouseholdFinances
+                    ? "Participant"
+                    : "Individual only"
+                }}
+              </td>
+              <td>
+                <button
+                  mat-button
+                  [disabled]="busy()"
+                  (click)="begin('person', p)"
+                >
+                  Edit</button
+                ><button mat-button [disabled]="busy()" (click)="remove(p)">
+                  Remove
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+  @if (tab === "classification") {
+    @for (c of categories(); track c.id) {
+      <section class="panel">
+        <div class="actions">
+          <h2>
+            {{ c.name }} <small>{{ c.financialType }}</small>
+          </h2>
+          <button mat-button (click)="begin('category', c)">Edit</button>
+        </div>
+        @for (g of groups(); track g.id) {
+          @if (g.categoryId === c.id) {
+            <p>
+              {{ g.name }}
+              <button mat-button (click)="begin('group', g)">Edit</button>
+            </p>
+          }
+        }
+      </section>
+    }
+  }
+  @if (tab === "items") {
+    <p class="notice">
+      Only active items appear in new snapshot entry. Retiring an item preserves
+      its saved history.
+    </p>
+    <section class="panel scroll">
+      <table
+        matSort
+        [matSortActive]="itemSort.active"
+        [matSortDirection]="itemSort.direction"
+        [matSortDisableClear]="true"
+        (matSortChange)="setSort($event)"
+        aria-label="Tracked items"
+      >
+        <thead>
+          <tr>
+            <th
+              mat-sort-header="name"
+              sortActionDescription="Sort by item name"
+            >
+              Item
+            </th>
+            <th
+              mat-sort-header="group"
+              sortActionDescription="Sort by category and group"
+            >
+              Group
+            </th>
+            <th
+              mat-sort-header="holder"
+              sortActionDescription="Sort by account holder"
+            >
+              Actual holder
+            </th>
+            <th mat-sort-header="currency">Currency</th>
+            <th mat-sort-header="household">Household</th>
+            <th mat-sort-header="checklist">Checklist</th>
+            <th mat-sort-header="presence">Latest snapshot</th>
+            <th
+              mat-sort-header="confirmed"
+              sortActionDescription="Sort by last confirmation date"
+            >
+              Last confirmed
+            </th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (i of filtered(items()); track i.id) {
+            <tr>
+              <td>
+                {{ i.name }}
+                @if (i.institutionName) {
+                  <div>
+                    <small>Institution: {{ i.institutionName }}</small>
+                  </div>
+                }
+                @if (i.fundName) {
+                  <div>
+                    <small>Fund: {{ i.fundName }}</small>
+                  </div>
+                }
+              </td>
+              <td>{{ groupName(i.groupId) }}</td>
+              <td>{{ name(i.holderPersonId) }}</td>
+              <td>{{ i.currencyCode }}</td>
+              <td>
+                {{ i.includeInHousehold ? "Included" : "Individual only" }}
+              </td>
+              <td>{{ i.isRetired ? "Retired" : "Active" }}</td>
+              <td>{{ presence(i.id) }}</td>
+              <td>
+                @if (activity()) {
+                  @if (itemActivity(i.id); as history) {
+                    {{
+                      activityDate(
+                        history.lastConfirmedDate,
+                        history.lastConfirmedPrecision
+                      )
+                    }}
+                  } @else {
+                    Never recorded
+                  }
+                } @else {
+                  {{ activityLoading() ? "Loading…" : "Unavailable" }}
+                }
+              </td>
+              <td>
+                <button
+                  mat-button
+                  [disabled]="busy()"
+                  (click)="begin('item', i)"
+                >
+                  Edit</button
+                ><button mat-button [disabled]="busy()" (click)="retire(i)">
+                  {{ i.isRetired ? "Activate" : "Retire" }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+  @if (tab === "assets") {
+    <section class="panel scroll">
+      <table
+        matSort
+        [matSortActive]="assetSort.active"
+        [matSortDirection]="assetSort.direction"
+        [matSortDisableClear]="true"
+        (matSortChange)="setSort($event, true)"
+        aria-label="Financed assets"
+      >
+        <thead>
+          <tr>
+            <th mat-sort-header="name">Financed asset</th>
+            <th mat-sort-header="group">Group</th>
+            <th
+              mat-sort-header="originalLoan"
+              sortActionDescription="Sort by original loan amount in native currency"
+            >
+              Original loan
+            </th>
+            <th mat-sort-header="checklist">Checklist</th>
+            <th mat-sort-header="presence">Latest snapshot</th>
+            <th mat-sort-header="valuationConfirmed">Valuation confirmed</th>
+            <th mat-sort-header="loanConfirmed">Loan confirmed</th>
+            <th mat-sort-header="withdrawalConfirmed">
+              Withdrawable funds confirmed
+            </th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (a of filtered(assets(), true); track a.id) {
+            <tr>
+              <td>{{ a.name }}</td>
+              <td>{{ groupName(a.groupId) }}</td>
+              <td>{{ a.currencyCode }} {{ a.originalLoanAmount }}</td>
+              <td>{{ a.isRetired ? "Retired" : "Active" }}</td>
+              <td>{{ presence(a.id, true) }}</td>
+              @for (kind of [1, 2, 3]; track kind) {
+                <td>
+                  @if (kind === 3 && !a.hasWithdrawalFacility) {
+                    Not applicable
+                  } @else if (activity()) {
+                    @if (balanceActivity(a.id, kind); as balance) {
+                      {{
+                        activityDate(
+                          balance.lastConfirmedDate,
+                          balance.lastConfirmedPrecision
+                        )
+                      }}
+                    } @else {
+                      Never recorded
+                    }
+                  } @else {
+                    {{ activityLoading() ? "Loading…" : "Unavailable" }}
+                  }
+                </td>
+              }
+              <td>
+                <button
+                  mat-button
+                  [disabled]="busy()"
+                  (click)="begin('asset', a)"
+                >
+                  Edit</button
+                ><button
+                  mat-button
+                  [disabled]="busy()"
+                  (click)="retire(a, true)"
+                >
+                  {{ a.isRetired ? "Activate" : "Retire" }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+}

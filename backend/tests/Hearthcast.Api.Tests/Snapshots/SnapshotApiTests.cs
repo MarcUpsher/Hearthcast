@@ -9,6 +9,7 @@ using Hearthcast.Data.Households;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.TrackedItems;
 using Hearthcast.Data.Snapshots;
+using Hearthcast.Data.FinancedAssets;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hearthcast.Api.Tests.Snapshots;
@@ -30,6 +31,56 @@ public sealed class SnapshotApiTests : IAsyncLifetime
         await _factory.DisposeAsync();
         await _database.DisposeAsync();
     }
+    [Fact]
+    public async Task ActivitySeparatesLatestPresenceFromConfirmationAndHandlesEachFinancedBalance()
+    {
+        var home=await new HouseholdService(_database).CreateAsync("Home","Alex");
+        var path=$"/api/households/{home.Id}/snapshots/activity";
+        var empty=(await _client.GetFromJsonAsync<SnapshotActivity>(path))!;
+        Assert.Null(empty.LatestSnapshot);
+        Assert.Empty(empty.Items);
+        var classification=new ClassificationService(_database);
+        var category=await classification.CreateCategoryAsync(home.Id,"Assets",FinancialType.Asset);
+        var group=await classification.CreateGroupAsync(home.Id,category.Id,"Holdings");
+        var items=new TrackedItemService(_database);
+        var person=home.People.Single().Id;
+        var zero=await items.CreateAsync(home.Id,group.Id,person,"Zero","GBP","GB",true);
+        var ended=await items.CreateAsync(home.Id,group.Id,person,"Old holding","GBP","GB",true);
+        var unknown=await items.CreateAsync(home.Id,group.Id,person,"Unknown","GBP","GB",true);
+        var asset=await new FinancedAssetService(_database).CreateAsync(home.Id,group.Id,"Financed asset","GBP","GB",
+            null,null,200m,true,[new(person,10000)],[],true,[new(person,10000)]);
+        var snapshots=new SnapshotService(_database);
+        var january=await snapshots.CreateAsync(home.Id,new(2023,1,1),[new(zero.Id,0m),new(ended.Id,100m)],DatePrecision.Month,
+            [new(asset.Id,FinancedAssetBalanceKind.CurrentValuation,300m),new(asset.Id,FinancedAssetBalanceKind.OutstandingLoanBalance,200m)]);
+        await items.SetRetiredAsync(home.Id,ended.Id,true);
+        var march=await snapshots.CreateNextAsync(home.Id,new(2023,3,1),datePrecision:DatePrecision.Month,
+            sourceSnapshotId:january.Id,financedAssetValues:[new(asset.Id,FinancedAssetBalanceKind.CurrentValuation,350m)]);
+        var never=await items.CreateAsync(home.Id,group.Id,person,"Never recorded","GBP","GB",true);
+        var result=(await _client.GetFromJsonAsync<SnapshotActivity>(path))!;
+        Assert.Equal(march.Id,result.LatestSnapshot!.Id);
+        var carried=result.Items.Single(i=>i.TrackedItemId==zero.Id);
+        Assert.True(carried.PresentInLatestSnapshot);
+        Assert.Equal(SnapshotValueOrigin.CarriedForward,carried.LatestValueOrigin);
+        Assert.Equal(new DateOnly(2023,1,1),carried.LastConfirmedDate);
+        Assert.Equal(DatePrecision.Month,carried.LastConfirmedPrecision);
+        Assert.Equal(new DateOnly(2023,3,1),carried.LastIncludedDate);
+        Assert.False(result.Items.Single(i=>i.TrackedItemId==ended.Id).PresentInLatestSnapshot);
+        Assert.Null(result.Items.Single(i=>i.TrackedItemId==unknown.Id).LastConfirmedDate);
+        Assert.DoesNotContain(result.Items,i=>i.TrackedItemId==never.Id);
+        var financed=Assert.Single(result.FinancedAssets);
+        Assert.True(financed.PresentInLatestSnapshot);
+        Assert.True(financed.HasCarriedValuesInLatestSnapshot);
+        Assert.Equal(new DateOnly(2023,3,1),financed.Balances.Single(b=>b.Balance==FinancedAssetBalanceKind.CurrentValuation).LastConfirmedDate);
+        Assert.Equal(new DateOnly(2023,1,1),financed.Balances.Single(b=>b.Balance==FinancedAssetBalanceKind.OutstandingLoanBalance).LastConfirmedDate);
+        Assert.Null(financed.Balances.Single(b=>b.Balance==FinancedAssetBalanceKind.AvailableToWithdraw).LastConfirmedDate);
+        var other=await new HouseholdService(_database).CreateAsync("Other","Morgan");
+        var foreign=(await _client.GetFromJsonAsync<SnapshotActivity>($"/api/households/{other.Id}/snapshots/activity"))!;
+        Assert.Empty(foreign.Items);
+        Assert.Empty(foreign.FinancedAssets);
+        Assert.Null(foreign.LatestSnapshot);
+        Assert.Equal(HttpStatusCode.NotFound,(await _client.GetAsync($"/api/households/{Guid.NewGuid()}/snapshots/activity")).StatusCode);
+    }
+
     [Fact]
     public async Task CaptureCopiesContextAndPreservesZeroAndUnknownValues()
     {

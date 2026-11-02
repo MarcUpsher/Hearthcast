@@ -16,7 +16,8 @@ saved holders and ownership shares. Household summaries count included values on
 and show person contributions using saved allocations. REST endpoints cover
 households and people, classification, tracked items, financed assets, snapshot
 capture/carry-forward/corrections, and all three summary views. The Angular
-Material frontend is planned.
+Material frontend provides household setup, snapshot browsing, summary views and
+bulk snapshot entry/correction.
 
 The API and database run in separate Docker containers. A one-shot migration
 service applies the schema before the API starts. There is no user data seeded
@@ -42,7 +43,7 @@ docker compose up -d --build --wait
 
 Readiness: `http://127.0.0.1:5190/health`.
 Liveness: `http://127.0.0.1:5190/health/live`.
-There is no frontend yet.
+Frontend: http://localhost:4201. See [frontend development](frontend/README.md).
 
 ```sh
 docker compose ps -a
@@ -72,7 +73,7 @@ backend/
     Hearthcast.Data.Tests/
   tools/
     Hearthcast.HistoryImport/
-frontend/                 # Planned Angular Material app; not created yet
+frontend/                 # Angular Material app, served separately by Nginx
 ```
 
 - [Schema proposal](docs/schema-proposal.md)

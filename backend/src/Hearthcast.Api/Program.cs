@@ -25,6 +25,7 @@ builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<TrackedItemService>();
 builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
+builder.Services.AddScoped<SnapshotActivityService>();
 builder.Services.AddScoped<SnapshotSummaryService>();
 builder.Services.AddScoped<IndividualHoldingsSummaryService>();
 builder.Services.AddScoped<HouseholdSummaryService>();

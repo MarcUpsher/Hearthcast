@@ -22,6 +22,8 @@ public sealed class ItemSnapshot
         HolderSnapshotPerson = people[item.HolderPersonId];
         HolderSnapshotPersonId = HolderSnapshotPerson.Id;
         ItemName = item.Name;
+        InstitutionName = item.InstitutionName;
+        FundName = item.FundName;
         GroupId = item.GroupId;
         GroupName = item.Group.Name;
         CategoryId = item.Group.CategoryId;
@@ -100,6 +102,8 @@ public sealed class ItemSnapshot
     public Guid HolderSnapshotPersonId { get; private set; }
     public SnapshotPerson HolderSnapshotPerson { get; private set; } = null!;
     public string ItemName { get; private set; } = string.Empty;
+    public string? InstitutionName { get; private set; }
+    public string? FundName { get; private set; }
     public Guid CategoryId { get; private set; }
     public string CategoryName { get; private set; } = string.Empty;
     public FinancialType FinancialType { get; private set; }

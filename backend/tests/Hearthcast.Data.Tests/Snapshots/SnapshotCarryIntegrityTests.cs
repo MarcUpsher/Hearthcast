@@ -130,10 +130,12 @@ public sealed class SnapshotCarryIntegrityTests : IAsyncLifetime
         await context.GetService<IMigrator>().MigrateAsync("20261030112256_AddSnapshotCarryForwardAndCorrections");
         var appliedBefore = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
         await Assert.ThrowsAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync("20261029230521_CreateInitialPostgresSchema"));
-        var retained = await context.Snapshots.AsNoTracking().Include(snapshot => snapshot.ItemSnapshots)
-            .SingleAsync(snapshot => snapshot.Id == carried.Id);
-        Assert.Equal(original.ItemSnapshots.Single().Id, Assert.Single(retained.ItemSnapshots).CarriedFromItemSnapshotId);
-        Assert.Equal(10m, Assert.Single(retained.ItemSnapshots).Amount);
+        // Project only columns present at this historical schema version.
+        var retained = await context.ItemSnapshots.AsNoTracking()
+            .Where(entry => entry.SnapshotId == carried.Id)
+            .Select(entry => new { entry.CarriedFromItemSnapshotId, entry.Amount }).SingleAsync();
+        Assert.Equal(original.ItemSnapshots.Single().Id, retained.CarriedFromItemSnapshotId);
+        Assert.Equal(10m, retained.Amount);
         Assert.Equal(appliedBefore, (await context.Database.GetAppliedMigrationsAsync()).ToArray());
         await context.Database.MigrateAsync();
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());

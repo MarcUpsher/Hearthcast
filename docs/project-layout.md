@@ -1,6 +1,6 @@
 # Project layout and naming
 
-Hearthcast separates backend source, backend tests and the future frontend. Within
+Hearthcast separates backend source, backend tests and the Angular frontend. Within
 the data project, related feature code stays together and EF infrastructure lives
 under Persistence. This is the repository's convention; .NET does not require a
 single universal folder layout.
@@ -254,7 +254,7 @@ hearthcast/
     containers-and-postgres.md
 ```
 
-The frontend will be created under `frontend/` in a later step. Build output and
+The frontend lives under `frontend/`; see its README for pages and commands. Build output and
 temporary financial files are excluded by the root `.gitignore`.
 
 ## Conventions

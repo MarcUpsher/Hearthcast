@@ -1,8 +1,42 @@
 # Tracked-item allocation and retirement API
 
+Renaming is also available through `PUT /api/households/{householdId}/tracked-items/{trackedItemId}/name`
+with `{ "name": "New name" }`. It trims and requires a nonblank name, returns the
+full item response, and preserves the ID, all other setup fields and saved snapshot
+labels. It works for active or retired items. Future captures use the new name.
+Unknown fields return 400; unknown or foreign items return 404. No schema change.
+
+Optional institution/platform and fund names are available on tracked items.
+The frontend's Edit sidebar uses
+`PUT /api/households/{householdId}/tracked-items/{trackedItemId}/details` with
+`{ "name": "Retirement", "institutionName": "Example platform", "fundName": null, "includeInHousehold": true, "allocations": null }`
+to replace the name, metadata and household allocation atomically. The name,
+both metadata keys and `includeInHousehold` are required; the name must be nonblank,
+and metadata values may be null. Allocation validation and omitted/null defaults
+match the existing allocation endpoint described below. The sidebar sends explicit
+shares. The response is the full item, retaining its other setup fields. Rejected edits
+leave all fields unchanged. Active and retired items are editable. Existing
+snapshots retain their copied details, and future captures use the new values.
+No additional schema migration is needed for the combined edit endpoint.
+
+Creation accepts `institutionName` and `fundName`. Replace both through
+`PUT /api/households/{householdId}/tracked-items/{trackedItemId}/metadata` with
+`{ "institutionName": "Example platform", "fundName": "Equity fund" }`.
+Both keys are required for replacement; either value may be null. Blank values
+clear the field, and nonblank values are trimmed. The endpoint works for active
+and retired items and returns the full item response. Missing keys, unknown
+properties and invalid text return 400; unknown or foreign items return 404.
+
+Metadata does not change identity, classification, ownership, allocations or
+amounts. New captures copy the current metadata, including when a balance is
+carried forward. Existing snapshots and value corrections retain their saved
+metadata. Snapshot responses and all three summary views expose those saved
+fields. `AddTrackedItemMetadata` adds four nullable text columns; it does not
+infer or backfill information from historical names.
+
 This slice lets an existing tracked item change its household inclusion and shares,
 or be retired/reactivated. Item identity, holder, group, currency, country and name
-are preserved. There is no migration.
+are preserved by allocation and retirement updates. There is no migration.
 
 ## Routes and contracts
 

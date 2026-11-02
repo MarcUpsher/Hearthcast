@@ -8,6 +8,18 @@ namespace Hearthcast.Api.FinancedAssets;
 [Route("api/households/{householdId:guid}/financed-assets")]
 public sealed class FinancedAssetsController(FinancedAssetService assets) : ControllerBase
 {
+    [HttpPut("{financedAssetId:guid}/details")]
+    public async Task<ActionResult<FinancedAssetResponse>> UpdateDetails(Guid householdId, Guid financedAssetId,
+        UpdateFinancedAssetDetailsRequest request, CancellationToken cancellationToken) =>
+        FinancedAssetResponse.From(await assets.UpdateDetailsAsync(householdId, financedAssetId,
+            request.Name!, Shares(request.Owners!), request.LoanHolderPersonIds!, request.IncludeInHousehold!.Value,
+            Shares(request.HouseholdAllocations!), cancellationToken));
+
+    [HttpPut("{financedAssetId:guid}/name")]
+    public async Task<ActionResult<FinancedAssetResponse>> Rename(Guid householdId, Guid financedAssetId,
+        RenameFinancedAssetRequest request, CancellationToken cancellationToken) =>
+        FinancedAssetResponse.From(await assets.RenameAsync(householdId, financedAssetId, request.Name!, cancellationToken));
+
     [HttpPost]
     public async Task<ActionResult<FinancedAssetResponse>> Create(Guid householdId, CreateFinancedAssetRequest request,
         CancellationToken cancellationToken)

@@ -43,7 +43,8 @@ internal static class SnapshotReportProjector
             LastConfirmedPrecision: item.LastConfirmedPrecision,
             CarriedFromEntryId: item.CarriedFromItemSnapshotId),
         HouseholdAllocations: item.HouseholdAllocations.OrderBy(row => row.SnapshotPersonId)
-            .Select(row => new SnapshotPersonShare(row.SnapshotPersonId, row.ShareBasisPoints)).ToArray());
+            .Select(row => new SnapshotPersonShare(row.SnapshotPersonId, row.ShareBasisPoints)).ToArray(),
+        InstitutionName: item.InstitutionName, FundName: item.FundName);
 
     private static FinancedAssetSnapshotSummary MapFinancedAsset(FinancedAssetSnapshot asset) => new(
         FinancedAssetSnapshotId: asset.Id,

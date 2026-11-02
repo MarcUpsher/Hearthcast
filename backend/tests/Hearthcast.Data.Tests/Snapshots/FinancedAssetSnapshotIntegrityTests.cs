@@ -214,9 +214,13 @@ public sealed class FinancedAssetSnapshotIntegrityTests : IAsyncLifetime
         var asset = await data.CreateAssetAsync(new(_database));
         await using var context = _database.CreateDbContext();
         await context.GetService<IMigrator>().MigrateAsync("20261030115628_AddFinancedAssetSetup");
-        Assert.Equal(123.45m, (await context.ItemSnapshots.AsNoTracking().SingleAsync()).Amount);
+        // Project only columns present at this historical schema version.
+        Assert.Equal(123.45m, await context.ItemSnapshots.Select(entry => entry.Amount).SingleAsync());
         Assert.Equal(asset.Id, (await context.FinancedAssets.AsNoTracking().SingleAsync()).Id);
         await context.GetService<IMigrator>().MigrateAsync("20261030121729_AddFinancedAssetSnapshots");
+        Assert.Equal(123.45m, await context.ItemSnapshots.Select(entry => entry.Amount).SingleAsync());
+        Assert.Empty(await context.FinancedAssetSnapshots.Select(entry => entry.Id).ToArrayAsync());
+        await context.Database.MigrateAsync();
         Assert.False(context.Database.HasPendingModelChanges());
         var retained = await service.GetAsync(data.HouseholdId, original.Id);
         Assert.Equal(original.Revision, retained.Revision);

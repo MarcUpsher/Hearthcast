@@ -505,6 +505,9 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<int>("FinancialType")
                         .HasColumnType("integer");
 
+                    b.Property<string>("FundName")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
@@ -520,6 +523,9 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.Property<bool>("IncludeInHousehold")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("InstitutionName")
+                        .HasColumnType("text");
 
                     b.Property<string>("ItemName")
                         .IsRequired()
@@ -692,6 +698,9 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("FundName")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uuid");
 
@@ -703,6 +712,9 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.Property<bool>("IncludeInHousehold")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("InstitutionName")
+                        .HasColumnType("text");
 
                     b.Property<bool>("IsRetired")
                         .HasColumnType("boolean");

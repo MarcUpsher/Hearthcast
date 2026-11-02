@@ -6,6 +6,32 @@ namespace Hearthcast.Data.FinancedAssets;
 
 public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> contextFactory)
 {
+    public Task<FinancedAsset> UpdateDetailsAsync(Guid householdId, Guid financedAssetId, string name,
+        IReadOnlyCollection<FinancedAssetShare> owners, IReadOnlyCollection<Guid> loanHolderPersonIds,
+        bool includeInHousehold, IReadOnlyCollection<FinancedAssetShare> householdAllocations,
+        CancellationToken cancellationToken = default) =>
+        SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var asset = await AssetGraph(context).SingleOrDefaultAsync(
+                asset => asset.Id == financedAssetId && asset.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The financed asset does not belong to this household.");
+            asset.Rename(name);
+            await ReplaceAssociationsAsync(context, asset, owners, loanHolderPersonIds,
+                includeInHousehold, householdAllocations, token);
+            return asset;
+        }, cancellationToken);
+
+    public Task<FinancedAsset> RenameAsync(Guid householdId, Guid financedAssetId, string name,
+        CancellationToken cancellationToken = default) =>
+        SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var asset = await AssetGraph(context).SingleOrDefaultAsync(
+                asset => asset.Id == financedAssetId && asset.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The financed asset does not belong to this household.");
+            asset.Rename(name);
+            return asset;
+        }, cancellationToken);
+
     public Task<FinancedAsset> CreateAsync(
         Guid householdId, Guid groupId, string name, string currencyCode, string countryCode,
         DateOnly? purchaseDate, decimal? purchasePrice, decimal originalLoanAmount, bool hasWithdrawalFacility,
@@ -37,14 +63,8 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
             var asset = await AssetGraph(context).SingleOrDefaultAsync(
                 asset => asset.HouseholdId == householdId && asset.Id == financedAssetId, token)
                 ?? throw new ResourceNotFoundException("The financed asset does not belong to this household.");
-            var oldOwners = asset.Owners.ToArray();
-            var oldLoanHolders = asset.LoanHolders.ToArray();
-            var oldAllocations = asset.HouseholdAllocations.ToArray();
-            await ApplyAssociationsAsync(context, asset, owners, loanHolderPersonIds,
+            await ReplaceAssociationsAsync(context, asset, owners, loanHolderPersonIds,
                 includeInHousehold, householdAllocations, token);
-            context.FinancedAssetOwners.RemoveRange(oldOwners.Except(asset.Owners));
-            context.FinancedAssetLoanHolders.RemoveRange(oldLoanHolders.Except(asset.LoanHolders));
-            context.FinancedAssetHouseholdAllocations.RemoveRange(oldAllocations.Except(asset.HouseholdAllocations));
             return asset;
         }, cancellationToken);
     }
@@ -85,6 +105,21 @@ public sealed class FinancedAssetService(IDbContextFactory<HearthcastDbContext> 
         .Include(asset => asset.Owners).ThenInclude(owner => owner.Person)
         .Include(asset => asset.LoanHolders).ThenInclude(holder => holder.Person)
         .Include(asset => asset.HouseholdAllocations).ThenInclude(allocation => allocation.Person);
+
+    private static async Task ReplaceAssociationsAsync(
+        HearthcastDbContext context, FinancedAsset asset, IReadOnlyCollection<FinancedAssetShare> owners,
+        IReadOnlyCollection<Guid> loanHolderPersonIds, bool includeInHousehold,
+        IReadOnlyCollection<FinancedAssetShare> householdAllocations, CancellationToken cancellationToken)
+    {
+        var oldOwners = asset.Owners.ToArray();
+        var oldLoanHolders = asset.LoanHolders.ToArray();
+        var oldAllocations = asset.HouseholdAllocations.ToArray();
+        await ApplyAssociationsAsync(context, asset, owners, loanHolderPersonIds,
+            includeInHousehold, householdAllocations, cancellationToken);
+        context.FinancedAssetOwners.RemoveRange(oldOwners.Except(asset.Owners));
+        context.FinancedAssetLoanHolders.RemoveRange(oldLoanHolders.Except(asset.LoanHolders));
+        context.FinancedAssetHouseholdAllocations.RemoveRange(oldAllocations.Except(asset.HouseholdAllocations));
+    }
 
     private static async Task ApplyAssociationsAsync(
         HearthcastDbContext context, FinancedAsset asset, IReadOnlyCollection<FinancedAssetShare> owners,

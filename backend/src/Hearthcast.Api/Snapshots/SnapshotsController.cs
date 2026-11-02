@@ -6,8 +6,12 @@ namespace Hearthcast.Api.Snapshots;
 
 [ApiController]
 [Route("api/households/{householdId:guid}/snapshots")]
-public sealed class SnapshotsController(SnapshotService snapshots) : ControllerBase
+public sealed class SnapshotsController(SnapshotService snapshots, SnapshotActivityService activity) : ControllerBase
 {
+    [HttpGet("activity")]
+    public async Task<ActionResult<SnapshotActivity>> Activity(Guid householdId, CancellationToken cancellationToken) =>
+        await activity.GetAsync(householdId,cancellationToken);
+
     [HttpPost]
     public async Task<ActionResult<SnapshotResponse>> Create(Guid householdId, CreateSnapshotRequest request,
         CancellationToken cancellationToken)

@@ -1,5 +1,22 @@
 # Financed-asset association and retirement API
 
+The setup Edit sidebar combines name and association changes through
+`PUT /api/households/{householdId}/financed-assets/{financedAssetId}/details`.
+It requires `name`, `owners`, `loanHolderPersonIds`, `includeInHousehold` and
+`householdAllocations`. A nonblank name and the same association rules described
+below apply. All changes commit together; invalid shares, foreign people and
+ineligible recipients leave the name and associations unchanged. The response is
+the full asset. Purchase/loan setup, identity and retirement state are preserved.
+Existing snapshots keep their copied context; future captures see the edited
+name and associations. No schema migration is needed.
+
+`PUT /api/households/{householdId}/financed-assets/{financedAssetId}/name` accepts
+`{ "name": "New name" }` and returns the full asset response. It trims and requires
+a nonblank name and preserves identity, retirement state, ownership, allocations,
+borrowers and purchase/loan metadata. Existing snapshots retain their copied names;
+future captures use the new name. Unknown request fields return 400; unknown or
+foreign assets return 404. Active and retired assets can both be renamed.
+
 This slice exposes changes to financed-asset person associations and retirement
 state. It uses the existing domain services and database schema.
 

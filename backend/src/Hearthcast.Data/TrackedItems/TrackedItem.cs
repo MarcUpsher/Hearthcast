@@ -37,6 +37,8 @@ public sealed class TrackedItem
     public Guid HolderPersonId { get; private set; }
     public Person HolderPerson { get; private set; } = null!;
     public string Name { get; private set; } = string.Empty;
+    public string? InstitutionName { get; private set; }
+    public string? FundName { get; private set; }
     public string CurrencyCode { get; private set; } = string.Empty;
     public string CountryCode { get; private set; } = string.Empty;
     public bool IncludeInHousehold { get; private set; }
@@ -52,6 +54,14 @@ public sealed class TrackedItem
     public void SetRetired(bool isRetired)
     {
         IsRetired = isRetired;
+    }
+
+    public void SetMetadata(string? institutionName, string? fundName)
+    {
+        var institution = string.IsNullOrWhiteSpace(institutionName) ? null : RequiredText.Trim(institutionName);
+        var fund = string.IsNullOrWhiteSpace(fundName) ? null : RequiredText.Trim(fundName);
+        InstitutionName = institution;
+        FundName = fund;
     }
 
     internal IReadOnlyCollection<TrackedItemHouseholdAllocation> SetHouseholdAllocation(

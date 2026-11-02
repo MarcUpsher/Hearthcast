@@ -8,6 +8,25 @@ namespace Hearthcast.Api.TrackedItems;
 [Route("api/households/{householdId:guid}/tracked-items")]
 public sealed class TrackedItemsController(TrackedItemService items) : ControllerBase
 {
+    [HttpPut("{trackedItemId:guid}/details")]
+    public async Task<ActionResult<TrackedItemResponse>> UpdateDetails(Guid householdId, Guid trackedItemId,
+        UpdateTrackedItemDetailsRequest request, CancellationToken cancellationToken) =>
+        TrackedItemResponse.From(await items.UpdateDetailsAsync(householdId, trackedItemId,
+            request.Name!, request.InstitutionName, request.FundName, request.IncludeInHousehold!.Value,
+            request.Allocations?.Select(share => new TrackedItemAllocationShare(
+                share!.PersonId!.Value, share.ShareBasisPoints!.Value)).ToArray(), cancellationToken));
+
+    [HttpPut("{trackedItemId:guid}/metadata")]
+    public async Task<ActionResult<TrackedItemResponse>> SetMetadata(Guid householdId, Guid trackedItemId,
+        SetTrackedItemMetadataRequest request, CancellationToken cancellationToken) =>
+        TrackedItemResponse.From(await items.SetMetadataAsync(householdId, trackedItemId,
+            request.InstitutionName, request.FundName, cancellationToken));
+
+    [HttpPut("{trackedItemId:guid}/name")]
+    public async Task<ActionResult<TrackedItemResponse>> Rename(Guid householdId, Guid trackedItemId,
+        RenameTrackedItemRequest request, CancellationToken cancellationToken) =>
+        TrackedItemResponse.From(await items.RenameAsync(householdId, trackedItemId, request.Name!, cancellationToken));
+
     [HttpPost]
     public async Task<ActionResult<TrackedItemResponse>> Create(Guid householdId, CreateTrackedItemRequest request,
         CancellationToken cancellationToken)
@@ -16,7 +35,7 @@ public sealed class TrackedItemsController(TrackedItemService items) : Controlle
             new TrackedItemAllocationShare(share!.PersonId!.Value, share.ShareBasisPoints!.Value)).ToArray();
         var item = await items.CreateAsync(householdId, request.GroupId!.Value, request.HolderPersonId!.Value,
             request.Name!, request.CurrencyCode!, request.CountryCode!, request.IncludeInHousehold!.Value,
-            allocations, cancellationToken);
+            allocations, request.InstitutionName, request.FundName, cancellationToken);
         return CreatedAtAction(nameof(Get), new { householdId, trackedItemId = item.Id }, TrackedItemResponse.From(item));
     }
 

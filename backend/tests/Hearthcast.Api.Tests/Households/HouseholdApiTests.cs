@@ -33,6 +33,17 @@ public sealed class HouseholdApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListsHouseholdsIncludingPeopleWithoutRequiringAnId()
+    {
+        Assert.Empty((await _client.GetFromJsonAsync<HouseholdResponse[]>("/api/households"))!);
+        await _client.PostAsJsonAsync("/api/households",new { name="Cedar",firstPersonDisplayName="Alex" });
+        await _client.PostAsJsonAsync("/api/households",new { name="Birch",firstPersonDisplayName="Morgan" });
+        var rows=(await _client.GetFromJsonAsync<HouseholdResponse[]>("/api/households"))!;
+        Assert.Equal(new[] { "Birch","Cedar" },rows.Select(r=>r.Name));
+        Assert.All(rows,r=>Assert.Single(r.People));
+    }
+
+    [Fact]
     public async Task CreateReadRenameAndPersonLifecycleUseRestStatusesAndPersistAcrossClients()
     {
         var response = await _client.PostAsJsonAsync("/api/households", new { name = "  Home  ", firstPersonDisplayName = "  Alex  " });

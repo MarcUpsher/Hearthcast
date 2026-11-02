@@ -9,6 +9,10 @@ namespace Hearthcast.Api.Households;
 [Route("api/households")]
 public sealed class HouseholdsController(HouseholdService households) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<HouseholdResponse>>> List(CancellationToken cancellationToken) =>
+        (await households.ListAsync(cancellationToken)).Select(HouseholdResponse.From).ToArray();
+
     [HttpPost]
     public async Task<ActionResult<HouseholdResponse>> Create(CreateHouseholdRequest request, CancellationToken cancellationToken)
     {

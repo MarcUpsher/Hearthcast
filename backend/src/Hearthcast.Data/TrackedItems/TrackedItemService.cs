@@ -7,6 +7,44 @@ namespace Hearthcast.Data.TrackedItems;
 
 public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> contextFactory)
 {
+    public Task<TrackedItem> UpdateDetailsAsync(Guid householdId, Guid trackedItemId,
+        string name, string? institutionName, string? fundName, bool includeInHousehold,
+        IReadOnlyCollection<TrackedItemAllocationShare>? allocations = null, CancellationToken cancellationToken = default) =>
+        SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var item = await context.TrackedItems.Include(item => item.HolderPerson)
+                .Include(item => item.HouseholdAllocations).ThenInclude(allocation => allocation.Person)
+                .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The tracked item does not belong to this household.");
+            item.Rename(name);
+            item.SetMetadata(institutionName, fundName);
+            var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, token);
+            context.TrackedItemHouseholdAllocations.RemoveRange(item.SetHouseholdAllocation(includeInHousehold, shares));
+            return item;
+        }, cancellationToken);
+
+    public Task<TrackedItem> SetMetadataAsync(Guid householdId, Guid trackedItemId,
+        string? institutionName, string? fundName, CancellationToken cancellationToken = default) =>
+        SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var item = await context.TrackedItems.Include(item => item.HouseholdAllocations)
+                .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The tracked item does not belong to this household.");
+            item.SetMetadata(institutionName, fundName);
+            return item;
+        }, cancellationToken);
+
+    public Task<TrackedItem> RenameAsync(Guid householdId, Guid trackedItemId, string name,
+        CancellationToken cancellationToken = default) =>
+        SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var item = await context.TrackedItems.Include(item => item.HouseholdAllocations)
+                .SingleOrDefaultAsync(item => item.Id == trackedItemId && item.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The tracked item does not belong to this household.");
+            item.Rename(name);
+            return item;
+        }, cancellationToken);
+
     public async Task<TrackedItem> CreateAsync(
         Guid householdId,
         Guid groupId,
@@ -16,6 +54,8 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
         string countryCode,
         bool includeInHousehold,
         IReadOnlyCollection<TrackedItemAllocationShare>? allocations = null,
+        string? institutionName = null,
+        string? fundName = null,
         CancellationToken cancellationToken = default)
     {
         return await SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
@@ -28,6 +68,7 @@ public sealed class TrackedItemService(IDbContextFactory<HearthcastDbContext> co
                 ?? throw new ResourceNotFoundException("The holder does not belong to this household.");
 
             var item = new TrackedItem(group, holder, name, currencyCode, countryCode);
+            item.SetMetadata(institutionName, fundName);
             var shares = await ResolveAllocationsAsync(context, item, includeInHousehold, allocations, token);
             item.SetHouseholdAllocation(includeInHousehold, shares);
             context.TrackedItems.Add(item);
