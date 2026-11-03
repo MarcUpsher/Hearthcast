@@ -102,12 +102,44 @@ export interface Totals {
     carriedForwardEntryCount: number;
   };
 }
+export interface ReportItem {
+  itemSnapshotId: string;
+  itemName: string;
+  holderSnapshotPersonId: string;
+  institutionName?: string | null;
+  fundName?: string | null;
+  balance: { amount: number | null; valueOrigin: number };
+}
+export interface ReportAsset {
+  financedAssetSnapshotId: string;
+  assetName: string;
+  currentEquity: number | null;
+  currentValuation: { valueOrigin: number };
+  outstandingLoanBalance: { valueOrigin: number };
+}
 export interface ReportGroup {
   groupId: string;
   groupName: string;
   totals: Totals;
   holdingsTotals: Totals;
   allRecordedTotals: Totals;
+  items?: (
+    | ReportItem
+    | {
+        item: ReportItem;
+        allocationShareBasisPoints: number;
+        contributingAmount: number | null;
+      }
+  )[];
+  financedAssets?: (
+    | ReportAsset
+    | {
+        asset: ReportAsset;
+        attributedEquity: number | null;
+        allocationShareBasisPoints?: number;
+        ownershipShareBasisPoints?: number;
+      }
+  )[];
 }
 export interface ReportCurrency {
   currencyCode: string;
@@ -117,6 +149,7 @@ export interface ReportCurrency {
   categories: {
     categoryId: string;
     categoryName: string;
+    financialType?: number;
     totals: Totals;
     holdingsTotals: Totals;
     allRecordedTotals: Totals;

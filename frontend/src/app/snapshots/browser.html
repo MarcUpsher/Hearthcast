@@ -122,7 +122,14 @@
   @for (c of currencies(); track c.currencyCode) {
     <section class="panel">
       <h2>{{ c.currencyCode }} breakdown</h2>
-      @for (category of c.categories; track category.categoryId) {
+      @for (
+        category of c.categories;
+        track category.categoryId +
+          ":" +
+          category.categoryName +
+          ":" +
+          category.financialType
+      ) {
         <details open>
           <summary>
             {{ category.categoryName }}
@@ -130,18 +137,76 @@
               money(totals(category).knownNetPosition, c.currencyCode)
             }}</strong>
           </summary>
-          <table>
-            <tbody>
-              @for (group of category.groups; track group.groupId) {
-                <tr>
-                  <td>{{ group.groupName }}</td>
-                  <td class="numeric">
-                    {{ money(totals(group).knownNetPosition, c.currencyCode) }}
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          @for (
+            group of category.groups;
+            track group.groupId + ":" + group.groupName
+          ) {
+            <details class="summary-group">
+              <summary>
+                <span>{{ group.groupName }}</span>
+                <strong class="group-total">{{
+                  money(totals(group).knownNetPosition, c.currencyCode)
+                }}</strong>
+              </summary>
+              <div class="scroll">
+                <table
+                  class="group-entries"
+                  [attr.aria-label]="
+                    c.currencyCode +
+                    ' · ' +
+                    category.categoryName +
+                    ' · ' +
+                    group.groupName +
+                    ' items'
+                  "
+                >
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th>Status</th>
+                      <th class="numeric">Net contribution</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (
+                      entry of groupEntries(group, category.financialType);
+                      track entry.key
+                    ) {
+                      <tr>
+                        <td>
+                          {{ entry.name }}<br /><small>{{
+                            entry.description
+                          }}</small>
+                          @if (entry.institutionName) {
+                            <div>
+                              <small
+                                >Institution: {{ entry.institutionName }}</small
+                              >
+                            </div>
+                          }
+                          @if (entry.fundName) {
+                            <div>
+                              <small>Fund: {{ entry.fundName }}</small>
+                            </div>
+                          }
+                        </td>
+                        <td>
+                          <span class="badge">{{ entry.status }}</span>
+                        </td>
+                        <td class="numeric">
+                          {{ money(entry.amount, c.currencyCode) }}
+                        </td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="3">No entries in this group.</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          }
         </details>
       }
     </section>
@@ -159,10 +224,10 @@
     </p>
     <div class="toolbar">
       <mat-form-field
-        ><mat-label>Find a tracked item or group</mat-label
+        ><mat-label>Find an item or group</mat-label
         ><input matInput [(ngModel)]="search" /></mat-form-field
       ><mat-form-field
-        ><mat-label>Tracked-item currency</mat-label
+        ><mat-label>Currency</mat-label
         ><mat-select [(ngModel)]="currency"
           ><mat-option value="">All</mat-option>
           @for (code of currencyOptions(); track code) {
@@ -171,79 +236,108 @@
         </mat-select></mat-form-field
       >
     </div>
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Holder</th>
-            <th>Group</th>
-            <th>Value</th>
-            <th>Status / last confirmed</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (i of items(); track i.trackedItemId) {
-            <tr>
-              <td>
-                {{ i.itemName }}
-                @if (!i.includeInHousehold) {
-                  <small>Individual only</small>
-                }
-                @if (i.institutionName) {
-                  <div>
-                    <small>Institution: {{ i.institutionName }}</small>
+    @for (person of groupedEntries(); track person.key) {
+      <section [attr.aria-label]="person.name">
+        <h2>{{ person.name }}</h2>
+        @for (category of person.categories; track category.key) {
+          <section class="panel">
+            <h3>{{ category.name }}</h3>
+            @for (group of category.groups; track group.key) {
+              <h4>{{ group.name }}</h4>
+              @if (group.items.length) {
+                <div class="scroll">
+                  <table
+                    class="recorded-items"
+                    [attr.aria-label]="
+                      person.name + ' · ' + category.name + ' · ' + group.name
+                    "
+                  >
+                    <colgroup>
+                      <col />
+                      <col class="value-column" />
+                      <col class="status-column" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>Value</th>
+                        <th>Status / last confirmed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (i of group.items; track i.trackedItemId) {
+                        <tr>
+                          <td>
+                            {{ i.itemName }}
+                            @if (!i.includeInHousehold) {
+                              <small>Individual only</small>
+                            }
+                            @if (i.institutionName) {
+                              <div>
+                                <small
+                                  >Institution: {{ i.institutionName }}</small
+                                >
+                              </div>
+                            }
+                            @if (i.fundName) {
+                              <div>
+                                <small>Fund: {{ i.fundName }}</small>
+                              </div>
+                            }
+                          </td>
+                          <td class="numeric">
+                            {{ money(i.amount, i.currencyCode) }}
+                            <small>{{ i.currencyCode }}</small>
+                          </td>
+                          <td>
+                            <span class="badge">{{
+                              status(i.valueOrigin)
+                            }}</span
+                            ><br /><small>{{
+                              i.lastConfirmedDate
+                                ? (i.lastConfirmedDate + "T00:00:00Z"
+                                  | date: "MMM yyyy" : "UTC")
+                                : "No confirmed reading"
+                            }}</small>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+              @for (a of group.assets; track a.financedAssetId) {
+                <section class="panel">
+                  <h5>{{ a.assetName }}</h5>
+                  <div class="toolbar">
+                    <span
+                      >Valuation
+                      <strong>{{
+                        money(a.currentValuation, a.currencyCode)
+                      }}</strong></span
+                    ><span
+                      >Outstanding loan
+                      <strong>{{
+                        money(a.outstandingLoanBalance, a.currencyCode)
+                      }}</strong></span
+                    >
+                    @if (a.hasWithdrawalFacility) {
+                      <span
+                        >Available to withdraw
+                        <strong>{{
+                          money(a.availableToWithdraw, a.currencyCode)
+                        }}</strong></span
+                      >
+                    }
                   </div>
-                }
-                @if (i.fundName) {
-                  <div>
-                    <small>Fund: {{ i.fundName }}</small>
-                  </div>
-                }
-              </td>
-              <td>{{ holder(i.holderSnapshotPersonId) }}</td>
-              <td>{{ i.categoryName }} / {{ i.groupName }}</td>
-              <td class="numeric">
-                {{ money(i.amount, i.currencyCode) }}
-                <small>{{ i.currencyCode }}</small>
-              </td>
-              <td>
-                <span class="badge">{{ status(i.valueOrigin) }}</span
-                ><br /><small>{{
-                  i.lastConfirmedDate
-                    ? (i.lastConfirmedDate + "T00:00:00Z"
-                      | date: "MMM yyyy" : "UTC")
-                    : "No confirmed reading"
-                }}</small>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  </section>
-  @for (a of s.financedAssetSnapshots; track a.financedAssetId) {
-    <section class="panel">
-      <h2>{{ a.assetName }}</h2>
-      <div class="toolbar">
-        <span
-          >Valuation
-          <strong>{{ money(a.currentValuation, a.currencyCode) }}</strong></span
-        ><span
-          >Outstanding loan
-          <strong>{{
-            money(a.outstandingLoanBalance, a.currencyCode)
-          }}</strong></span
-        >
-        @if (a.hasWithdrawalFacility) {
-          <span
-            >Available to withdraw
-            <strong>{{
-              money(a.availableToWithdraw, a.currencyCode)
-            }}</strong></span
-          >
+                </section>
+              }
+            }
+          </section>
         }
-      </div>
-    </section>
-  }
+      </section>
+    } @empty {
+      <p class="muted">No recorded entries match these filters.</p>
+    }
+  </section>
 }

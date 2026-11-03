@@ -2,6 +2,7 @@ import { signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
+import { MatSelectHarness } from "@angular/material/select/testing";
 import { MatButtonHarness } from "@angular/material/button/testing";
 import { MatDialog, MatDialogState } from "@angular/material/dialog";
 import { MatDialogHarness } from "@angular/material/dialog/testing";
@@ -260,5 +261,71 @@ describe("Setup edit sidebars", () => {
     );
     expect(p.fixture.componentInstance.error()).toBe("Refresh failed");
     expect(p.fixture.componentInstance.formError()).toBe("");
+  });
+  it.each(["item", "asset"] as const)(
+    "creates %s with country defaults and an independently selected currency",
+    async (kind) => {
+      const p = await page();
+      const setup = p.fixture.componentInstance;
+      setup.categories.set([
+        { id: "cat", name: "Assets", financialType: "Asset" },
+      ]);
+      setup.groups.set([{ id: "group", categoryId: "cat", name: "Cash" }]);
+      setup.begin(kind);
+      Object.assign(setup.value, {
+        name: "Holding",
+        groupId: "group",
+        holderPersonId: "a",
+        originalLoanAmount: 1000,
+        owner_a: 100,
+      });
+      p.fixture.detectChanges();
+      await p.fixture.whenStable();
+      const country = await p.root.getHarness(
+        MatSelectHarness.with({ selector: '[aria-label="Country"]' }),
+      );
+      const currency = await p.root.getHarness(
+        MatSelectHarness.with({ selector: '[aria-label="Currency"]' }),
+      );
+      expect(await country.getValueText()).toContain("United Kingdom");
+      expect(await currency.getValueText()).toContain("GBP");
+      await country.open();
+      await country.clickOptions({ text: "South Africa (ZA)" });
+      expect(await currency.getValueText()).toContain("ZAR");
+      await currency.open();
+      await currency.clickOptions({ text: /^USD / });
+      expect(await country.getValueText()).toContain("South Africa");
+      expect(setup.value["currencyCode"]).toBe("USD");
+      // A change unrelated to country must preserve the denomination override.
+      await p.setInput("name", "Updated holding");
+      await p.save();
+      expect(send).toHaveBeenCalledWith(
+        "POST",
+        "households/home/" +
+          (kind === "item" ? "tracked-items" : "financed-assets"),
+        expect.objectContaining({
+          countryCode: "ZA",
+          currencyCode: "USD",
+          name: "Updated holding",
+        }),
+      );
+    },
+  );
+  it("clears the currency when a country has no usual currency, requiring an explicit choice", async () => {
+    const p = await page();
+    const setup = p.fixture.componentInstance;
+    setup.begin("item");
+    p.fixture.detectChanges();
+    await p.fixture.whenStable();
+    const country = await p.root.getHarness(
+      MatSelectHarness.with({ selector: '[aria-label="Country"]' }),
+    );
+    await country.open();
+    await country.clickOptions({ text: "Antarctica (AQ)" });
+    expect(setup.value["currencyCode"]).toBe("");
+    const currency = await p.root.getHarness(
+      MatSelectHarness.with({ selector: '[aria-label="Currency"]' }),
+    );
+    expect(await currency.isEmpty()).toBe(true);
   });
 });

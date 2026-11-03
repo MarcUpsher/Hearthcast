@@ -1,3 +1,9 @@
+import { money, currencySymbol, MoneyInput } from "../core/money";
+import {
+  countryOptions,
+  currencyOptions,
+  defaultCurrency,
+} from "../core/location-options";
 import {
   Component,
   DestroyRef,
@@ -45,6 +51,7 @@ interface Field {
 @Component({
   imports: [
     FormsModule,
+    MoneyInput,
     NgTemplateOutlet,
     MatDialogModule,
     MatButtonModule,
@@ -56,6 +63,11 @@ interface Field {
   templateUrl: "setup.html",
 })
 export class Setup {
+  money = money;
+  currencySymbol = currencySymbol;
+  currencyCode() {
+    return String(this.value["currencyCode"] ?? "");
+  }
   w = inject(Workspace);
   api = inject(Api);
   private readonly dialogs = inject(MatDialog);
@@ -72,7 +84,7 @@ export class Setup {
   activityLoading = signal(false);
   historyFilter = "all";
   holderFilter = "";
-  itemSort: Sort = { active: "name", direction: "asc" };
+  itemSort: Sort = { active: "", direction: "" };
   assetSort: Sort = { active: "name", direction: "asc" };
   private readonly collator = new Intl.Collator("en", {
     numeric: true,
@@ -83,7 +95,7 @@ export class Setup {
   busy = signal(false);
   tab = "people";
   search = "";
-  status = "all";
+  status = "active";
   title = "";
   fields: Field[] = [];
   value: Record<string, unknown> = {};
@@ -276,6 +288,25 @@ export class Setup {
             ?.presentInLatestSnapshot === true),
     );
     const sort = asset ? this.assetSort : this.itemSort;
+    if (!asset && !sort.active) {
+      return filtered.sort(
+        (a, b) =>
+          this.collator.compare(
+            this.name((a as Item).holderPersonId),
+            this.name((b as Item).holderPersonId),
+          ) ||
+          this.collator.compare(
+            this.groupName(a.groupId),
+            this.groupName(b.groupId),
+          ) ||
+          (this.itemActivity(b.id)?.lastConfirmedDate ?? "").localeCompare(
+            this.itemActivity(a.id)?.lastConfirmedDate ?? "",
+          ) ||
+          Number(a.isRetired) - Number(b.isRetired) ||
+          this.collator.compare(a.name, b.name) ||
+          a.id.localeCompare(b.id),
+      );
+    }
     if (!sort.direction) return filtered;
     return filtered.sort((a, b) => {
       const left = this.sortValue(a, sort.active, asset);
@@ -413,8 +444,8 @@ export class Setup {
                       })),
                     ),
                   ]),
-              text("currencyCode", "Currency code"),
-              text("countryCode", "Country code"),
+              select("countryCode", "Country", countryOptions),
+              select("currencyCode", "Currency", currencyOptions),
               ...(this.financed
                 ? [
                     text(
@@ -468,6 +499,10 @@ export class Setup {
           household: "household",
         }[kind] ?? kind);
     if (row) this.openEditor();
+  }
+  fieldSelectionChanged(key: string, value: string) {
+    if (key === "countryCode")
+      this.value["currencyCode"] = defaultCurrency(value);
   }
   private openEditor() {
     const editor = this.dialogs.open<unknown, unknown, boolean>(

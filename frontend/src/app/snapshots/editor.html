@@ -67,6 +67,33 @@
       reload before saving again.
     </p>
   }
+  @if (mode === "correct" && ready() && availableItems().length) {
+    <div class="toolbar">
+      <mat-form-field>
+        <mat-label>Active item missing from this snapshot</mat-label>
+        <mat-select [(ngModel)]="itemToAdd" [disabled]="busy()">
+          @for (item of availableItems(); track item.id) {
+            <mat-option [value]="item.id"
+              >{{ holderName(item.holderPersonId) }} · {{ item.name }} ·
+              {{ item.currencyCode }}</mat-option
+            >
+          }
+        </mat-select>
+      </mat-form-field>
+      <button
+        mat-stroked-button
+        [disabled]="!itemToAdd || busy()"
+        (click)="addItem()"
+      >
+        Add item
+      </button>
+    </div>
+    <p class="muted">
+      Added items use their current holder, classification, currency and
+      household allocation. Review the new row before saving. Existing entries
+      keep their saved details.
+    </p>
+  }
   @if (!rows().length && !busy()) {
     <p class="notice">
       No items are available for this action. Activate the current items in
@@ -87,10 +114,17 @@
             @for (group of category.groups; track group.key) {
               <h4>{{ group.name }}</h4>
               <table
+                class="snapshot-entry-table"
                 [attr.aria-label]="
                   person.name + ' · ' + category.name + ' · ' + group.name
                 "
               >
+                <colgroup>
+                  <col />
+                  <col class="previous-column" />
+                  <col class="action-column" />
+                  <col class="value-column" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Item</th>
@@ -104,6 +138,18 @@
                     <tr>
                       <td>
                         {{ r.name }}<br /><small>{{ r.currency }}</small>
+                        @if (r.added) {
+                          <div><span class="badge">New addition</span></div>
+                          <small>{{ r.allocationDescription }}</small>
+                          <button
+                            mat-button
+                            type="button"
+                            [disabled]="busy()"
+                            (click)="cancelAddition(r.id)"
+                          >
+                            Cancel addition
+                          </button>
+                        }
                         @if (r.institutionName) {
                           <div>
                             <small>Institution: {{ r.institutionName }}</small>
@@ -116,8 +162,9 @@
                         }
                       </td>
                       <td>
-                        {{ r.previous === null ? "Unknown" : r.previous
-                        }}<br /><small>{{ r.confirmed }}</small>
+                        {{ money(r.previous, r.currency) }}<br /><small>{{
+                          r.confirmed
+                        }}</small>
                       </td>
                       <td>
                         <mat-select
@@ -127,7 +174,7 @@
                           [attr.aria-label]="r.name + ' action'"
                           ><mat-option
                             value="keep"
-                            [disabled]="mode === 'new'"
+                            [disabled]="mode === 'new' || r.added"
                             >{{
                               mode === "correct"
                                 ? "Leave unchanged"
@@ -142,15 +189,23 @@
                       </td>
                       <td>
                         @if (r.mode === "record") {
-                          <input
-                            class="money"
-                            inputmode="decimal"
-                            [name]="r.id + ':' + r.kind + ':amount'"
-                            [(ngModel)]="r.amount"
-                            [attr.aria-label]="r.name + ' amount'"
-                            [disabled]="busy()"
-                            required
-                          />
+                          <div class="money-entry">
+                            <span aria-hidden="true">{{
+                              currencySymbol(r.currency)
+                            }}</span>
+                            <input
+                              appMoney="text"
+                              class="money"
+                              inputmode="decimal"
+                              [name]="r.id + ':' + r.kind + ':amount'"
+                              [(ngModel)]="r.amount"
+                              [attr.aria-label]="
+                                r.name + ' amount in ' + r.currency
+                              "
+                              [disabled]="busy()"
+                              required
+                            />
+                          </div>
                         } @else {
                           <small>{{
                             r.mode === "clear" ? "Unknown" : "Unchanged"

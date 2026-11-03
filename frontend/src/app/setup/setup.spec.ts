@@ -25,6 +25,8 @@ describe("Setup snapshot activity", () => {
       ],
     });
     c = TestBed.runInInjectionContext(() => new Setup());
+    expect(c.status).toBe("active");
+    c.status = "all";
     const activity: SnapshotActivity = {
       latestSnapshot: {
         id: "latest",
@@ -115,7 +117,7 @@ describe("Setup snapshot activity", () => {
     c.search = "cash";
     c.status = "retired";
     c.historyFilter = "latest";
-    expect(c.filtered(rows).map((r) => r.id)).toEqual(["unknown", "carried"]);
+    expect(c.filtered(rows).map((r) => r.id)).toEqual(["carried", "unknown"]);
     c.setSort({ active: "name", direction: "desc" });
     expect(c.filtered(rows).map((r) => r.id)).toEqual(["carried", "unknown"]);
     c.holderFilter = "b";
@@ -169,6 +171,7 @@ describe("Setup snapshot activity", () => {
     const fixture = TestBed.createComponent(Setup);
     fixture.componentInstance.load = vi.fn().mockResolvedValue(undefined);
     fixture.componentInstance.tab = "items";
+    fixture.componentInstance.status = "all";
     fixture.componentInstance.items.set([
       { id: "first", name: "First", isRetired: false, holderPersonId: "a" },
       { id: "second", name: "Second", isRetired: true, holderPersonId: "b" },
@@ -225,6 +228,7 @@ describe("Setup snapshot activity", () => {
     const setup = fixture.componentInstance;
     setup.load = vi.fn().mockResolvedValue(undefined);
     setup.tab = "items";
+    setup.status = "all";
     const row = {
       id: "existing",
       name: "Original",
@@ -413,6 +417,7 @@ describe("Setup snapshot activity", () => {
     const fixture = TestBed.createComponent(Setup);
     fixture.componentInstance.load = vi.fn().mockResolvedValue(undefined);
     fixture.componentInstance.tab = "items";
+    fixture.componentInstance.status = "all";
     fixture.componentInstance.items.set([
       { id: "b", name: "Beta", isRetired: true, allocations: [] },
       { id: "a", name: "Alpha", isRetired: true, allocations: [] },
@@ -431,8 +436,69 @@ describe("Setup snapshot activity", () => {
       ).map((r: any) => r.cells[0].textContent.trim());
     expect(names()).toEqual(["Alpha", "Beta"]);
     await header.click();
-    expect(names()).toEqual(["Beta", "Alpha"]);
-    await header.click();
     expect(names()).toEqual(["Alpha", "Beta"]);
+    await header.click();
+    expect(names()).toEqual(["Beta", "Alpha"]);
+  });
+  it("defaults to person, group, newest confirmation and active status, with missing dates last", () => {
+    vi.spyOn(c.w, "current").mockReturnValue({
+      id: "home",
+      name: "Example",
+      people: [
+        { id: "a", displayName: "Alex", participatesInHouseholdFinances: true },
+        {
+          id: "b",
+          displayName: "Morgan",
+          participatesInHouseholdFinances: true,
+        },
+      ],
+    });
+    c.categories.set([
+      { id: "cat", name: "Investments", financialType: "Asset" },
+    ]);
+    c.groups.set([
+      { id: "p", categoryId: "cat", name: "Pension" },
+      { id: "s", categoryId: "cat", name: "Savings" },
+    ]);
+    const row = (
+      id: string,
+      holderPersonId = "a",
+      groupId = "p",
+      isRetired = false,
+    ) => ({ id, name: id, holderPersonId, groupId, isRetired }) as Item;
+    const rows = [
+      row("other", "b"),
+      row("savings", "a", "s"),
+      row("unknown"),
+      row("old"),
+      row("retired", "a", "p", true),
+      row("active"),
+    ];
+    c.activity.update((a) => ({
+      ...a!,
+      items: [
+        { trackedItemId: "old", lastConfirmedDate: "2020-01-01" },
+        { trackedItemId: "retired", lastConfirmedDate: "2026-09-01" },
+        { trackedItemId: "active", lastConfirmedDate: "2026-09-01" },
+      ] as SnapshotActivity["items"],
+    }));
+    expect(c.filtered(rows).map((r) => r.id)).toEqual([
+      "active",
+      "retired",
+      "old",
+      "unknown",
+      "savings",
+      "other",
+    ]);
+    expect(rows[0].id).toBe("other");
+    c.setSort({ active: "name", direction: "asc" });
+    expect(c.filtered(rows).map((r) => r.id)).toEqual([
+      "active",
+      "old",
+      "other",
+      "retired",
+      "savings",
+      "unknown",
+    ]);
   });
 });

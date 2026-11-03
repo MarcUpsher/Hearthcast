@@ -66,5 +66,44 @@ Leaving historical correction restores the capture date/precision. Navigation,
 mode changes and source changes prompt before discarding unsaved snapshot work;
 closing or reloading the browser uses its native unsaved-changes warning.
 The summary selectors apply to the totals; the section labelled Entire snapshot
-shows all saved entries, with separate tracked-item search/currency filters.
+shows all saved entries, with separate search/currency filters.
 Sidebar form errors and setup refresh errors have independent state.
+
+Tracked items open in person/group order, then newest confirmed reading first
+(unknown dates last), then active before retired, with name as a tie-breaker.
+Column headers override this order; Restore default order returns to it.
+
+The checklist filter defaults to Active on opening setup. Select All or Retired
+to find older tracked items or financed assets.
+
+Displayed balances use the currency symbol, spaces between thousands and two
+decimal places (for example R 12 028.00 or £ 12 028.00). Monetary inputs show the
+symbol separately and group digits on blur; focusing reveals the raw editable
+value. Pasted spaces are accepted. Formatting never rounds the input model or
+changes existing snapshot values; API payloads remain unformatted.
+
+When editing a saved snapshot, Add item lists only currently active tracked items
+absent from it. Selected additions appear in their holder/category/group section
+with a New addition badge and their household allocation. Enter a value or choose
+Unknown; Cancel addition removes only a pending addition. Save corrections submits
+additions and corrections atomically with the saved revision. Existing retired
+entries remain present. The chooser does not add financed assets.
+
+Recorded entries on the snapshot view use saved holder/owner, category and group
+headings, with items alphabetized and consistent table columns across groups.
+Joint financed assets appear once under their combined owners. Search and currency
+filters apply to both ordinary items and financed assets.
+
+New tracked items and financed assets use Country and Currency dropdowns. Country
+changes default the currency; users can then choose a different denomination.
+Countries without a default require an explicit currency choice. Defaults are
+checked-in Unicode CLDR 49 reference data (2026-11-03), with English display names
+provided by Intl.DisplayNames; there are no runtime lookup requests or new npm
+dependencies. The data source is
+[Unicode CLDR](https://github.com/unicode-org/cldr-json/tree/main/cldr-json/cldr-core/supplemental).
+
+Summary groups have collapsed disclosure arrows revealing their constituent items
+and financed-asset equity. The detail rows come from the selected report scope,
+including the selected person's household allocation or ownership share. Values
+are API-provided contributions; debts display as deductions, and missing values
+remain Unknown. Metadata and carried/confirmed status are shown alongside names.

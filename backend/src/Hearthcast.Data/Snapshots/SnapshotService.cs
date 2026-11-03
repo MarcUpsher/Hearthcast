@@ -30,7 +30,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         return CaptureAsync(householdId, snapshotDate, values, datePrecision, true, sourceSnapshotId, financedAssetValues, cancellationToken);
     }
 
-    public async Task<Snapshot> CorrectValuesAsync(
+    public Task<Snapshot> CorrectValuesAsync(
         Guid householdId,
         Guid snapshotId,
         Guid expectedRevision,
@@ -38,7 +38,14 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         IReadOnlyCollection<FinancedAssetSnapshotValue>? financedAssetValues = null,
         CancellationToken cancellationToken = default)
     {
-        if (values is null && financedAssetValues is null)
+        return AmendAsync(householdId, snapshotId, expectedRevision, values, financedAssetValues, null, cancellationToken);
+    }
+
+    public async Task<Snapshot> AmendAsync(Guid householdId, Guid snapshotId, Guid expectedRevision,
+        IReadOnlyCollection<ItemSnapshotValue>? values, IReadOnlyCollection<FinancedAssetSnapshotValue>? financedAssetValues,
+        IReadOnlyCollection<ItemSnapshotValue>? addedItems, CancellationToken cancellationToken = default)
+    {
+        if (values is null && financedAssetValues is null && (addedItems?.Count ?? 0) == 0)
         {
             throw new ArgumentNullException(nameof(values));
         }
@@ -49,7 +56,25 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
                 var snapshot = await SnapshotGraph(context)
                     .SingleOrDefaultAsync(snapshot => snapshot.Id == snapshotId && snapshot.HouseholdId == householdId, token)
                     ?? throw new ResourceNotFoundException("The snapshot does not belong to this household.");
-                snapshot.CorrectValues(expectedRevision, values ?? [], financedAssetValues ?? []);
+                if (snapshot.Revision != expectedRevision) throw new SnapshotConflictException();
+                if (addedItems is { Count: > 0 })
+                {
+                    var ids = addedItems.Select(value => value.TrackedItemId).ToArray();
+                    if (ids.Distinct().Count() != ids.Length || (values ?? []).Any(value => ids.Contains(value.TrackedItemId)))
+                        throw new InvalidValueException("Each item must appear only once across additions and corrections.");
+                    var items = await context.TrackedItems.Where(item => item.HouseholdId == householdId && ids.Contains(item.Id) && !item.IsRetired)
+                        .Include(item => item.Group).ThenInclude(group => group.Category)
+                        .Include(item => item.HouseholdAllocations).ToArrayAsync(token);
+                    if (items.Length != ids.Length)
+                        throw new InvalidValueException("Only active items in this household can be added.");
+                    var people = await context.People.Where(person => person.HouseholdId == householdId).ToArrayAsync(token);
+                    var savedPeople = snapshot.People.Select(person => person.Id).ToHashSet();
+                    snapshot.AddItems(items, addedItems, people);
+                    context.SnapshotPeople.AddRange(snapshot.People.Where(person => !savedPeople.Contains(person.Id)));
+                    context.ItemSnapshots.AddRange(snapshot.ItemSnapshots.Where(item => ids.Contains(item.TrackedItemId)));
+                }
+                if ((values?.Count ?? 0) + (financedAssetValues?.Count ?? 0) > 0 || (addedItems?.Count ?? 0) == 0)
+                    snapshot.CorrectValues(snapshot.Revision, values ?? [], financedAssetValues ?? []);
                 return snapshot;
             }, cancellationToken);
         }

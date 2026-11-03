@@ -34,6 +34,45 @@ describe("Snapshot entry requests", () => {
     editor = TestBed.runInInjectionContext(() => new SnapshotEditor());
     editor.ready.set(true);
   });
+  it("keeps historical and current classification labels separate when adding an item", () => {
+    editor.mode = "correct";
+    const row = {
+      id: "old",
+      name: "Existing",
+      currency: "GBP",
+      mode: "keep" as const,
+      amount: "20",
+      previous: 20,
+      confirmed: null,
+      personKey: "holder",
+      personName: "Alex",
+      categoryId: "category",
+      categoryName: "Old category",
+      groupId: "group",
+      groupName: "Old group",
+    };
+    editor.rows.set([
+      row,
+      { ...row, id: "renamed-group", groupName: "New group", added: true },
+      {
+        ...row,
+        id: "renamed-category",
+        categoryName: "New category",
+        added: true,
+      },
+    ]);
+    const categories = editor.groupedRows()[0].categories;
+    expect(categories.map((c) => c.name)).toEqual([
+      "New category",
+      "Old category",
+    ]);
+    expect(categories[1].groups.map((g) => g.name)).toEqual([
+      "New group",
+      "Old group",
+    ]);
+    expect(new Set(categories.map((c) => c.key)).size).toBe(2);
+    expect(new Set(categories[1].groups.map((g) => g.key)).size).toBe(2);
+  });
   it("omits carried readings and sends unknown values as explicit nulls", async () => {
     editor.mode = "next";
     editor.sourceId = "previous";
@@ -336,6 +375,7 @@ describe("Snapshot entry requests", () => {
       "snapshots/saved": source,
       "tracked-items": [],
       "financed-assets": [],
+      categories: [],
     };
     get.mockImplementation((path: string) =>
       Promise.resolve(responses[path.replace("households/example/", "")]),
@@ -357,7 +397,7 @@ describe("Snapshot entry requests", () => {
       2,
     );
     expect(get.mock.calls.some(([path]) => path.endsWith("/categories"))).toBe(
-      false,
+      true,
     );
   });
   it("invalidates stale rows after a failed source reload and refuses to save", async () => {
@@ -432,5 +472,84 @@ describe("Snapshot entry requests", () => {
     } finally {
       confirm.mockRestore();
     }
+  });
+  it("offers only active missing items, supports cancelling additions and saves them explicitly", async () => {
+    vi.spyOn(editor.w, "current").mockReturnValue({
+      id: "example",
+      name: "Example",
+      people: [
+        {
+          id: "child",
+          displayName: "Child",
+          participatesInHouseholdFinances: false,
+        },
+      ],
+    });
+    editor.mode = "correct";
+    editor.sourceId = "saved";
+    editor.source.set({ revision: "revision" } as never);
+    editor.items = [
+      { id: "present", name: "Existing", isRetired: false },
+      { id: "retired", name: "Retired", isRetired: true },
+      {
+        id: "missing",
+        name: "Savings",
+        isRetired: false,
+        holderPersonId: "child",
+        groupId: "cash",
+        currencyCode: "GBP",
+        includeInHousehold: false,
+        allocations: [],
+      },
+    ].map((item) => ({
+      holderPersonId: "child",
+      groupId: "cash",
+      currencyCode: "GBP",
+      countryCode: "GB",
+      includeInHousehold: false,
+      allocations: [],
+      ...item,
+    }));
+    editor.categories = [
+      { id: "savings", name: "Savings", financialType: "Asset" },
+    ];
+    editor.groups = [{ id: "cash", categoryId: "savings", name: "Cash" }];
+    editor.rows.set([
+      {
+        id: "present",
+        name: "Existing",
+        currency: "GBP",
+        mode: "keep",
+        amount: "20",
+        previous: 20,
+        confirmed: null,
+      },
+    ]);
+    expect(editor.availableItems().map((i) => i.id)).toEqual(["missing"]);
+    editor.itemToAdd = "retired";
+    editor.addItem();
+    expect(editor.rows()).toHaveLength(1);
+    editor.itemToAdd = "missing";
+    editor.addItem();
+    expect(editor.availableItems()).toEqual([]);
+    expect(editor.rows()[1].personName).toBe("Child");
+    expect(editor.rows()[1].groupName).toBe("Cash");
+    editor.cancelAddition("missing");
+    expect(editor.availableItems()).toHaveLength(1);
+    editor.itemToAdd = "missing";
+    editor.addItem();
+    editor.rows()[1].amount = "12028";
+    await editor.save();
+    expect(send).toHaveBeenCalledWith(
+      "PATCH",
+      "households/example/snapshots/saved/values",
+      {
+        expectedRevision: "revision",
+        values: [],
+        financedAssetValues: [],
+        addedItems: [{ trackedItemId: "missing", amount: 12028 }],
+      },
+    );
+    expect(editor.rows()[0].amount).toBe("20");
   });
 });

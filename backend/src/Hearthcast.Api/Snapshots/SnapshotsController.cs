@@ -36,8 +36,8 @@ public sealed class SnapshotsController(SnapshotService snapshots, SnapshotActiv
     [HttpPatch("{snapshotId:guid}/values")]
     public async Task<ActionResult<SnapshotResponse>> CorrectValues(Guid householdId, Guid snapshotId,
         CorrectSnapshotValuesRequest request, CancellationToken cancellationToken) =>
-        SnapshotResponse.From(await snapshots.CorrectValuesAsync(householdId, snapshotId, request.ExpectedRevision!.Value,
-            ItemValues(request.Values), FinancedAssetValues(request.FinancedAssetValues), cancellationToken));
+        SnapshotResponse.From(await snapshots.AmendAsync(householdId, snapshotId, request.ExpectedRevision!.Value,
+            ItemValues(request.Values), FinancedAssetValues(request.FinancedAssetValues), ItemValues(request.AddedItems), cancellationToken));
 
     [HttpGet("{snapshotId:guid}")]
     public async Task<ActionResult<SnapshotResponse>> Get(Guid householdId, Guid snapshotId, CancellationToken cancellationToken) =>

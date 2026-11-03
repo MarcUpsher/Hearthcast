@@ -31,3 +31,24 @@ HTTP tests isolate missing/null/empty revisions from empty corrections using
 otherwise valid saved data. PATCH clearing is checked for both an item and a
 carried asset balance, including removal of confirmation/source metadata,
 preservation of omitted entries and balances, and persisted GET results.
+
+## Explicit additions while editing
+
+`PATCH /api/households/{householdId}/snapshots/{snapshotId}/values` also accepts
+optional `addedItems`, using the same `{ trackedItemId, amount }` shape as values.
+An amount of null records an explicitly unknown balance. At least one addition
+or correction is required. `expectedRevision` protects the entire operation;
+additions and value corrections commit together or roll back together.
+
+Only active tracked items in this household that are absent from this snapshot
+can be added. Duplicate IDs, overlap with corrections, retired/foreign/missing
+items and negative amounts are rejected. Existing saved entries and their copied
+metadata are retained, regardless of current retirement state. Later snapshots
+are not modified. Financed-asset additions are outside this operation.
+
+New entries copy the item's current metadata and household allocation. Existing
+saved people retain their copied names and participation. Required holders or
+allocation recipients absent from the saved roster are copied from the current
+household; unrelated current people are not added. An allocation to a person
+recorded as nonparticipating in the saved snapshot is rejected with 409.
+The operation uses existing tables and needs no migration.

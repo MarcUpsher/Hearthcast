@@ -147,12 +147,19 @@
             >{{ f.label }}</mat-checkbox
           >
         } @else {
-          <mat-form-field
+          <mat-form-field subscriptSizing="fixed"
             ><mat-label>{{ f.label }}</mat-label>
+            @if (f.key === "originalLoanAmount" || f.key === "purchasePrice") {
+              <span matTextPrefix
+                >{{ currencySymbol(currencyCode()) }}&nbsp;</span
+              >
+            }
             @if (f.options) {
               <mat-select
                 [name]="f.key"
+                [aria-label]="f.label"
                 [(ngModel)]="value[f.key]"
+                (selectionChange)="fieldSelectionChanged(f.key, $event.value)"
                 [disabled]="busy()"
                 required
               >
@@ -160,6 +167,18 @@
                   <mat-option [value]="o.id">{{ o.name }}</mat-option>
                 }
               </mat-select>
+            } @else if (
+              f.key === "originalLoanAmount" || f.key === "purchasePrice"
+            ) {
+              <input
+                matInput
+                appMoney="number"
+                inputmode="decimal"
+                [name]="f.key"
+                [required]="!f.optional"
+                [(ngModel)]="value[f.key]"
+                [disabled]="busy()"
+              />
             } @else {
               <input
                 matInput
@@ -169,6 +188,9 @@
                 [(ngModel)]="value[f.key]"
                 [disabled]="busy()"
               />
+            }
+            @if (f.key === "currencyCode") {
+              <mat-hint>Defaults from country. Change if needed.</mat-hint>
             }
           </mat-form-field>
         }
@@ -326,6 +348,17 @@
       Only active items appear in new snapshot entry. Retiring an item preserves
       its saved history.
     </p>
+    <div class="actions">
+      <small
+        >Default order: person, group, last confirmed (newest first), active
+        first.</small
+      >
+      @if (itemSort.active) {
+        <button mat-button (click)="itemSort = { active: '', direction: '' }">
+          Restore default order
+        </button>
+      }
+    </div>
     <section class="panel scroll">
       <table
         matSort
@@ -460,7 +493,7 @@
             <tr>
               <td>{{ a.name }}</td>
               <td>{{ groupName(a.groupId) }}</td>
-              <td>{{ a.currencyCode }} {{ a.originalLoanAmount }}</td>
+              <td>{{ money(a.originalLoanAmount, a.currencyCode) }}</td>
               <td>{{ a.isRetired ? "Retired" : "Active" }}</td>
               <td>{{ presence(a.id, true) }}</td>
               @for (kind of [1, 2, 3]; track kind) {

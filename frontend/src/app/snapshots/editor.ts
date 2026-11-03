@@ -1,3 +1,4 @@
+import { money, currencySymbol, MoneyInput } from "../core/money";
 import {
   Component,
   HostListener,
@@ -25,6 +26,8 @@ import {
 } from "../core/api";
 type CaptureMode = "next" | "new" | "correct";
 interface Entry {
+  added?: boolean;
+  allocationDescription?: string;
   id: string;
   name: string;
   currency: string;
@@ -46,6 +49,7 @@ interface Entry {
 @Component({
   imports: [
     FormsModule,
+    MoneyInput,
     RouterLink,
     MatButtonModule,
     MatFormFieldModule,
@@ -53,8 +57,11 @@ interface Entry {
     MatInputModule,
   ],
   templateUrl: "editor.html",
+  styleUrl: "editor.scss",
 })
 export class SnapshotEditor {
+  money = money;
+  currencySymbol = currencySymbol;
   w = inject(Workspace);
   api = inject(Api);
   router = inject(Router);
@@ -91,7 +98,7 @@ export class SnapshotEditor {
         };
         people.set(key, person);
       }
-      const categoryKey = row.categoryId ?? "unknown";
+      const categoryKey = JSON.stringify([row.categoryId, row.categoryName]);
       let category = person.categories.get(categoryKey);
       if (!category) {
         category = {
@@ -101,7 +108,7 @@ export class SnapshotEditor {
         };
         person.categories.set(categoryKey, category);
       }
-      const groupKey = row.groupId ?? "unknown";
+      const groupKey = JSON.stringify([row.groupId, row.groupName]);
       let group = category.groups.get(groupKey);
       if (!group) {
         group = {
@@ -159,6 +166,9 @@ export class SnapshotEditor {
   private generation = 0;
   items: Item[] = [];
   assets: Asset[] = [];
+  categories: Category[] = [];
+  groups: Group[] = [];
+  itemToAdd = "";
   constructor() {
     effect(() => {
       if (this.w.current()) void this.load();
@@ -235,9 +245,7 @@ export class SnapshotEditor {
         this.api.get<Inventory[]>(this.w.path("snapshots")),
         this.api.get<Item[]>(this.w.path("tracked-items")),
         this.api.get<Asset[]>(this.w.path("financed-assets")),
-        this.mode === "correct"
-          ? Promise.resolve([] as Category[])
-          : this.api.get<Category[]>(this.w.path("categories")),
+        this.api.get<Category[]>(this.w.path("categories")),
       ]);
       if (g !== this.generation) return;
       const groups = (
@@ -253,6 +261,9 @@ export class SnapshotEditor {
       this.inventory.set(inventory);
       this.items = items;
       this.assets = assets;
+      this.categories = categories;
+      this.groups = groups;
+      this.itemToAdd = "";
       if (!inventory.some((i) => i.id === this.sourceId))
         this.sourceId = inventory[0]?.id ?? "";
       const source = this.sourceId
@@ -410,12 +421,83 @@ export class SnapshotEditor {
       if (g === this.generation) this.busy.set(false);
     }
   }
+  availableItems() {
+    return this.items
+      .filter(
+        (item) =>
+          !item.isRetired &&
+          !this.rows().some((row) => !row.kind && row.id === item.id),
+      )
+      .sort((a, b) => this.collator.compare(a.name, b.name));
+  }
+  holderName(id: string) {
+    return (
+      (this.mode === "correct"
+        ? this.source()?.people?.find((p) => p.personId === id)?.displayName
+        : undefined) ??
+      this.w.current()?.people.find((p) => p.id === id)?.displayName ??
+      "Unknown holder"
+    );
+  }
+  addItem() {
+    if (!this.ready() || this.busy() || this.mode !== "correct") return;
+    const item = this.availableItems().find(
+      (item) => item.id === this.itemToAdd,
+    );
+    if (!item) return;
+    const group = this.groups.find((group) => group.id === item.groupId);
+    const category = this.categories.find(
+      (category) => category.id === group?.categoryId,
+    );
+    this.rows.update((rows) => [
+      ...rows,
+      {
+        id: item.id,
+        name: item.name,
+        itemName: item.name,
+        currency: item.currencyCode,
+        personKey: item.holderPersonId,
+        personName: this.holderName(item.holderPersonId),
+        groupId: item.groupId,
+        groupName: group?.name,
+        categoryId: category?.id,
+        categoryName: category?.name,
+        institutionName: item.institutionName,
+        fundName: item.fundName,
+        mode: "record",
+        amount: "",
+        previous: null,
+        confirmed: null,
+        added: true,
+        allocationDescription: item.includeInHousehold
+          ? "Household: " +
+            item.allocations
+              .map(
+                (share) =>
+                  this.holderName(share.personId) +
+                  " " +
+                  share.shareBasisPoints / 100 +
+                  "%",
+              )
+              .join(", ")
+          : "Individual only",
+      },
+    ]);
+    this.itemToAdd = "";
+  }
+  cancelAddition(id: string) {
+    if (!this.busy())
+      this.rows.update((rows) =>
+        rows.filter((row) => !(row.id === id && row.added)),
+      );
+  }
   async save() {
     if (!this.ready() || this.busy()) return;
     this.saving.set(true);
     this.busy.set(true);
     this.error.set("");
     try {
+      const addedItems: { trackedItemId: string; amount: number | null }[] = [];
       const values: { trackedItemId: string; amount: number | null }[] = [];
       const financedAssetValues: {
         financedAssetId: string;
@@ -439,18 +521,20 @@ export class SnapshotEditor {
             balance: r.kind,
             amount,
           });
+        else if (r.added) addedItems.push({ trackedItemId: r.id, amount });
         else values.push({ trackedItemId: r.id, amount });
       }
       let body: unknown;
       let method = "POST";
       let path = this.w.path("snapshots");
       if (this.mode === "correct") {
-        if (!values.length && !financedAssetValues.length)
+        if (!values.length && !financedAssetValues.length && !addedItems.length)
           throw new Error("Choose at least one value to record or clear.");
         method = "PATCH";
         path += "/" + this.sourceId + "/values";
         body = {
           expectedRevision: this.source()!.revision,
+          ...(addedItems.length ? { addedItems } : {}),
           values,
           financedAssetValues,
         };

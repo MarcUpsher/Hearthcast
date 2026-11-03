@@ -78,6 +78,30 @@ public sealed class Snapshot
         }
     }
 
+    internal void AddItems(IReadOnlyCollection<TrackedItem> items, IReadOnlyCollection<ItemSnapshotValue> values,
+        IReadOnlyCollection<Person> currentPeople)
+    {
+        if (items.Any(item => item.HouseholdId != HouseholdId || item.IsRetired
+            || _itemSnapshots.Any(saved => saved.TrackedItemId == item.Id)))
+            throw new InvalidValueException("Added items must be active, in this household and absent from the snapshot.");
+        var amounts = values.ToDictionary(value => value.TrackedItemId, value => value.Amount);
+        var people = _people.ToDictionary(person => person.PersonId);
+        var requiredPeople = items.Select(item => item.HolderPersonId)
+            .Concat(items.SelectMany(item => item.HouseholdAllocations.Select(share => share.PersonId))).ToHashSet();
+        var newPeople = currentPeople.Where(person => requiredPeople.Contains(person.Id) && !people.ContainsKey(person.Id))
+            .Select(person => new SnapshotPerson(this, person)).ToArray();
+        foreach (var person in newPeople) people.Add(person.PersonId, person);
+        if (requiredPeople.Any(id => !people.ContainsKey(id)))
+            throw new InvalidValueException("The item's holder and allocation recipients must belong to this household.");
+        if (items.SelectMany(item => item.HouseholdAllocations).Any(share => !people[share.PersonId].ParticipatesInHouseholdFinances))
+            throw new BusinessRuleViolationException("The item's household allocation conflicts with participation recorded in this snapshot.");
+        var entries = items.Select(item => new ItemSnapshot(this, item, people, amounts[item.Id])).ToArray();
+        _people.AddRange(newPeople);
+        _itemSnapshots.AddRange(entries);
+        Revision = Guid.NewGuid();
+        UpdatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
     internal void CorrectValues(Guid expectedRevision, IReadOnlyCollection<ItemSnapshotValue> values,
         IReadOnlyCollection<FinancedAssetSnapshotValue> financedValues)
     {

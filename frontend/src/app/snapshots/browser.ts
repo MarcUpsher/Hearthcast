@@ -1,3 +1,4 @@
+import { money } from "../core/money";
 import { Component, effect, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
@@ -11,8 +12,11 @@ import {
   Workspace,
   Inventory,
   Snapshot,
+  SavedItem,
+  SavedAsset,
   Report,
   ReportCurrency,
+  ReportGroup,
   Totals,
   message,
 } from "../core/api";
@@ -27,6 +31,7 @@ import {
     MatInputModule,
   ],
   templateUrl: "browser.html",
+  styleUrl: "browser.scss",
 })
 export class SnapshotBrowser {
   w = inject(Workspace);
@@ -159,15 +164,68 @@ export class SnapshotBrowser {
         ? row.holdingsTotals
         : row.allRecordedTotals;
   }
-  money(value: number | null | undefined, currency: string) {
-    return value == null
-      ? "Unknown"
-      : new Intl.NumberFormat("en-GB", {
-          style: "currency",
-          currency,
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }).format(value);
+  money = money;
+  groupEntries(group: ReportGroup, financialType?: number) {
+    const entries = (group.items ?? []).map((entry) => {
+      const item = "item" in entry ? entry.item : entry;
+      const amount =
+        "item" in entry ? entry.contributingAmount : item.balance.amount;
+      const share =
+        "item" in entry && entry.allocationShareBasisPoints !== 10000
+          ? ` · ${entry.allocationShareBasisPoints / 100}% household share`
+          : "";
+      return {
+        key: "item:" + item.itemSnapshotId,
+        name: item.itemName,
+        description:
+          "Held by " +
+          this.holder(item.holderSnapshotPersonId) +
+          share +
+          (financialType === 2 ? " · Debt" : ""),
+        institutionName: item.institutionName,
+        fundName: item.fundName,
+        amount: amount == null ? null : financialType === 2 ? -amount : amount,
+        status: this.status(item.balance.valueOrigin),
+      };
+    });
+    for (const entry of group.financedAssets ?? []) {
+      const asset = "asset" in entry ? entry.asset : entry;
+      const amount =
+        "asset" in entry ? entry.attributedEquity : asset.currentEquity;
+      const share =
+        "asset" in entry
+          ? (entry.allocationShareBasisPoints ??
+            entry.ownershipShareBasisPoints)
+          : undefined;
+      entries.push({
+        key: "asset:" + asset.financedAssetSnapshotId,
+        name: asset.assetName,
+        description:
+          "Equity" +
+          (share !== undefined && share !== 10000
+            ? ` · ${share / 100}% ${"allocationShareBasisPoints" in entry ? "household share" : "ownership"}`
+            : ""),
+        institutionName: undefined,
+        fundName: undefined,
+        amount,
+        status:
+          amount == null
+            ? "Missing balances"
+            : this.status(
+                asset.currentValuation.valueOrigin === 3 ||
+                  asset.outstandingLoanBalance.valueOrigin === 3
+                  ? 3
+                  : 2,
+              ),
+      });
+    }
+    return entries.sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, "en", {
+          numeric: true,
+          sensitivity: "base",
+        }) || a.key.localeCompare(b.key),
+    );
   }
   status(origin: number) {
     return origin === 3
@@ -184,6 +242,115 @@ export class SnapshotBrowser {
           .toLowerCase()
           .includes(this.search.toLowerCase()),
     );
+  }
+  groupedEntries() {
+    type Group = {
+      key: string;
+      name: string;
+      items: SavedItem[];
+      assets: SavedAsset[];
+    };
+    type Category = { key: string; name: string; groups: Map<string, Group> };
+    const people = new Map<
+      string,
+      { key: string; name: string; categories: Map<string, Category> }
+    >();
+    const groupFor = (
+      personKey: string,
+      personName: string,
+      entry: SavedItem | SavedAsset,
+    ) => {
+      let person = people.get(personKey);
+      if (!person) {
+        person = { key: personKey, name: personName, categories: new Map() };
+        people.set(personKey, person);
+      }
+      const categoryKey = JSON.stringify([
+        entry.categoryId,
+        entry.categoryName,
+      ]);
+      let category = person.categories.get(categoryKey);
+      if (!category) {
+        category = {
+          key: categoryKey,
+          name: entry.categoryName,
+          groups: new Map(),
+        };
+        person.categories.set(categoryKey, category);
+      }
+      const groupKey = JSON.stringify([entry.groupId, entry.groupName]);
+      let group = category.groups.get(groupKey);
+      if (!group) {
+        group = { key: groupKey, name: entry.groupName, items: [], assets: [] };
+        category.groups.set(groupKey, group);
+      }
+      return group;
+    };
+    for (const item of this.items())
+      groupFor(
+        item.holderSnapshotPersonId,
+        this.holder(item.holderSnapshotPersonId),
+        item,
+      ).items.push(item);
+    const collator = new Intl.Collator("en", {
+      numeric: true,
+      sensitivity: "base",
+    });
+    for (const asset of this.saved()?.financedAssetSnapshots ?? []) {
+      if (
+        (this.currency && asset.currencyCode !== this.currency) ||
+        !`${asset.assetName} ${asset.categoryName} ${asset.groupName}`
+          .toLowerCase()
+          .includes(this.search.toLowerCase())
+      )
+        continue;
+      const owners = asset.owners
+        .map((owner) => ({
+          id: owner.snapshotPersonId,
+          name: this.holder(owner.snapshotPersonId),
+        }))
+        .sort(
+          (a, b) =>
+            collator.compare(a.name, b.name) || a.id.localeCompare(b.id),
+        );
+      const key =
+        owners.length === 1
+          ? owners[0].id
+          : "owners:" +
+            owners
+              .map((owner) => owner.id)
+              .sort()
+              .join("|");
+      const name =
+        owners.map((owner) => owner.name).join(" & ") +
+        (owners.length > 1 ? " (joint)" : "");
+      groupFor(key, name || "Unknown owner", asset).assets.push(asset);
+    }
+    const compare = (
+      a: { name: string; key: string },
+      b: { name: string; key: string },
+    ) => collator.compare(a.name, b.name) || a.key.localeCompare(b.key);
+    return [...people.values()].sort(compare).map((person) => ({
+      ...person,
+      categories: [...person.categories.values()]
+        .sort(compare)
+        .map((category) => ({
+          ...category,
+          groups: [...category.groups.values()].sort(compare).map((group) => ({
+            ...group,
+            items: group.items.sort(
+              (a, b) =>
+                collator.compare(a.itemName, b.itemName) ||
+                a.trackedItemId.localeCompare(b.trackedItemId),
+            ),
+            assets: group.assets.sort(
+              (a, b) =>
+                collator.compare(a.assetName, b.assetName) ||
+                a.financedAssetId.localeCompare(b.financedAssetId),
+            ),
+          })),
+        })),
+    }));
   }
   holder(id: string) {
     return (
