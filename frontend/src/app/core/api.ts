@@ -194,6 +194,17 @@ export interface SavedAsset {
   hasWithdrawalFacility: boolean;
 }
 export interface Snapshot {
+  exchangeRateLookupDate?: string | null;
+  exchangeRateBaseCurrency?: string | null;
+  exchangeRateStatus?: "NotCaptured" | "NotRequired" | "Pending" | "Ready";
+  exchangeRates?: {
+    baseCurrency: string;
+    quoteCurrency: string;
+    rate: number;
+    effectiveDate: string;
+    source: string;
+    retrievedAtUtc: string;
+  }[];
   id: string;
   revision: string;
   snapshotDate: string;

@@ -125,6 +125,27 @@ export class SnapshotBrowser {
       if (g === this.generation) this.busy.set(false);
     }
   }
+  async retryExchangeRates() {
+    const snapshot = this.saved();
+    if (!snapshot || this.busy()) return;
+    const g = ++this.generation;
+    this.busy.set(true);
+    this.error.set("");
+    try {
+      await this.api.send(
+        "POST",
+        this.w.path("snapshots/" + snapshot.id + "/exchange-rates/retry"),
+        {
+          expectedRevision: snapshot.revision,
+        },
+      );
+      if (g === this.generation) await this.open();
+    } catch (e) {
+      if (g === this.generation) this.error.set(message(e));
+    } finally {
+      if (g === this.generation) this.busy.set(false);
+    }
+  }
   people() {
     return this.view === 2 ? [] : (this.reports()[this.view]?.people ?? []);
   }

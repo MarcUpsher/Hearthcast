@@ -134,6 +134,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
                 ? await ResolveSourceAsync(context, householdId, period, sourceSnapshotId, token)
                 : null;
             var snapshot = new Snapshot(household, date, datePrecision, items, values ?? [], assets, financedAssetValues ?? [], source);
+            snapshot.InitializeExchangeRateContext(DateOnly.FromDateTime(DateTime.UtcNow));
             context.Snapshots.Add(snapshot);
             return snapshot;
         }, cancellationToken);
@@ -179,7 +180,7 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
 
     private static IQueryable<Snapshot> SnapshotGraph(HearthcastDbContext context)
     {
-        return context.Snapshots.AsSplitQuery()
+        return context.Snapshots.AsSplitQuery().Include(snapshot => snapshot.ExchangeRates)
             .Include(snapshot => snapshot.People)
             .Include(snapshot => snapshot.ItemSnapshots).ThenInclude(item => item.HolderSnapshotPerson)
             .Include(snapshot => snapshot.ItemSnapshots)

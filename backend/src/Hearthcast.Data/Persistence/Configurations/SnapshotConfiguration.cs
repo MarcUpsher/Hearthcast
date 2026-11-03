@@ -14,6 +14,12 @@ public sealed class SnapshotConfiguration : IEntityTypeConfiguration<Snapshot>
             table.HasCheckConstraint("CK_Snapshots_HouseholdName_NotBlank", "length(trim(\"HouseholdName\")) > 0");
             table.HasCheckConstraint("CK_Snapshots_DatePrecision", "\"DatePrecision\" IN (1, 2)");
         });
+        builder.Ignore(snapshot => snapshot.Currencies);
+        builder.Ignore(snapshot => snapshot.MissingExchangeRateCurrencies);
+        builder.Ignore(snapshot => snapshot.ExchangeRateStatus);
+        builder.Property(snapshot => snapshot.ExchangeRateBaseCurrency).HasMaxLength(3);
+        builder.Navigation(snapshot => snapshot.ExchangeRates).HasField("_exchangeRates")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.HasKey(snapshot => snapshot.Id);
         builder.Property(snapshot => snapshot.Id).ValueGeneratedNever();
         builder.HasAlternateKey(snapshot => new { snapshot.HouseholdId, snapshot.Id });

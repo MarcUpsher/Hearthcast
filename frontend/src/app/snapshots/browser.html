@@ -72,6 +72,28 @@
   <a mat-flat-button routerLink="/record">Record snapshot</a>
 }
 @if (saved(); as s) {
+  @if (s.exchangeRateStatus === "Pending") {
+    <p class="notice" role="status">
+      Financial values are saved. Exchange rates are still pending.
+      <button mat-button [disabled]="busy()" (click)="retryExchangeRates()">
+        Retry exchange rates
+      </button>
+    </p>
+  }
+  @if (s.exchangeRates?.length) {
+    <details class="panel">
+      <summary>
+        Saved exchange rates · lookup {{ s.exchangeRateLookupDate }}
+      </summary>
+      @for (rate of s.exchangeRates; track rate.quoteCurrency) {
+        <p>
+          1 {{ rate.baseCurrency }} = {{ rate.rate }} {{ rate.quoteCurrency }}
+          <small> · {{ rate.effectiveDate }} · {{ rate.source }}</small>
+        </p>
+      }
+    </details>
+  }
+
   <p class="notice">
     Totals reflect the entries recorded or carried in this snapshot. Earlier
     history may have incomplete household coverage. Currencies are kept

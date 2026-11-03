@@ -618,6 +618,13 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<int>("DatePrecision")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ExchangeRateBaseCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateOnly?>("ExchangeRateLookupDate")
+                        .HasColumnType("date");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
@@ -646,6 +653,45 @@ namespace Hearthcast.Data.Persistence.Migrations
                             t.HasCheckConstraint("CK_Snapshots_DatePrecision", "\"DatePrecision\" IN (1, 2)");
 
                             t.HasCheckConstraint("CK_Snapshots_HouseholdName_NotBlank", "length(trim(\"HouseholdName\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.SnapshotExchangeRate", b =>
+                {
+                    b.Property<Guid>("SnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("QuoteCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("BaseCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Rate")
+                        .HasPrecision(36, 18)
+                        .HasColumnType("numeric(36,18)");
+
+                    b.Property<DateTimeOffset>("RetrievedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("SnapshotId", "QuoteCurrency");
+
+                    b.ToTable("SnapshotExchangeRates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SnapshotExchangeRates_DifferentCurrencies", "\"BaseCurrency\" <> \"QuoteCurrency\"");
+
+                            t.HasCheckConstraint("CK_SnapshotExchangeRates_Positive", "\"Rate\" > 0");
                         });
                 });
 
@@ -1057,6 +1103,15 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Snapshots.SnapshotExchangeRate", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Snapshots.Snapshot", null)
+                        .WithMany("ExchangeRates")
+                        .HasForeignKey("SnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Snapshots.SnapshotPerson", b =>
                 {
                     b.HasOne("Hearthcast.Data.Households.Person", null)
@@ -1146,6 +1201,8 @@ namespace Hearthcast.Data.Persistence.Migrations
 
             modelBuilder.Entity("Hearthcast.Data.Snapshots.Snapshot", b =>
                 {
+                    b.Navigation("ExchangeRates");
+
                     b.Navigation("FinancedAssetSnapshots");
 
                     b.Navigation("ItemSnapshots");

@@ -9,6 +9,46 @@ import { MatSelectHarness } from "@angular/material/select/testing";
 describe("Snapshot rendering", () => {
   beforeEach(() => vi.stubEnv("TZ", "Europe/London"));
   afterEach(() => vi.unstubAllEnvs());
+  it("shows pending rates and retries against the displayed snapshot revision", async () => {
+    const send = vi.fn().mockResolvedValue({});
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: { send } },
+        {
+          provide: Workspace,
+          useValue: {
+            current: () => null,
+            path: (path: string) => "households/example/" + path,
+          },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(SnapshotBrowser);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const browser = fixture.componentInstance;
+    browser.saved.set({
+      id: "saved",
+      revision: "revision",
+      exchangeRateStatus: "Pending",
+      people: [],
+      itemSnapshots: [],
+      financedAssetSnapshots: [],
+    } as unknown as Snapshot);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(
+      "Financial values are saved",
+    );
+    const open = vi.spyOn(browser, "open").mockResolvedValue();
+    await browser.retryExchangeRates();
+    expect(send).toHaveBeenCalledWith(
+      "POST",
+      "households/example/snapshots/saved/exchange-rates/retry",
+      { expectedRevision: "revision" },
+    );
+    expect(open).toHaveBeenCalledOnce();
+  });
   it("renders returned totals and names the selected individual", async () => {
     TestBed.configureTestingModule({
       imports: [SnapshotBrowser],

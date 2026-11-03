@@ -7,6 +7,7 @@ namespace Hearthcast.Data.Snapshots;
 
 public sealed class Snapshot
 {
+    private readonly List<SnapshotExchangeRate> _exchangeRates = [];
     private readonly List<SnapshotPerson> _people = [];
     private readonly List<ItemSnapshot> _itemSnapshots = [];
     private readonly List<FinancedAssetSnapshot> _financedAssetSnapshots = [];
@@ -78,6 +79,36 @@ public sealed class Snapshot
         }
     }
 
+    internal void ValidateExchangeRates(IReadOnlyList<Hearthcast.Data.ExchangeRates.ExchangeRateQuote> quotes)
+    {
+        if (ExchangeRateLookupDate is null || ExchangeRateBaseCurrency is null)
+            throw new InvalidOperationException("This snapshot has no exchange-rate capture context.");
+        var missing = MissingExchangeRateCurrencies;
+        if (quotes.Count != missing.Count || quotes.Select(q => q.QuoteCurrency).Distinct().Count() != quotes.Count
+            || quotes.Any(q => q.BaseCurrency != ExchangeRateBaseCurrency || !missing.Contains(q.QuoteCurrency)
+                || q.Rate <= 0 || q.Rate > 999999999999999999m || decimal.Round(q.Rate, 18) != q.Rate
+                || q.EffectiveDate == default || q.EffectiveDate > ExchangeRateLookupDate))
+            throw new InvalidOperationException("The provider returned incomplete or invalid exchange rates.");
+
+    }
+
+    internal void InitializeExchangeRateContext(DateOnly lookupDate)
+    {
+        ExchangeRateLookupDate = lookupDate;
+        ExchangeRateBaseCurrency = Currencies.FirstOrDefault();
+    }
+
+    public IReadOnlyList<string> Currencies => _itemSnapshots.Select(i => i.CurrencyCode)
+        .Concat(_financedAssetSnapshots.Select(a => a.CurrencyCode)).Distinct().Order(StringComparer.Ordinal).ToArray();
+    public IReadOnlyList<string> MissingExchangeRateCurrencies => Currencies
+        .Where(currency => currency != ExchangeRateBaseCurrency && !_exchangeRates.Any(rate => rate.QuoteCurrency == currency)).ToArray();
+    public string ExchangeRateStatus => ExchangeRateLookupDate is null ? "NotCaptured"
+        : Currencies.Count < 2 && MissingExchangeRateCurrencies.Count == 0 ? "NotRequired"
+        : MissingExchangeRateCurrencies.Count == 0 ? "Ready" : "Pending";
+    public DateOnly? ExchangeRateLookupDate { get; private set; }
+    public string? ExchangeRateBaseCurrency { get; private set; }
+    public IReadOnlyCollection<SnapshotExchangeRate> ExchangeRates => _exchangeRates.AsReadOnly();
+
     internal void AddItems(IReadOnlyCollection<TrackedItem> items, IReadOnlyCollection<ItemSnapshotValue> values,
         IReadOnlyCollection<Person> currentPeople)
     {
@@ -98,6 +129,8 @@ public sealed class Snapshot
         var entries = items.Select(item => new ItemSnapshot(this, item, people, amounts[item.Id])).ToArray();
         _people.AddRange(newPeople);
         _itemSnapshots.AddRange(entries);
+        if (ExchangeRateLookupDate.HasValue && ExchangeRateBaseCurrency is null)
+            ExchangeRateBaseCurrency = Currencies.FirstOrDefault();
         Revision = Guid.NewGuid();
         UpdatedAtUtc = DateTimeOffset.UtcNow;
     }

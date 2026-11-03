@@ -275,13 +275,13 @@ public sealed class FinancedAssetPersistenceTests : IAsyncLifetime
         await context.GetService<IMigrator>().MigrateAsync(setupMigration);
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Equal(setupMigration, (await context.Database.GetAppliedMigrationsAsync()).Last());
-        Assert.Equal(snapshot.Revision, (await context.Snapshots.AsNoTracking().SingleAsync(saved => saved.Id == snapshot.Id)).Revision);
+        Assert.Equal(snapshot.Revision, await context.Snapshots.Where(saved => saved.Id == snapshot.Id).Select(saved => saved.Revision).SingleAsync());
         var asset = await data.CreateAssetAsync(new(_database));
         Assert.Equal(asset.Id, (await new FinancedAssetService(_database).GetAsync(data.HouseholdId, asset.Id)).Id);
         await context.GetService<IMigrator>().MigrateAsync(previous);
         await context.GetService<IMigrator>().MigrateAsync(setupMigration);
         Assert.Empty(await context.FinancedAssets.ToArrayAsync());
-        Assert.Equal(snapshot.Revision, (await context.Snapshots.AsNoTracking().SingleAsync(saved => saved.Id == snapshot.Id)).Revision);
+        Assert.Equal(snapshot.Revision, await context.Snapshots.Where(saved => saved.Id == snapshot.Id).Select(saved => saved.Revision).SingleAsync());
     }
 
     private async Task AssertNoAssetAsync()

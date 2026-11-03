@@ -1,4 +1,5 @@
 using Hearthcast.Api.Health;
+using Hearthcast.Data.ExchangeRates;
 using Hearthcast.Api.Errors;
 using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Classification;
@@ -25,6 +26,12 @@ builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<TrackedItemService>();
 builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
+builder.Services.AddScoped<SnapshotExchangeRateService>();
+builder.Services.AddHttpClient<IExchangeRateProvider, FrankfurterExchangeRateProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://api.frankfurter.dev/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddScoped<SnapshotActivityService>();
 builder.Services.AddScoped<SnapshotSummaryService>();
 builder.Services.AddScoped<IndividualHoldingsSummaryService>();
