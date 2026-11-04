@@ -19,6 +19,8 @@ import { Workspace } from "./core/api";
       <nav aria-label="Main navigation">
         <a mat-button routerLink="/snapshots" routerLinkActive="active"
           >Snapshots</a
+        ><a mat-button routerLink="/history" routerLinkActive="active"
+          >History</a
         ><a mat-button routerLink="/record" routerLinkActive="active"
           >Record snapshot</a
         ><a mat-button routerLink="/setup" routerLinkActive="active"

@@ -115,6 +115,20 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         return snapshot;
     }
 
+    public async Task<IReadOnlyList<Snapshot>> GetManyAsync(Guid householdId, IReadOnlyCollection<Guid> snapshotIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (snapshotIds.Count == 0) return [];
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.RepeatableRead, cancellationToken);
+        var snapshots = await SnapshotGraph(context).AsNoTrackingWithIdentityResolution()
+            .Where(snapshot => snapshot.HouseholdId == householdId && snapshotIds.Contains(snapshot.Id))
+            .ToArrayAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return snapshots;
+    }
+
     public async Task<IReadOnlyList<SnapshotInventoryEntry>> ListAsync(Guid householdId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);

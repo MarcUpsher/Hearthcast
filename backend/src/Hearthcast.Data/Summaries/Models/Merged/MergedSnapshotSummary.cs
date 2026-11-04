@@ -8,7 +8,7 @@ public sealed record MergedAmount(string CurrencyCode, decimal? KnownSubtotal, i
     public bool IsComplete => MissingValueCount == 0 && MissingRateCount == 0;
 }
 public sealed record MergedEntry(string Key, string Name, string Description, string SourceCurrency,
-    decimal? SourceAmount, string Status, string? InstitutionName, string? FundName, IReadOnlyList<MergedAmount> Amounts);
+    decimal? SourceAmount, string Status, string? InstitutionName, string? FundName, IReadOnlyList<MergedAmount> Amounts, MergedEntryKind Kind);
 public sealed record MergedGroup(Guid GroupId, string GroupName, IReadOnlyList<MergedAmount> Amounts,
     IReadOnlyList<MergedEntry> Entries);
 public sealed record MergedCategory(Guid CategoryId, string CategoryName, FinancialType FinancialType,

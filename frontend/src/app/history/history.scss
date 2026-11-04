@@ -1,0 +1,110 @@
+.history-controls {
+  display: flex;
+  align-items: start;
+  gap: 14px;
+  flex-wrap: wrap;
+  mat-form-field {
+    flex: 1 1 150px;
+  }
+  .category-select {
+    flex: 2 1 230px;
+  }
+}
+.history-chart {
+  border-color: var(--mat-sys-primary);
+  h2 {
+    margin: 0;
+  }
+  .chart-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+  .legend span::before {
+    content: "";
+    display: inline-block;
+    width: 13px;
+    height: 3px;
+    margin: 0 7px 4px 0;
+    background: currentColor;
+  }
+  .legend span.dashed::before {
+    background: repeating-linear-gradient(
+      90deg,
+      currentColor 0 6px,
+      transparent 6px 10px
+    );
+  }
+  .graph-scroll {
+    overflow-x: auto;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    min-width: 620px;
+  }
+  .grid {
+    stroke: var(--mat-sys-outline-variant);
+    stroke-width: 1;
+  }
+  .axis {
+    fill: var(--mat-sys-on-surface-variant);
+    font: 13px system-ui;
+  }
+  .line {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: d 400ms ease;
+  }
+  .dot {
+    stroke: var(--mat-sys-surface-container-low);
+    stroke-width: 1.5;
+    transition: r 150ms ease;
+  }
+  a:hover .dot,
+  a:focus .dot {
+    r: 6;
+  }
+  .outgoing {
+    animation: fade-out 420ms ease both;
+    pointer-events: none;
+  }
+  .incoming {
+    animation: fade-in 420ms ease both;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-chart .line,
+  .history-chart .dot {
+    transition: none;
+  }
+  .history-chart .outgoing,
+  .history-chart .incoming {
+    animation: none;
+  }
+}

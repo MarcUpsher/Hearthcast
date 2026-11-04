@@ -57,7 +57,9 @@ public sealed class MergedSummaryApiTests : IAsyncLifetime
         var entries = report.Household.Categories.SelectMany(c => c.Groups).SelectMany(g => g.Entries).ToArray();
         Assert.DoesNotContain(entries, entry => entry.Name == "Private holding");
         Assert.Equal(-30m, entries.Single(e => e.Name == "Loan").SourceAmount);
+        Assert.Equal(MergedEntryKind.Item, entries.Single(e => e.Name == "Loan").Kind);
         Assert.Equal(600m, entries.Single(e => e.Name == "Home").SourceAmount);
+        Assert.Equal(MergedEntryKind.FinancedAsset, entries.Single(e => e.Name == "Home").Kind);
         Assert.Equal(200m, entries.Single(e => e.Name == "Cash ZA").SourceAmount);
         Assert.Equal(carry ? 4 : 0, Cell(report.Household, "GBP").CarriedEntryCount);
         foreach (var column in report.Household.Amounts)

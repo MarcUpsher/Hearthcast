@@ -1,0 +1,203 @@
+<h1>History</h1>
+<p class="muted">
+  Follow your household's recorded position through time. Select a point to open
+  its snapshot.
+</p>
+@if (!w.current()) {
+  <p class="notice">Create a household to begin.</p>
+  <a mat-flat-button routerLink="/setup">Set up household</a>
+} @else {
+  @if (inventory().length) {
+    <section class="panel history-controls" aria-label="Chart controls">
+      <mat-form-field>
+        <mat-label>From</mat-label>
+        <input matInput type="date" [(ngModel)]="from" (change)="load()" />
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>To</mat-label>
+        <input matInput type="date" [(ngModel)]="to" (change)="load()" />
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Interval</mat-label>
+        <mat-select [(ngModel)]="interval" (selectionChange)="load()">
+          <mat-option [value]="1">Monthly</mat-option>
+          <mat-option [value]="3">Every three months</mat-option>
+          <mat-option [value]="6">Every six months</mat-option>
+          <mat-option [value]="12">Yearly</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Currency</mat-label>
+        <mat-select [(ngModel)]="currency" (selectionChange)="load()">
+          @for (code of report()?.availableCurrencies ?? []; track code) {
+            <mat-option [value]="code">{{ code }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      @if (categoryOptions().length) {
+        <mat-form-field class="category-select">
+          <mat-label>Investment categories</mat-label>
+          <mat-select
+            multiple
+            [ngModel]="investmentCategories()"
+            (ngModelChange)="categoriesChanged($event)"
+          >
+            @for (category of categoryOptions(); track category.id) {
+              <mat-option [value]="category.id">{{ category.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </section>
+  }
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+    <button
+      mat-button
+      (click)="inventory().length ? load() : initialize(w.current()!.id)"
+    >
+      Retry
+    </button>
+  }
+  @if (busy()) {
+    <p role="status">Loading history…</p>
+  }
+  @if (!busy() && !inventory().length && !error()) {
+    <p class="notice">No snapshots yet. Record one to begin your history.</p>
+    <a mat-flat-button routerLink="/record">Record snapshot</a>
+  }
+  @if (report(); as series) {
+    @if (chart(); as plot) {
+      <section class="panel history-chart" aria-label="Household history graph">
+        <div class="chart-heading">
+          <div>
+            <h2>Household over time</h2>
+            <p class="muted">
+              {{ series.points.length }} recorded points ·
+              {{ series.currencyCode }}
+            </p>
+          </div>
+          <div class="legend" aria-label="Graph lines">
+            @for (line of plot.lines; track line.key) {
+              <span [style.color]="line.color" [class.dashed]="line.dash">{{
+                line.label
+              }}</span>
+            }
+          </div>
+        </div>
+        @if (!plot.hasValues) {
+          <p class="notice">
+            No complete values can be plotted in {{ series.currencyCode }} for
+            this range. Earlier snapshots may need a saved exchange rate.
+          </p>
+        }
+        <div class="graph-scroll">
+          <svg
+            viewBox="0 0 1000 420"
+            role="img"
+            aria-label="Investment, equity and net position over time"
+          >
+            @for (tick of plot.ticks; track tick.y) {
+              <line
+                class="grid"
+                x1="88"
+                x2="920"
+                [attr.y1]="tick.y"
+                [attr.y2]="tick.y"
+              />
+              <text class="axis" x="78" [attr.y]="tick.y + 4" text-anchor="end">
+                {{ tick.label }}
+              </text>
+            }
+            @for (date of plot.dates; track date.x) {
+              <text class="axis" [attr.x]="date.x" y="402" text-anchor="middle">
+                {{ date.label }}
+              </text>
+            }
+            @if (outgoing(); as old) {
+              <g class="outgoing">
+                @for (line of old.lines; track line.key) {
+                  <path
+                    [attr.class]="
+                      'line ' +
+                      (line.key.startsWith('person:')
+                        ? 'person-line'
+                        : line.key)
+                    "
+                    [attr.d]="line.path"
+                    [attr.stroke]="line.color"
+                    [attr.stroke-dasharray]="line.dash"
+                    [attr.stroke-width]="line.width"
+                  />
+                }
+              </g>
+            }
+            <g [class.incoming]="outgoing() !== null">
+              @for (line of plot.lines; track line.key) {
+                <path
+                  [attr.class]="
+                    'line ' +
+                    (line.key.startsWith('person:') ? 'person-line' : line.key)
+                  "
+                  [attr.d]="line.path"
+                  [attr.stroke]="line.color"
+                  [attr.stroke-dasharray]="line.dash"
+                  [attr.stroke-width]="line.width"
+                />
+                @for (point of line.points; track point.snapshotId) {
+                  <a
+                    [attr.href]="'/snapshots?snapshot=' + point.snapshotId"
+                    [attr.aria-label]="
+                      line.label +
+                      ' on ' +
+                      point.date +
+                      ': ' +
+                      money(point.value, series.currencyCode) +
+                      '. Open snapshot.'
+                    "
+                  >
+                    <circle
+                      [attr.class]="'dot ' + line.key"
+                      [attr.cx]="point.x"
+                      [attr.cy]="point.y"
+                      [attr.fill]="line.color"
+                      r="3"
+                    >
+                      <title>
+                        {{ line.label }} · {{ point.date }} ·
+                        {{ money(point.value, series.currencyCode)
+                        }}{{
+                          point.carried
+                            ? " · " + point.carried + " carried"
+                            : ""
+                        }}
+                      </title>
+                    </circle>
+                  </a>
+                }
+              }
+            </g>
+          </svg>
+        </div>
+        @if (!investmentCategories().length) {
+          <p class="muted">
+            Choose the categories that make up your investment line.
+          </p>
+        }
+        <p class="muted">
+          Gaps mean no snapshot or an incomplete value. Lines do not interpolate
+          across missing periods. Amounts use each snapshot's saved exchange
+          rates.
+        </p>
+      </section>
+    } @else {
+      <p class="notice">No snapshots fall within this date range.</p>
+    }
+    @if (series.currencyCode === "GBP" && series.points.length) {
+      <p class="muted">
+        Earlier rand-only snapshots may lack a saved GBP rate. Those points
+        remain unplotted until historical quotes are added.
+      </p>
+    }
+  }
+}

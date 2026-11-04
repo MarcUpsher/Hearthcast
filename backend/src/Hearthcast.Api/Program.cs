@@ -38,6 +38,7 @@ builder.Services.AddHttpClient<IExchangeRateProvider, FrankfurterExchangeRatePro
 builder.Services.AddScoped<SnapshotActivityService>();
 builder.Services.AddScoped<SnapshotSummaryService>();
 builder.Services.AddScoped<MergedSnapshotSummaryService>();
+builder.Services.AddScoped<HistoricalSummarySeriesService>();
 builder.Services.AddScoped<IndividualHoldingsSummaryService>();
 builder.Services.AddScoped<HouseholdSummaryService>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);

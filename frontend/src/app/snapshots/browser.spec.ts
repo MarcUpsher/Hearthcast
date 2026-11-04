@@ -56,6 +56,7 @@ describe("Snapshot rendering", () => {
               entries: [
                 {
                   key: "one",
+                  kind: 1,
                   name: "Example pension",
                   description: "Held by Alex",
                   sourceCurrency: "GBP",

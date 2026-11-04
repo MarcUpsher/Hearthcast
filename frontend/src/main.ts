@@ -12,6 +12,11 @@ bootstrapApplication(App, {
           import("./app/snapshots/browser").then((m) => m.SnapshotBrowser),
       },
       {
+        path: "history",
+        loadComponent: () =>
+          import("./app/history/history").then((m) => m.History),
+      },
+      {
         path: "record",
         canDeactivate: [
           (component: import("./app/snapshots/editor").SnapshotEditor) =>

@@ -7,12 +7,12 @@ namespace Hearthcast.Data.Summaries;
 
 internal static class MergedSnapshotSummaryCalculator
 {
-    public static MergedSnapshotSummary Calculate(Snapshot snapshot)
+    public static MergedSnapshotSummary Calculate(Snapshot snapshot, IReadOnlyList<string>? requestedCurrencies = null)
     {
         var household = HouseholdSummaryCalculator.Calculate(snapshot);
         var individual = IndividualHoldingsSummaryCalculator.Calculate(SnapshotReportProjector.Project(snapshot));
         var all = SnapshotSummaryCalculator.Calculate(snapshot);
-        var currencies = snapshot.Currencies;
+        var currencies = requestedCurrencies ?? snapshot.Currencies;
         var people = snapshot.People.ToDictionary(p => p.Id, p => p.DisplayName);
         string Holder(ItemSnapshotSummary item) => "Held by " + people[item.HolderSnapshotPersonId];
         string Share(int basisPoints, string label) => basisPoints == 10000 ? "" : $" · {basisPoints / 100m}% {label}";
@@ -80,7 +80,7 @@ internal static class MergedSnapshotSummaryCalculator
                         {
                             var entries = group.OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Key)
                                 .Select(r => new MergedEntry(r.Key, r.Name, r.Description, r.Currency, r.Amount, r.Status,
-                                    r.InstitutionName, r.FundName, currencies.Select(target => Convert(r, target)).ToArray())).ToArray();
+                                    r.InstitutionName, r.FundName, currencies.Select(target => Convert(r, target)).ToArray(), r.Kind)).ToArray();
                             return new MergedGroup(group.Key.GroupId, group.Key.GroupName, Sum(entries.Select(e => e.Amounts)), entries);
                         }).ToArray();
                     return new MergedCategory(category.Key.CategoryId, category.Key.CategoryName, category.Key.FinancialType,
@@ -114,12 +114,12 @@ internal static class MergedSnapshotSummaryCalculator
 
     private sealed record Row(Guid CategoryId, string CategoryName, FinancialType FinancialType,
         Guid GroupId, string GroupName, string Currency, string Key, string Name, string Description,
-        decimal? Amount, bool IsCarried, string Status, string? InstitutionName = null, string? FundName = null);
+        decimal? Amount, MergedEntryKind Kind, bool IsCarried, string Status, string? InstitutionName = null, string? FundName = null);
     private static Row ItemRow(Guid categoryId, string categoryName, FinancialType type, Guid groupId, string groupName,
         string currency, ItemSnapshotSummary item, decimal? amount, string description) =>
         new(categoryId, categoryName, type, groupId, groupName, currency, "item:" + item.ItemSnapshotId,
             item.ItemName, description + (type == FinancialType.Debt ? " · Debt" : ""), type == FinancialType.Debt ? -amount : amount,
-            item.Balance.ValueOrigin == SnapshotValueOrigin.CarriedForward,
+            MergedEntryKind.Item, item.Balance.ValueOrigin == SnapshotValueOrigin.CarriedForward,
             Status(item.Balance.ValueOrigin), item.InstitutionName, item.FundName);
     private static Row AssetRow(Guid categoryId, string categoryName, FinancialType type, Guid groupId, string groupName,
         string currency, FinancedAssetSnapshotSummary asset, decimal? amount, string description)
@@ -127,7 +127,7 @@ internal static class MergedSnapshotSummaryCalculator
         var isCarried = amount.HasValue && (asset.CurrentValuation.ValueOrigin == SnapshotValueOrigin.CarriedForward
             || asset.OutstandingLoanBalance.ValueOrigin == SnapshotValueOrigin.CarriedForward);
         return new(categoryId, categoryName, type, groupId, groupName, currency, "asset:" + asset.FinancedAssetSnapshotId,
-            asset.AssetName, description, amount, isCarried,
+            asset.AssetName, description, amount, MergedEntryKind.FinancedAsset, isCarried,
             amount is null ? "Missing balances" : isCarried ? "Carried forward" : "Confirmed");
     }
     private static string Status(SnapshotValueOrigin origin) => origin == SnapshotValueOrigin.CarriedForward
