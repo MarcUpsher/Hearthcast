@@ -37,11 +37,40 @@ idempotent when rates are already complete. A stale revision returns 409. The
 snapshot browser shows pending status, retry and saved rate details.
 
 Existing snapshots receive no lookup date or rates during migration or edits.
-A separate historical backfill will use the first day of month-only snapshots,
+The historical backfill uses the first day of month-only snapshots,
 and the recorded date of day-precision snapshots, with the same on-or-before
-publication rule. Backfill and converted summaries are subsequent slices.
+publication rule. Converted summaries are a subsequent slice.
 
 Provider documentation: https://frankfurter.dev/ (v2, direct provider routes).
 The GBP/ZAR lookup for 2023-01-01 was verified against the public endpoint: it
 returned the 2022-12-30 publication. Automated tests use fake providers/HTTP
 handlers and disposable PostgreSQL databases, without sending personal data.
+
+## Historical backfill command
+
+After applying migrations, run:
+
+```sh
+docker compose run --rm --no-deps api --backfill-exchange-rates
+```
+
+For host development, supply the normal `ConnectionStrings__Hearthcast` setting:
+
+```sh
+dotnet run --no-launch-profile --project backend/src/Hearthcast.Api -- --backfill-exchange-rates
+```
+
+The command processes snapshots chronologically across households without starting
+an HTTP server. Legacy lookup dates are initialized once from the snapshot date
+(month precision uses the first). Existing lookup dates and rates are preserved,
+including dates captured when creating newer snapshots. Each snapshot commits
+separately and currency requests run sequentially. Re-running skips complete
+snapshots and retries missing rates. It never changes item values, copied metadata,
+allocations, financial dates or carry-forward history. Rate initialization and
+capture update revision/timestamps, so reload open editors after running it.
+
+Progress is followed by a JSON report containing each snapshot ID/date, lookup
+date and status. Exit code 0 means complete; 2 means unresolved snapshots remain
+(e.g. unavailable rates or concurrent edits); cancellation returns 130. Unexpected
+database failures stop the command; committed work remains resumable. Back up the
+database before running this administrative command.

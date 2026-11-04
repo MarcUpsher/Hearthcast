@@ -94,6 +94,8 @@ public sealed class Snapshot
 
     internal void InitializeExchangeRateContext(DateOnly lookupDate)
     {
+        if (ExchangeRateLookupDate.HasValue || _exchangeRates.Count != 0)
+            throw new InvalidOperationException("Existing exchange-rate context cannot be replaced.");
         ExchangeRateLookupDate = lookupDate;
         ExchangeRateBaseCurrency = Currencies.FirstOrDefault();
     }

@@ -107,3 +107,9 @@ and financed-asset equity. The detail rows come from the selected report scope,
 including the selected person's household allocation or ownership share. Values
 are API-provided contributions; debts display as deductions, and missing values
 remain Unknown. Metadata and carried/confirmed status are shown alongside names.
+
+The snapshot viewer starts with a combined summary, showing each category/group
+and expandable holding in every currency represented in the saved snapshot.
+Conversions and allocations are calculated by the backend using saved rates.
+Missing values or rates are marked incomplete. The original native-currency blocks
+and full recorded entries remain below it. See `../docs/merged-summary-slice.md`.

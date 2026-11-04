@@ -12,7 +12,9 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 
 var migrateOnly = args.Contains("--migrate");
-var builder = WebApplication.CreateBuilder(args.Where(argument => argument != "--migrate").ToArray());
+var backfillRates = args.Contains("--backfill-exchange-rates");
+if (migrateOnly && backfillRates) throw new ArgumentException("Run migration and backfill separately.");
+var builder = WebApplication.CreateBuilder(args.Where(argument => argument != "--migrate" && argument != "--backfill-exchange-rates").ToArray());
 var connectionString = builder.Configuration.GetConnectionString("Hearthcast")
     ?? throw new InvalidOperationException("Configure ConnectionStrings__Hearthcast before starting Hearthcast.");
 
@@ -27,6 +29,7 @@ builder.Services.AddScoped<TrackedItemService>();
 builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
 builder.Services.AddScoped<SnapshotExchangeRateService>();
+builder.Services.AddScoped<HistoricalExchangeRateBackfillService>();
 builder.Services.AddHttpClient<IExchangeRateProvider, FrankfurterExchangeRateProvider>(client =>
 {
     client.BaseAddress = new Uri("https://api.frankfurter.dev/");
@@ -34,6 +37,7 @@ builder.Services.AddHttpClient<IExchangeRateProvider, FrankfurterExchangeRatePro
 });
 builder.Services.AddScoped<SnapshotActivityService>();
 builder.Services.AddScoped<SnapshotSummaryService>();
+builder.Services.AddScoped<MergedSnapshotSummaryService>();
 builder.Services.AddScoped<IndividualHoldingsSummaryService>();
 builder.Services.AddScoped<HouseholdSummaryService>();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
@@ -45,6 +49,29 @@ if (migrateOnly)
     await using var context = await factory.CreateDbContextAsync();
     await context.Database.MigrateAsync();
     app.Logger.LogInformation("Database migrations completed.");
+    return;
+}
+
+if (backfillRates)
+{
+    using var cancellation = new CancellationTokenSource();
+    ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+    Console.CancelKeyPress += cancel;
+    try
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var report = await scope.ServiceProvider.GetRequiredService<HistoricalExchangeRateBackfillService>()
+            .RunAsync(cancellation.Token);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        Environment.ExitCode = report.Remaining == 0 ? 0 : 2;
+    }
+    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+    {
+        app.Logger.LogInformation("Exchange-rate backfill cancelled. Run the command again to resume.");
+        Environment.ExitCode = 130;
+    }
+    finally { Console.CancelKeyPress -= cancel; }
     return;
 }
 

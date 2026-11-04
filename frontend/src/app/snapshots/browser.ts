@@ -1,3 +1,4 @@
+import { MergedAmountCell } from "./merged-amount";
 import { money } from "../core/money";
 import { Component, effect, inject, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
@@ -15,6 +16,7 @@ import {
   SavedItem,
   SavedAsset,
   Report,
+  MergedReport,
   ReportCurrency,
   ReportGroup,
   Totals,
@@ -23,6 +25,7 @@ import {
 @Component({
   imports: [
     CommonModule,
+    MergedAmountCell,
     FormsModule,
     RouterLink,
     MatButtonModule,
@@ -41,12 +44,60 @@ export class SnapshotBrowser {
   inventory = signal<Inventory[]>([]);
   saved = signal<Snapshot | null>(null);
   reports = signal<Report[]>([]);
+  mergedReport = signal<MergedReport | null>(null);
+  collapsedMergedCategories = new Set<string>();
+  expandedMergedGroups = new Set<string>();
+  mergedView() {
+    const report = this.mergedReport();
+    if (!report) return null;
+    if (this.view === 2) return report.allRecorded;
+    if (this.view === 1)
+      return (
+        report.individualPeople.find((p) => p.personId === this.person)?.view ??
+        null
+      );
+    return this.person
+      ? (report.householdPeople.find((p) => p.personId === this.person)?.view ??
+          null)
+      : report.household;
+  }
+  selectedPersonName() {
+    return (
+      this.people().find((p) => p.person.personId === this.person)?.person
+        .displayName ?? ""
+    );
+  }
+  mergedKey(id: string, name: string, type?: number) {
+    return JSON.stringify([id, name, type]);
+  }
+  toggleMergedCategory(key: string) {
+    if (this.collapsedMergedCategories.has(key))
+      this.collapsedMergedCategories.delete(key);
+    else this.collapsedMergedCategories.add(key);
+  }
+  toggleMergedGroup(key: string) {
+    if (this.expandedMergedGroups.has(key))
+      this.expandedMergedGroups.delete(key);
+    else this.expandedMergedGroups.add(key);
+  }
   busy = signal(false);
   error = signal("");
   selected = "";
   year = "";
-  view = 0;
-  person = "";
+  private selectedView = signal(0);
+  get view() {
+    return this.selectedView();
+  }
+  set view(value: number) {
+    this.selectedView.set(value);
+  }
+  private selectedPerson = signal("");
+  get person() {
+    return this.selectedPerson();
+  }
+  set person(value: string) {
+    this.selectedPerson.set(value);
+  }
   search = "";
   currency = "";
   private generation = 0;
@@ -102,17 +153,29 @@ export class SnapshotBrowser {
     this.busy.set(true);
     this.error.set("");
     this.saved.set(null);
+    this.mergedReport.set(null);
     try {
       const base = this.w.path("snapshots/" + this.selected);
-      const [saved, ...reports] = await Promise.all([
+      const [saved, household, individual, all, merged] = await Promise.all([
         this.api.get<Snapshot>(base),
-        ...["household-summary", "individual-holdings", "summary"].map((s) =>
-          this.api.get<Report>(base + "/" + s),
-        ),
+        this.api.get<Report>(base + "/household-summary"),
+        this.api.get<Report>(base + "/individual-holdings"),
+        this.api.get<Report>(base + "/summary"),
+        this.api.get<MergedReport>(base + "/merged-summary"),
       ]);
       if (g !== this.generation) return;
+      const reports = [household, individual, all] as Report[];
+      if (
+        [...reports, merged].some(
+          (report) => report?.revision && report.revision !== saved.revision,
+        )
+      )
+        throw new Error(
+          "Snapshot changed while loading. Reload to see consistent totals and rates.",
+        );
       this.saved.set(saved);
       this.reports.set(reports);
+      this.mergedReport.set(merged ?? null);
       if (!this.people().some((p) => p.person.personId === this.person))
         this.changeView();
       void this.router.navigate([], {

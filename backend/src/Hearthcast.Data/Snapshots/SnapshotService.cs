@@ -84,6 +84,23 @@ public sealed class SnapshotService(IDbContextFactory<HearthcastDbContext> conte
         }
     }
 
+    public Task<Snapshot> InitializeHistoricalExchangeRatesAsync(Guid householdId, Guid snapshotId,
+        Guid expectedRevision, CancellationToken cancellationToken = default) =>
+        SerializableTransaction.ExecuteAsync(contextFactory, async (context, token) =>
+        {
+            var snapshot = await SnapshotGraph(context)
+                .SingleOrDefaultAsync(s => s.Id == snapshotId && s.HouseholdId == householdId, token)
+                ?? throw new ResourceNotFoundException("The snapshot does not belong to this household.");
+            if (snapshot.Revision != expectedRevision) throw new SnapshotConflictException();
+            if (snapshot.ExchangeRateLookupDate.HasValue) return snapshot;
+            var lookupDate = snapshot.DatePrecision == DatePrecision.Month
+                ? new DateOnly(snapshot.SnapshotDate.Year, snapshot.SnapshotDate.Month, 1) : snapshot.SnapshotDate;
+            snapshot.InitializeExchangeRateContext(lookupDate);
+            context.Entry(snapshot).Property(s => s.Revision).CurrentValue = Guid.NewGuid();
+            context.Entry(snapshot).Property(s => s.UpdatedAtUtc).CurrentValue = DateTimeOffset.UtcNow;
+            return snapshot;
+        }, cancellationToken);
+
     public async Task<Snapshot> GetAsync(
         Guid householdId, Guid snapshotId, CancellationToken cancellationToken = default)
     {

@@ -33,3 +33,49 @@
     vertical-align: top;
   }
 }
+
+.merged-summary {
+  border: 1px solid var(--mat-sys-primary);
+  h2 {
+    margin-top: 0;
+  }
+}
+.merged-table {
+  table-layout: fixed;
+  min-width: 760px;
+  th:first-child {
+    width: 42%;
+    text-align: left;
+  }
+  th,
+  td {
+    vertical-align: top;
+  }
+  small {
+    display: block;
+    font-weight: normal;
+    white-space: normal;
+  }
+  .merged-total {
+    background: var(--mat-sys-surface-container-high);
+    font-weight: 700;
+    font-size: 1.15rem;
+  }
+  .merged-category {
+    background: var(--mat-sys-surface-container);
+  }
+  .merged-group th:first-child {
+    padding-left: 24px;
+  }
+  .merged-entry td:first-child {
+    padding-left: 56px;
+  }
+  .incomplete {
+    color: var(--mat-sys-tertiary);
+  }
+  button {
+    justify-content: flex-start;
+    white-space: normal;
+    text-align: left;
+  }
+}

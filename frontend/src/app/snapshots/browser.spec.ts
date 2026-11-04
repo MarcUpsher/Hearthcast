@@ -1,7 +1,14 @@
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Api, Workspace, Report, ReportGroup, Snapshot } from "../core/api";
+import {
+  Api,
+  Workspace,
+  Report,
+  ReportGroup,
+  Snapshot,
+  MergedView,
+} from "../core/api";
 import { SnapshotBrowser } from "./browser";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatSelectHarness } from "@angular/material/select/testing";
@@ -9,6 +16,211 @@ import { MatSelectHarness } from "@angular/material/select/testing";
 describe("Snapshot rendering", () => {
   beforeEach(() => vi.stubEnv("TZ", "Europe/London"));
   afterEach(() => vi.unstubAllEnvs());
+  it("places the combined summary first, expands items, marks partial values and follows the selected person", async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: Api, useValue: {} },
+        { provide: Workspace, useValue: { current: () => null } },
+      ],
+    });
+    const fixture = TestBed.createComponent(SnapshotBrowser);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const browser = fixture.componentInstance;
+    const amount = (
+      currencyCode: string,
+      knownSubtotal: number | null,
+      missing = 0,
+    ) => ({
+      currencyCode,
+      knownSubtotal,
+      missingValueCount: missing,
+      missingRateCount: 0,
+      carriedEntryCount: 0,
+      isComplete: missing === 0,
+    });
+    const whole: MergedView = {
+      amounts: [amount("GBP", 100), amount("ZAR", 2000)],
+      categories: [
+        {
+          categoryId: "investments",
+          categoryName: "Investments",
+          financialType: 1,
+          amounts: [amount("GBP", 100), amount("ZAR", 2000)],
+          groups: [
+            {
+              groupId: "pensions",
+              groupName: "Pensions",
+              amounts: [amount("GBP", 100), amount("ZAR", 2000)],
+              entries: [
+                {
+                  key: "one",
+                  name: "Example pension",
+                  description: "Held by Alex",
+                  sourceCurrency: "GBP",
+                  sourceAmount: 100,
+                  status: "Confirmed",
+                  institutionName: "Example institution",
+                  fundName: null,
+                  amounts: [amount("GBP", 100), amount("ZAR", 2000)],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    browser.saved.set({
+      id: "s",
+      people: [],
+      itemSnapshots: [],
+      financedAssetSnapshots: [],
+    } as unknown as Snapshot);
+    browser.mergedReport.set({
+      snapshotId: "s",
+      revision: "r",
+      currencies: ["GBP", "ZAR"],
+      household: whole,
+      householdPeople: [
+        {
+          personId: "alex",
+          view: { ...whole, amounts: [amount("GBP", 50), amount("ZAR", 1000)] },
+        },
+      ],
+      individualPeople: [
+        {
+          personId: "alex",
+          view: {
+            amounts: [amount("GBP", null, 1), amount("ZAR", null, 1)],
+            categories: [],
+          },
+        },
+      ],
+      allRecorded: whole,
+    });
+    fixture.detectChanges();
+    let block: HTMLElement =
+      fixture.nativeElement.querySelector(".merged-summary");
+    expect(block.textContent).toContain("£ 100.00");
+    expect(block.textContent).toContain("R 2 000.00");
+    expect(block.querySelector(".merged-entry")).toBeNull();
+    const button = [...block.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Pensions"),
+    )!;
+    button.click();
+    fixture.detectChanges();
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(block.querySelector(".merged-entry")?.textContent).toContain(
+      "Example pension",
+    );
+    expect(block.textContent).toContain("Native: £ 100.00 GBP");
+    expect(block.textContent).toContain("Example institution");
+    browser.person = "alex";
+    expect(browser.mergedView()?.amounts[0].knownSubtotal).toBe(50);
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    block = fixture.nativeElement.querySelector(".merged-summary");
+    expect(block.querySelector(".merged-total")?.textContent).toContain(
+      "£ 50.00",
+    );
+    browser.view = 1;
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    block = fixture.nativeElement.querySelector(".merged-summary");
+    expect(block.textContent).toContain("Unknown");
+    expect(block.textContent).toContain("Incomplete");
+    expect(block.textContent).toContain("1 missing values");
+    expect(
+      block.compareDocumentPosition(
+        fixture.nativeElement.querySelector(".cards"),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+  it.each([
+    "household-summary",
+    "individual-holdings",
+    "summary",
+    "merged-summary",
+  ])(
+    "hides inconsistent results from %s and recovers on retry",
+    async (mismatchedEndpoint) => {
+      let mismatch = true;
+      const saved = {
+        id: "snapshot",
+        revision: "current",
+        snapshotDate: "2023-01-01",
+        datePrecision: 2,
+        people: [],
+        itemSnapshots: [],
+        financedAssetSnapshots: [],
+      } as unknown as Snapshot;
+      const emptyView = { amounts: [], categories: [] };
+      const get = vi.fn(async (path: string) => {
+        if (path.endsWith("/snapshots")) return [saved];
+        if (path.endsWith("/snapshot")) return saved;
+        const endpoint = path.split("/").at(-1);
+        const revision =
+          mismatch && endpoint === mismatchedEndpoint ? "old" : "current";
+        return endpoint === "merged-summary"
+          ? {
+              snapshotId: saved.id,
+              revision,
+              currencies: [],
+              household: emptyView,
+              householdPeople: [],
+              individualPeople: [],
+              allRecorded: emptyView,
+            }
+          : { revision, currencies: [], people: [] };
+      });
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([]),
+          { provide: Api, useValue: { get } },
+          {
+            provide: Workspace,
+            useValue: {
+              current: () => null,
+              path: (path: string) => "households/example/" + path,
+            },
+          },
+        ],
+      });
+      const fixture = TestBed.createComponent(SnapshotBrowser);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const browser = fixture.componentInstance;
+      browser.selected = saved.id;
+      await browser.open();
+      fixture.detectChanges();
+      expect(browser.saved()).toBeNull();
+      expect(browser.mergedReport()).toBeNull();
+      expect(browser.busy()).toBe(false);
+      expect(
+        fixture.nativeElement.querySelector('[role="alert"]').textContent,
+      ).toContain("Snapshot changed while loading");
+      expect(fixture.nativeElement.querySelector(".merged-summary")).toBeNull();
+      expect(fixture.nativeElement.querySelector(".cards")).toBeNull();
+
+      mismatch = false;
+      const retry = [...fixture.nativeElement.querySelectorAll("button")].find(
+        (button) =>
+          (button as HTMLButtonElement).textContent?.trim() === "Retry",
+      ) as HTMLButtonElement;
+      retry.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(browser.error()).toBe("");
+      expect(browser.saved()?.revision).toBe("current");
+      expect(browser.mergedReport()?.revision).toBe("current");
+      expect(
+        fixture.nativeElement.querySelector(".merged-summary"),
+      ).not.toBeNull();
+    },
+  );
   it("shows pending rates and retries against the displayed snapshot revision", async () => {
     const send = vi.fn().mockResolvedValue({});
     TestBed.configureTestingModule({

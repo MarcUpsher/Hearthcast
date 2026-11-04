@@ -157,6 +157,7 @@ export interface ReportCurrency {
   }[];
 }
 export interface Report {
+  revision?: string;
   currencies: ReportCurrency[];
   people: {
     person: { personId: string; displayName: string };
@@ -192,6 +193,49 @@ export interface SavedAsset {
   outstandingLoanBalance: number | null;
   availableToWithdraw: number | null;
   hasWithdrawalFacility: boolean;
+}
+export interface MergedAmount {
+  currencyCode: string;
+  knownSubtotal: number | null;
+  missingValueCount: number;
+  missingRateCount: number;
+  carriedEntryCount: number;
+  isComplete: boolean;
+}
+export interface MergedEntry {
+  key: string;
+  name: string;
+  description: string;
+  sourceCurrency: string;
+  sourceAmount: number | null;
+  status: string;
+  institutionName: string | null;
+  fundName: string | null;
+  amounts: MergedAmount[];
+}
+export interface MergedView {
+  amounts: MergedAmount[];
+  categories: {
+    categoryId: string;
+    categoryName: string;
+    financialType: number;
+    amounts: MergedAmount[];
+    groups: {
+      groupId: string;
+      groupName: string;
+      amounts: MergedAmount[];
+      entries: MergedEntry[];
+    }[];
+  }[];
+}
+export interface MergedReport {
+  snapshotId: string;
+  revision: string;
+  currencies: string[];
+  household: MergedView;
+  householdPeople: { personId: string; view: MergedView }[];
+  individualPeople: { personId: string; view: MergedView }[];
+  allRecorded: MergedView;
 }
 export interface Snapshot {
   exchangeRateLookupDate?: string | null;

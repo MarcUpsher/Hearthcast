@@ -94,10 +94,154 @@
     </details>
   }
 
+  @if (mergedView(); as merged) {
+    <section
+      class="panel merged-summary"
+      aria-label="Combined currency summary"
+    >
+      <h2>Combined summary</h2>
+      <p class="muted">
+        {{
+          view === 2
+            ? "All recorded balances"
+            : view === 1
+              ? "Individual holdings"
+              : "Household contributions"
+        }}
+        @if (person) {
+          · {{ selectedPersonName() }}
+        }
+        · Each column values the same holdings in that currency using this
+        snapshot's saved rates.
+      </p>
+      <div class="scroll">
+        <table class="merged-table">
+          <thead>
+            <tr>
+              <th>Category / group / item</th>
+              @for (currency of mergedReport()!.currencies; track currency) {
+                <th class="numeric">{{ currency }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="merged-total">
+              <th>Net position</th>
+              @for (cell of merged.amounts; track cell.currencyCode) {
+                <td appMergedAmount [cell]="cell"></td>
+              }
+            </tr>
+            @for (
+              category of merged.categories;
+              track mergedKey(
+                category.categoryId,
+                category.categoryName,
+                category.financialType
+              )
+            ) {
+              @let categoryKey =
+                mergedKey(
+                  category.categoryId,
+                  category.categoryName,
+                  category.financialType
+                );
+              <tr class="merged-category">
+                <th>
+                  <button
+                    mat-button
+                    [attr.aria-expanded]="
+                      !collapsedMergedCategories.has(categoryKey)
+                    "
+                    (click)="toggleMergedCategory(categoryKey)"
+                  >
+                    <span aria-hidden="true">{{
+                      collapsedMergedCategories.has(categoryKey) ? "▸" : "▾"
+                    }}</span>
+                    {{ category.categoryName }}
+                  </button>
+                </th>
+                @for (cell of category.amounts; track cell.currencyCode) {
+                  <td appMergedAmount [cell]="cell"></td>
+                }
+              </tr>
+              @if (!collapsedMergedCategories.has(categoryKey)) {
+                @for (
+                  group of category.groups;
+                  track mergedKey(group.groupId, group.groupName)
+                ) {
+                  @let groupKey =
+                    categoryKey + mergedKey(group.groupId, group.groupName);
+                  <tr class="merged-group">
+                    <th>
+                      <button
+                        mat-button
+                        [attr.aria-expanded]="
+                          expandedMergedGroups.has(groupKey)
+                        "
+                        (click)="toggleMergedGroup(groupKey)"
+                      >
+                        <span aria-hidden="true">{{
+                          expandedMergedGroups.has(groupKey) ? "▾" : "▸"
+                        }}</span>
+                        {{ group.groupName }}
+                      </button>
+                    </th>
+                    @for (cell of group.amounts; track cell.currencyCode) {
+                      <td appMergedAmount [cell]="cell"></td>
+                    }
+                  </tr>
+                  @if (expandedMergedGroups.has(groupKey)) {
+                    @for (entry of group.entries; track entry.key) {
+                      <tr class="merged-entry">
+                        <td>
+                          {{ entry.name }}
+                          <small
+                            >{{ entry.description }} · {{ entry.status }}</small
+                          >
+                          <small
+                            >Native:
+                            {{
+                              money(entry.sourceAmount, entry.sourceCurrency)
+                            }}
+                            {{ entry.sourceCurrency }}</small
+                          >
+                          @if (entry.institutionName) {
+                            <small
+                              >Institution: {{ entry.institutionName }}</small
+                            >
+                          }
+                          @if (entry.fundName) {
+                            <small>Fund: {{ entry.fundName }}</small>
+                          }
+                        </td>
+                        @for (cell of entry.amounts; track cell.currencyCode) {
+                          <td appMergedAmount [cell]="cell"></td>
+                        }
+                      </tr>
+                    }
+                  }
+                }
+              }
+            } @empty {
+              <tr>
+                <td [attr.colspan]="mergedReport()!.currencies.length + 1">
+                  No holdings in this view.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">
+        Totals describe recorded coverage. Incomplete amounts include only
+        values that can be calculated; unknown values are never treated as zero.
+      </p>
+    </section>
+  }
   <p class="notice">
     Totals reflect the entries recorded or carried in this snapshot. Earlier
-    history may have incomplete household coverage. Currencies are kept
-    separate.
+    history may have incomplete household coverage. The sections below show
+    amounts separately in their original currencies.
   </p>
   <div class="cards">
     @for (c of currencies(); track c.currencyCode) {
