@@ -38,13 +38,13 @@ public sealed class HistoricalSummarySeriesApiTests : IAsyncLifetime
         var (home, investments, jan, feb, april) = await Setup();
         var zar = (await _client.GetFromJsonAsync<HistoricalSummarySeries>(Path(home, 3, "ZAR")))!;
         Assert.Equal(new[] { "GBP", "ZAR" }, zar.AvailableCurrencies);
-        Assert.Equal(new[] { feb.Id, april.Id }, zar.Points.Select(p => p.SnapshotId));
-        Assert.Equal(new decimal?[] { 200m, 500m }, zar.Points.Select(p => p.NetPosition.KnownSubtotal).ToArray());
+        Assert.Equal(new[] { jan.Id, feb.Id, april.Id }, zar.Points.Select(p => p.SnapshotId));
+        Assert.Equal(new decimal?[] { 100m, 200m, 500m }, zar.Points.Select(p => p.NetPosition.KnownSubtotal).ToArray());
         Assert.All(zar.Points, p => Assert.True(p.NetPosition.IsComplete));
         Assert.Equal(investments, zar.Points[0].Categories.Single().CategoryId);
-        Assert.Equal(200m, zar.Points[0].Categories.Single().Amount.KnownSubtotal);
+        Assert.Equal(100m, zar.Points[0].Categories.Single().Amount.KnownSubtotal);
         Assert.Equal(0m, zar.Points[0].FinancedEquity.KnownSubtotal);
-        Assert.Equal(april.Revision, zar.Points[1].Revision);
+        Assert.Equal(april.Revision, zar.Points[2].Revision);
 
         var gbp = (await _client.GetFromJsonAsync<HistoricalSummarySeries>(Path(home, 1, "GBP")))!;
         Assert.Equal(new[] { jan.Id, feb.Id, april.Id }, gbp.Points.Select(p => p.SnapshotId));
@@ -53,6 +53,20 @@ public sealed class HistoricalSummarySeriesApiTests : IAsyncLifetime
         Assert.False(gbp.Points[0].NetPosition.IsComplete);
         Assert.Equal(25m, gbp.Points[2].NetPosition.KnownSubtotal);
         Assert.True(gbp.Points[2].NetPosition.IsComplete);
+    }
+
+    [Fact]
+    public async Task CoarseIntervalsPreserveFirstAndLastReadingsWithoutDuplicatingSinglePoints()
+    {
+        var (home, _, jan, feb, april) = await Setup();
+        foreach (var interval in new[] { 6, 12 })
+        {
+            var report = (await _client.GetFromJsonAsync<HistoricalSummarySeries>(Path(home, interval, "ZAR")))!;
+            Assert.Equal(new[] { jan.Id, april.Id }, report.Points.Select(p => p.SnapshotId));
+        }
+        var single = (await _client.GetFromJsonAsync<HistoricalSummarySeries>(
+            $"/api/households/{home}/summary-history?from=2023-02-01&to=2023-02-28&intervalMonths=12&currency=ZAR"))!;
+        Assert.Equal(feb.Id, Assert.Single(single.Points).SnapshotId);
     }
 
     [Fact]

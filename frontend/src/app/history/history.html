@@ -1,8 +1,17 @@
-<h1>History</h1>
-<p class="muted">
-  Follow your household's recorded position through time. Select a point to open
-  its snapshot.
-</p>
+<section class="page-heading">
+  <div>
+    <h1>History</h1>
+    <p class="muted">
+      Follow your household's recorded position through time. Select a point to
+      open its snapshot.
+    </p>
+  </div>
+  @if (w.current()) {
+    <div class="page-actions">
+      <a mat-flat-button routerLink="/record">Record snapshot</a>
+    </div>
+  }
+</section>
 @if (!w.current()) {
   <p class="notice">Create a household to begin.</p>
   <a mat-flat-button routerLink="/setup">Set up household</a>
@@ -79,9 +88,7 @@
           </div>
           <div class="legend" aria-label="Graph lines">
             @for (line of plot.lines; track line.key) {
-              <span [style.color]="line.color" [class.dashed]="line.dash">{{
-                line.label
-              }}</span>
+              <span [style.color]="line.color">{{ line.label }}</span>
             }
           </div>
         </div>
@@ -93,6 +100,9 @@
         }
         <div class="graph-scroll">
           <svg
+            (mousemove)="hoverChart($event)"
+            (mouseleave)="hoveredReading.set(null)"
+            (click)="openReading($event)"
             viewBox="0 0 1000 420"
             role="img"
             aria-label="Investment, equity and net position over time"
@@ -124,9 +134,9 @@
                         ? 'person-line'
                         : line.key)
                     "
+                    [attr.data-key]="line.key"
                     [attr.d]="line.path"
                     [attr.stroke]="line.color"
-                    [attr.stroke-dasharray]="line.dash"
                     [attr.stroke-width]="line.width"
                   />
                 }
@@ -136,17 +146,32 @@
               @for (line of plot.lines; track line.key) {
                 <path
                   [attr.class]="
-                    'line ' +
+                    'line current-line ' +
                     (line.key.startsWith('person:') ? 'person-line' : line.key)
                   "
+                  [attr.data-key]="line.key"
                   [attr.d]="line.path"
                   [attr.stroke]="line.color"
-                  [attr.stroke-dasharray]="line.dash"
                   [attr.stroke-width]="line.width"
                 />
+                @for (point of line.isolated; track $index) {
+                  <circle
+                    [attr.cx]="point.x"
+                    [attr.cy]="point.y"
+                    r="3"
+                    [attr.fill]="line.color"
+                  />
+                }
                 @for (point of line.points; track point.snapshotId) {
                   <a
                     [attr.href]="'/snapshots?snapshot=' + point.snapshotId"
+                    (focus)="focusReading($event, line, point)"
+                    (blur)="hoveredReading.set(null)"
+                    [attr.aria-describedby]="
+                      hoveredReading()?.lineKey === line.key
+                        ? 'history-reading-tooltip'
+                        : null
+                    "
                     [attr.aria-label]="
                       line.label +
                       ' on ' +
@@ -157,22 +182,12 @@
                     "
                   >
                     <circle
-                      [attr.class]="'dot ' + line.key"
+                      class="point-target"
                       [attr.cx]="point.x"
                       [attr.cy]="point.y"
-                      [attr.fill]="line.color"
-                      r="3"
-                    >
-                      <title>
-                        {{ line.label }} · {{ point.date }} ·
-                        {{ money(point.value, series.currencyCode)
-                        }}{{
-                          point.carried
-                            ? " · " + point.carried + " carried"
-                            : ""
-                        }}
-                      </title>
-                    </circle>
+                      fill="transparent"
+                      r="10"
+                    />
                   </a>
                 }
               }
@@ -200,4 +215,17 @@
       </p>
     }
   }
+}
+
+@if (hoveredReading(); as reading) {
+  <div
+    #readingPopup
+    id="history-reading-tooltip"
+    role="tooltip"
+    class="chart-popup"
+    [style.left.px]="reading.x"
+    [style.top.px]="reading.y"
+  >
+    {{ reading.message }}
+  </div>
 }

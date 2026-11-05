@@ -30,7 +30,7 @@ import { Workspace } from "./core/api";
       @if (w.households().length) {
         <mat-select
           aria-label="Household"
-          style="width:200px;margin-left:auto"
+          class="household-picker"
           [ngModel]="w.current()?.id"
           (ngModelChange)="w.select($event)"
         >

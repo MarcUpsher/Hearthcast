@@ -18,7 +18,7 @@
 .summary-group {
   margin: 8px 0 8px 20px;
   summary {
-    padding: 12px;
+    padding: 8px 12px;
   }
   .group-total {
     float: right;
@@ -35,7 +35,12 @@
 }
 
 .merged-summary {
-  border: 1px solid var(--mat-sys-primary);
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--mat-sys-primary) 35%,
+      var(--mat-sys-outline-variant)
+    );
   h2 {
     margin-top: 0;
   }

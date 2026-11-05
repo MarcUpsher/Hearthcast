@@ -1,5 +1,14 @@
-<h1>Snapshots</h1>
-<p class="muted">Your household finances, one recorded moment at a time.</p>
+<section class="page-heading">
+  <div>
+    <h1>Snapshots</h1>
+    <p class="muted">Your household finances, one recorded moment at a time.</p>
+  </div>
+  @if (w.current()) {
+    <div class="page-actions">
+      <a mat-flat-button routerLink="/record">Record snapshot</a>
+    </div>
+  }
+</section>
 @if (!w.current()) {
   <p class="notice">Create a household to begin.</p>
   <a mat-flat-button routerLink="/setup">Set up household</a>

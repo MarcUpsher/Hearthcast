@@ -1,6 +1,16 @@
-import { Component, computed, effect, inject, signal } from "@angular/core";
+import { smoothPath } from "./smooth-path";
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  afterRenderEffect,
+  viewChild,
+  ElementRef,
+} from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { RouterLink } from "@angular/router";
+import { Router, RouterLink } from "@angular/router";
 import { MatButtonModule } from "@angular/material/button";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
@@ -20,9 +30,9 @@ type ChartLine = {
   key: string;
   label: string;
   color: string;
-  dash: string | null;
   width: number;
   path: string;
+  isolated: { x: number; y: number }[];
   points: {
     x: number;
     y: number;
@@ -69,6 +79,13 @@ const today = () => {
 })
 export class History {
   private api = inject(Api);
+  private router = inject(Router);
+  hoveredReading = signal<{
+    lineKey: string;
+    message: string;
+    x: number;
+    y: number;
+  } | null>(null);
   w = inject(Workspace);
   inventory = signal<Inventory[]>([]);
   report = signal<HistorySeries | null>(null);
@@ -76,7 +93,7 @@ export class History {
   error = signal("");
   from = "";
   to = today();
-  interval = 3;
+  interval = 6;
   currency = "ZAR";
   investmentCategories = signal<string[]>([]);
   private categoriesInitialized = false;
@@ -99,10 +116,29 @@ export class History {
   });
   money = money;
 
+  private popup = viewChild<ElementRef<HTMLElement>>("readingPopup");
+
   constructor() {
+    afterRenderEffect(() => {
+      const reading = this.hoveredReading();
+      const element = this.popup()?.nativeElement;
+      if (!reading || !element) return;
+      const bounds = element.getBoundingClientRect();
+      const x = Math.max(
+        8,
+        Math.min(reading.x, window.innerWidth - bounds.width - 8),
+      );
+      const y = Math.max(
+        8,
+        Math.min(reading.y, window.innerHeight - bounds.height - 8),
+      );
+      if (x !== reading.x || y !== reading.y)
+        this.hoveredReading.set({ ...reading, x, y });
+    });
     effect(() => {
       const householdId = this.w.current()?.id;
       this.generation++;
+      this.hoveredReading.set(null);
       this.report.set(null);
       this.inventory.set([]);
       this.personColorById.clear();
@@ -139,6 +175,7 @@ export class History {
 
   async load() {
     const generation = ++this.generation;
+    this.hoveredReading.set(null);
     this.busy.set(false);
     this.error.set("");
     if (!this.w.current()) return;
@@ -195,6 +232,125 @@ export class History {
   categoriesChanged(ids: string[]) {
     this.investmentCategories.set(ids);
     this.outgoing.set(null);
+    this.hoveredReading.set(null);
+  }
+
+  private nearestReading(event: MouseEvent, line: ChartLine) {
+    const svg =
+      (event.currentTarget as SVGElement).tagName === "svg"
+        ? (event.currentTarget as SVGSVGElement)
+        : (event.currentTarget as SVGElement).ownerSVGElement;
+    const bounds = svg?.getBoundingClientRect();
+    if (!bounds?.width || !line.points.length) return null;
+    const x = ((event.clientX - bounds.left) * width) / bounds.width;
+    return line.points.reduce((nearest, point) =>
+      Math.abs(point.x - x) < Math.abs(nearest.x - x) ? point : nearest,
+    );
+  }
+
+  hoverChart(event: MouseEvent) {
+    const svg = event.currentTarget as SVGSVGElement;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+    const candidates: { line: ChartLine; distance: number }[] = [];
+    for (const line of this.chart()?.lines ?? []) {
+      const path = [
+        ...svg.querySelectorAll<SVGPathElement>(".current-line"),
+      ].find((path) => path.dataset["key"] === line.key);
+      let distance = Infinity;
+      if (path) {
+        // Sample the rendered curve in screen pixels so SVG scaling and smoothing
+        // are both included in hit testing. Isolated readings are checked below.
+        const length = path.getTotalLength();
+        for (
+          let offset = 0;
+          offset <= length;
+          offset += Math.max(1, length / 600)
+        ) {
+          const point = path.getPointAtLength(offset).matrixTransform(matrix);
+          distance = Math.min(
+            distance,
+            Math.hypot(point.x - event.clientX, point.y - event.clientY),
+          );
+        }
+      }
+      for (const point of line.points) {
+        const screen = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+        distance = Math.min(
+          distance,
+          Math.hypot(screen.x - event.clientX, screen.y - event.clientY),
+        );
+      }
+      candidates.push({ line, distance });
+    }
+    candidates.sort((a, b) => a.distance - b.distance);
+    const nearest = candidates[0];
+    if (!nearest || nearest.distance > 10) {
+      this.hoveredReading.set(null);
+      return;
+    }
+    const matches = candidates.filter(
+      (candidate) => candidate.distance <= nearest.distance + 1,
+    );
+    const readings = matches.map(({ line }) => ({
+      line,
+      point: this.nearestReading(event, line)!,
+    }));
+    this.showReading(
+      nearest.line,
+      readings[0].point,
+      event.clientX,
+      event.clientY,
+    );
+    this.hoveredReading.update(
+      (reading) =>
+        reading && {
+          ...reading,
+          message: readings
+            .map(({ line, point }) => this.readingMessage(line, point))
+            .join("\n"),
+        },
+    );
+  }
+
+  private readingMessage(line: ChartLine, point: ChartLine["points"][number]) {
+    return `${line.label} · ${point.date} · ${money(point.value, this.report()!.currencyCode)}${point.carried ? ` · ${point.carried} carried` : ""}`;
+  }
+
+  focusReading(
+    event: FocusEvent,
+    line: ChartLine,
+    point: ChartLine["points"][number],
+  ) {
+    const bounds = (event.currentTarget as SVGElement).getBoundingClientRect();
+    this.showReading(line, point, bounds.right, bounds.top);
+  }
+
+  private showReading(
+    line: ChartLine,
+    point: ChartLine["points"][number],
+    x: number,
+    y: number,
+  ) {
+    this.hoveredReading.set({
+      lineKey: line.key,
+      x: Math.max(8, Math.min(x + 14, window.innerWidth - 8)),
+      y: Math.max(8, Math.min(y + 14, window.innerHeight - 8)),
+      message: this.readingMessage(line, point),
+    });
+  }
+
+  openReading(event: MouseEvent) {
+    if ((event.target as Element).closest("a")) return;
+    const line = this.chart()?.lines.find(
+      (line) => line.key === this.hoveredReading()?.lineKey,
+    );
+    if (!line) return;
+    const point = this.nearestReading(event, line);
+    if (point)
+      void this.router.navigate(["/snapshots"], {
+        queryParams: { snapshot: point.snapshotId },
+      });
   }
 
   private personColor(personId: string): string {
@@ -258,10 +414,7 @@ export class History {
           )
         )
           people.set(person.personId, person.displayName);
-    const definitions: (Pick<
-      ChartLine,
-      "key" | "label" | "color" | "dash" | "width"
-    > & {
+    const definitions: (Pick<ChartLine, "key" | "label" | "color" | "width"> & {
       values: (number | null)[];
       amounts: HistoryAmount[];
     })[] = [
@@ -269,7 +422,6 @@ export class History {
         key: "investments",
         label: "Household investments",
         color: "#42c9ff",
-        dash: null,
         width: 3,
         amounts: report.points.map((point) =>
           this.investment(point.categories, selected),
@@ -280,7 +432,6 @@ export class History {
         key: "equity",
         label: "Financed equity",
         color: "#ffc35a",
-        dash: "9 5",
         width: 2.7,
         amounts: report.points.map((point) => point.financedEquity),
         values: [],
@@ -289,7 +440,6 @@ export class History {
         key: "net",
         label: "Household net position",
         color: "#ec8cda",
-        dash: null,
         width: 3.5,
         amounts: report.points.map((point) => point.netPosition),
         values: [],
@@ -302,7 +452,6 @@ export class History {
           key: `person:${personId}`,
           label: `${name} investments`,
           color: this.personColor(personId),
-          dash: "4 4",
           width: 2.4,
           amounts: report.points.map((point) => {
             const person = point.people.find(
@@ -319,7 +468,10 @@ export class History {
       .filter((value): value is number => value !== null);
     const minimum = Math.min(0, ...values);
     const observedMaximum = Math.max(0, ...values);
-    const maximum = observedMaximum === minimum ? minimum + 1 : observedMaximum;
+    const maximum =
+      observedMaximum === minimum
+        ? minimum + 1
+        : observedMaximum + (observedMaximum - minimum) * 0.1;
     const span = maximum - minimum;
     const minDate = dateNumber(report.from);
     const maxDate = Math.max(minDate + 86400000, dateNumber(report.to));
@@ -335,7 +487,7 @@ export class History {
       return Math.floor((year * 12 + month) / report.intervalMonths);
     };
     const lines: ChartLine[] = definitions.map((line) => {
-      let path = "";
+      const segments: { x: number; y: number }[][] = [];
       let previousBucket: number | null = null;
       const points: ChartLine["points"] = [];
       report.points.forEach((point, index) => {
@@ -347,7 +499,15 @@ export class History {
         }
         const px = x(point.snapshotDate);
         const py = y(value);
-        path += `${previousBucket !== null && currentBucket - previousBucket === 1 ? "L" : "M"}${px.toFixed(2)} ${py.toFixed(2)} `;
+        const segment = segments.at(-1);
+        if (
+          previousBucket !== null &&
+          currentBucket - previousBucket <= 1 &&
+          segment &&
+          px > segment.at(-1)!.x
+        )
+          segment.push({ x: px, y: py });
+        else segments.push([{ x: px, y: py }]);
         previousBucket = currentBucket;
         points.push({
           x: px,
@@ -362,9 +522,9 @@ export class History {
         key: line.key,
         label: line.label,
         color: line.color,
-        dash: line.dash,
         width: line.width,
-        path,
+        path: segments.map(smoothPath).join(""),
+        isolated: segments.filter((segment) => segment.length === 1).flat(),
         points,
       };
     });

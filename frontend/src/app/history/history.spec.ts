@@ -183,6 +183,24 @@ describe("History graph", () => {
     );
     expect(chart.textContent).toContain("Alex investments");
     expect(chart.textContent).toContain("Morgan investments");
+    const target = chart.querySelector(".point-target")!;
+    expect(target.getAttribute("fill")).toBe("transparent");
+    expect(target.getAttribute("r")).toBe("10");
+    const anchor = target.closest("a")!;
+    anchor.dispatchEvent(new FocusEvent("focus"));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(chart.querySelector('[role="tooltip"]')!.textContent).toContain(
+      "2023-01-01",
+    );
+    anchor.dispatchEvent(new FocusEvent("blur"));
+    fixture.detectChanges();
+    expect(chart.querySelector('[role="tooltip"]')).toBeNull();
+    const netLine = history.chart()!.lines.find((line) => line.key === "net")!;
+    expect(Math.min(...netLine.points.map((point) => point.y))).toBeGreaterThan(
+      Math.min(...history.chart()!.ticks.map((tick) => tick.y)),
+    );
+
     expect(
       chart.querySelector('a[href="/snapshots?snapshot=one"]'),
     ).not.toBeNull();
@@ -234,7 +252,7 @@ describe("History graph", () => {
     fixture.detectChanges();
     expect(history.report()?.currencyCode).toBe("GBP");
     expect(get).toHaveBeenCalledWith(
-      expect.stringContaining("intervalMonths=3&currency=GBP"),
+      expect.stringContaining("intervalMonths=6&currency=GBP"),
     );
     history.from = "2025-01-01";
     history.to = "2024-01-01";
@@ -309,6 +327,82 @@ describe("History graph", () => {
       history.chart()!.lines.find((line) => line.key === "person:morgan")!
         .color,
     ).toBe(color);
+  });
+
+  it("connects preserved endpoint readings within the same calendar interval", async () => {
+    const history = await setupChart();
+    const data = report();
+    data.intervalMonths = 12;
+    data.points = [data.points[0], data.points[2]];
+    history.report.set(data);
+    const path = history
+      .chart()!
+      .lines.find((line) => line.key === "net")!.path;
+    expect(path.match(/M/g)).toHaveLength(1);
+    expect(path.match(/C/g)).toHaveLength(1);
+  });
+
+  it("selects the closest series and includes coincident readings", async () => {
+    const history = await setupChart();
+    history.report.set(report());
+    const lines = history.chart()!.lines;
+    const net = lines.find((line) => line.key === "net")!;
+    const equity = lines.find((line) => line.key === "equity")!;
+    const point = net.points[0];
+    vi.stubGlobal(
+      "DOMPoint",
+      class {
+        constructor(
+          public x: number,
+          public y: number,
+        ) {}
+        matrixTransform() {
+          return this;
+        }
+      },
+    );
+    const svg = {
+      tagName: "svg",
+      getScreenCTM: () => ({}),
+      querySelectorAll: () => [],
+      getBoundingClientRect: () => ({ left: 0, width: 1000 }),
+    };
+    const event = {
+      currentTarget: svg,
+      clientX: point.x,
+      clientY: point.y,
+    } as unknown as MouseEvent;
+    try {
+      history.hoverChart(event);
+      expect(history.hoveredReading()?.lineKey).toBe("net");
+      equity.points[0].y = point.y;
+      history.hoverChart(event);
+      expect(history.hoveredReading()?.message).toContain("Financed equity");
+      expect(history.hoveredReading()?.message).toContain(
+        "Household net position",
+      );
+      history.hoverChart({ ...event, clientY: -100 } as MouseEvent);
+      expect(history.hoveredReading()).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps isolated readings visible without adding markers to connected lines", async () => {
+    const history = await setupChart();
+    history.report.set(report());
+    expect(
+      history.chart()!.lines.find((line) => line.key === "equity")!.isolated,
+    ).toHaveLength(0);
+    expect(
+      history.chart()!.lines.find((line) => line.key === "net")!.isolated,
+    ).toHaveLength(2);
+    const data = report();
+    data.points = [data.points[0]];
+    history.report.set(data);
+    expect(
+      history.chart()!.lines.find((line) => line.key === "net")!.isolated,
+    ).toHaveLength(1);
   });
 
   it("uses distinct vertical ticks for an all-zero portfolio", async () => {

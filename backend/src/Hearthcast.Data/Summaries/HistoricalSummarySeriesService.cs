@@ -35,6 +35,10 @@ public sealed class HistoricalSummarySeriesService(IDbContextFactory<HearthcastD
         var selected = inventory.GroupBy(s => Bucket(s.SnapshotDate, intervalMonths))
             .Select(group => group.OrderByDescending(s => s.SnapshotDate).ThenByDescending(s => s.CreatedAtUtc)
                 .ThenBy(s => s.Id).First())
+            // Keep the first actual reading even when its calendar bucket ends later.
+            .Concat(inventory.OrderBy(s => s.SnapshotDate).ThenByDescending(s => s.CreatedAtUtc)
+                .ThenBy(s => s.Id).Take(1))
+            .DistinctBy(s => s.Id)
             .OrderBy(s => s.SnapshotDate).ToArray();
         var loaded = (await snapshots.GetManyAsync(householdId, selected.Select(s => s.Id).ToArray(), cancellationToken))
             .ToDictionary(s => s.Id);

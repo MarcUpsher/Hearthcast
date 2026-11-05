@@ -3,7 +3,9 @@
 `GET /api/households/{householdId}/summary-history?from=2020-01-01&to=2026-11-04&intervalMonths=3&currency=ZAR`
 returns chart-ready points calculated from saved household snapshots. `from` and `to`
 are inclusive. Valid calendar intervals are 1, 3, 6 and 12 months, aligned to
-January. Within each interval the latest recorded snapshot is selected; an
+January. Within each interval the latest recorded snapshot is selected. The earliest
+recorded snapshot in the selected range is also retained as a starting anchor;
+the final interval already retains the latest reading. Anchors are deduplicated. An
 interval without a snapshot contributes no point. A duplicate date is resolved
 by creation time and then ID. No averages or fabricated carried values are
 introduced by the series.

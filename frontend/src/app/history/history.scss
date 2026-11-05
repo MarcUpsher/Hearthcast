@@ -1,7 +1,7 @@
 .history-controls {
   display: flex;
   align-items: start;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
   mat-form-field {
     flex: 1 1 150px;
@@ -11,7 +11,11 @@
   }
 }
 .history-chart {
-  border-color: var(--mat-sys-primary);
+  border-color: color-mix(
+    in srgb,
+    var(--mat-sys-primary) 35%,
+    var(--mat-sys-outline-variant)
+  );
   h2 {
     margin: 0;
   }
@@ -36,13 +40,6 @@
     margin: 0 7px 4px 0;
     background: currentColor;
   }
-  .legend span.dashed::before {
-    background: repeating-linear-gradient(
-      90deg,
-      currentColor 0 6px,
-      transparent 6px 10px
-    );
-  }
   .graph-scroll {
     overflow-x: auto;
   }
@@ -65,14 +62,13 @@
     stroke-linejoin: round;
     transition: d 400ms ease;
   }
-  .dot {
-    stroke: var(--mat-sys-surface-container-low);
-    stroke-width: 1.5;
-    transition: r 150ms ease;
+  .point-target {
+    pointer-events: all;
+    stroke: none;
   }
-  a:hover .dot,
-  a:focus .dot {
-    r: 6;
+  a:focus-visible .point-target {
+    stroke: var(--mat-sys-primary);
+    stroke-width: 2;
   }
   .outgoing {
     animation: fade-out 420ms ease both;
@@ -99,12 +95,29 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .history-chart .line,
-  .history-chart .dot {
+  .history-chart .line {
     transition: none;
   }
   .history-chart .outgoing,
   .history-chart .incoming {
     animation: none;
   }
+}
+
+.chart-popup {
+  position: fixed;
+  z-index: 1100;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(312px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border: 1px solid var(--mat-sys-outline);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+  box-shadow: 0 4px 16px #0006;
+  font-size: 14px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
 }
