@@ -257,6 +257,21 @@ public sealed class ProjectionCalculatorTests
         });
     }
 
+    [Theory]
+    [InlineData("Valuation")]
+    [InlineData("Debt")]
+    [InlineData("RedirectedPayment")]
+    public void CurrencyConversionRejectsBalancesAndCashFlowsThatRoundToZero(string component)
+    {
+        const decimal tiny = .00000000001m;
+        var loan = Loan(balance: component == "Debt" ? tiny : 0,
+            value: component == "Valuation" ? tiny : 1,
+            payment: component == "RedirectedPayment" ? tiny : 0,
+            currency: "ZAR", fx: .000000000000000001m);
+        var failure = Assert.Throws<InvalidValueException>(() => Calculate(loans: [loan]));
+        Assert.Contains("numeric limits", failure.Message);
+    }
+
     [Fact]
     public void RejectsMissingInvalidAndDuplicateLoanInputs()
     {

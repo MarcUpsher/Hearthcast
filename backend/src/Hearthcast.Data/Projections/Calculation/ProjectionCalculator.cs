@@ -69,7 +69,7 @@ public static class ProjectionCalculator
                 var surplus = 0m;
                 if (month > 0)
                 {
-                    asset.Value = Compound(asset.Value, asset.GrowthFactor);
+                    asset.Value = Multiply(asset.Value, asset.GrowthFactor);
                     interest = asset.Balance * asset.Input.Assumptions.AnnualLoanInterestPercent / 1200m;
                     var budget = asset.Input.Assumptions.MonthlyLoanPaymentInAssetCurrency;
                     if (asset.Balance > 0 && budget <= interest && !asset.Warned)
@@ -83,20 +83,20 @@ public static class ProjectionCalculator
                     asset.Balance = due - payment;
                     surplus = budget - payment;
                     if (asset.Balance == 0) asset.PayoffDate ??= date;
-                    redirected += surplus * asset.Input.ConversionRate;
+                    redirected += Multiply(surplus, asset.Input.ConversionRate);
                 }
                 loans.Add(new(asset.Input.Assumptions.FinancedAssetId, asset.Currency, asset.Value,
                     asset.Balance, interest, payment, surplus, asset.PayoffDate));
             }
             if (month > 0)
             {
-                investments = Compound(investments, investmentFactor) + a.MonthlyInvestmentContribution + redirected;
-                savings = Compound(savings, savingsFactor) + a.MonthlySavingsContribution;
-                inflation = Compound(inflation, inflationFactor);
+                investments = Multiply(investments, investmentFactor) + a.MonthlyInvestmentContribution + redirected;
+                savings = Multiply(savings, savingsFactor) + a.MonthlySavingsContribution;
+                inflation = Multiply(inflation, inflationFactor);
             }
             var nominal = new ProjectionBalances(investments, savings,
-                assets.Sum(asset => asset.Value * asset.Input.ConversionRate),
-                assets.Sum(asset => asset.Balance * asset.Input.ConversionRate));
+                assets.Sum(asset => Multiply(asset.Value, asset.Input.ConversionRate)),
+                assets.Sum(asset => Multiply(asset.Balance, asset.Input.ConversionRate)));
             var adjusted = new ProjectionBalances(investments / inflation, savings / inflation,
                 nominal.FinancedAssetValue / inflation, nominal.LoanBalance / inflation);
             // Force derived totals to be checked here, rather than fail later during rendering.
@@ -118,7 +118,7 @@ public static class ProjectionCalculator
         return factor;
     }
 
-    private static decimal Compound(decimal balance, decimal factor)
+    private static decimal Multiply(decimal balance, decimal factor)
     {
         var result = balance * factor;
         if (balance != 0 && result == 0) throw new OverflowException();

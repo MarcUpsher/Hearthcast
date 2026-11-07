@@ -71,7 +71,9 @@ use `Math.Pow` converted to decimal, so tests allow a small tolerance for compou
 The positive annual factor is computed in decimal before conversion to double,
 preserving valid rates close to -100%. If a positive balance or inflation factor
 rounds to zero while compounding, calculation fails with the numeric-limits
-validation error rather than silently wiping that balance.
+validation error rather than silently wiping that balance. The same guard applies
+to converted financed valuations, debt balances and redirected payment cash flows
+in every projected month.
 The calculator is an illustration, not an exact bank amortisation statement.
 Unsupported date ranges and numeric overflow/underflow are reported as validation
 errors rather than returning incomplete results. Returned collections are read-only;

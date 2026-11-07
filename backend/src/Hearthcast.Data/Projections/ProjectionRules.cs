@@ -22,6 +22,24 @@ internal static class ProjectionRules
         Rate(asset.AnnualAssetAppreciationPercent, nameof(asset.AnnualAssetAppreciationPercent));
     }
 
+    public static void ValidateSelections(IReadOnlyCollection<ProjectionGroupSelection> groups,
+        IReadOnlyCollection<ProjectionFinancedAssetSettings> assets)
+    {
+        if (groups.Any(g => g is null))
+            throw new InvalidValueException("Group selections cannot contain null entries.", nameof(groups));
+        if (assets.Any(a => a is null))
+            throw new InvalidValueException("Financed asset selections cannot contain null entries.", nameof(assets));
+        if (groups.Select(g => g.GroupId).Distinct().Count() != groups.Count)
+            throw new InvalidValueException("A group can only appear once, in one bucket.");
+        if (groups.Any(g => !Enum.IsDefined(g.Bucket))) throw new InvalidValueException("Select Investment or Savings.");
+        if (assets.Select(a => a.FinancedAssetId).Distinct().Count() != assets.Count)
+            throw new InvalidValueException("A financed asset can only appear once.");
+        foreach (var asset in assets)
+        {
+            ProjectionRules.ValidateLoan(asset);
+        }
+    }
+
     public static void Contribution(decimal value, string name)
     {
         if (value < 0) throw new InvalidValueException("Amounts cannot be negative.", name);

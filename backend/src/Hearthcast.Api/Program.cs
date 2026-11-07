@@ -1,4 +1,5 @@
 using Hearthcast.Data.Projections;
+using Hearthcast.Data.Projections.Preparation;
 using Hearthcast.Api.Health;
 using Hearthcast.Data.ExchangeRates;
 using Hearthcast.Api.Errors;
@@ -27,6 +28,7 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<ProjectionPresetService>();
+builder.Services.AddScoped<ProjectionPreparationService>();
 builder.Services.AddScoped<TrackedItemService>();
 builder.Services.AddScoped<FinancedAssetService>();
 builder.Services.AddScoped<SnapshotService>();
