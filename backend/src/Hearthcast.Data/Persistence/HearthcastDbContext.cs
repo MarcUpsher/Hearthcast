@@ -1,3 +1,4 @@
+using Hearthcast.Data.Projections;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Households;
@@ -30,6 +31,10 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<FinancedAssetSnapshotOwner> FinancedAssetSnapshotOwners => Set<FinancedAssetSnapshotOwner>();
     public DbSet<FinancedAssetSnapshotLoanHolder> FinancedAssetSnapshotLoanHolders => Set<FinancedAssetSnapshotLoanHolder>();
     public DbSet<FinancedAssetSnapshotHouseholdAllocation> FinancedAssetSnapshotHouseholdAllocations => Set<FinancedAssetSnapshotHouseholdAllocation>();
+
+    public DbSet<ProjectionPreset> ProjectionPresets => Set<ProjectionPreset>();
+    public DbSet<ProjectionPresetGroup> ProjectionPresetGroups => Set<ProjectionPresetGroup>();
+    public DbSet<ProjectionPresetFinancedAsset> ProjectionPresetFinancedAssets => Set<ProjectionPresetFinancedAsset>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

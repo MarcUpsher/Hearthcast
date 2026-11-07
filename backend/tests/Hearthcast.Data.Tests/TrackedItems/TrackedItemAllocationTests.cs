@@ -257,7 +257,8 @@ public sealed class TrackedItemAllocationTests : IAsyncLifetime
         var stopParticipating = Record.ExceptionAsync(() => households.SetPersonParticipationAsync(
             setup.HouseholdId, setup.OtherPersonId, false));
         var outcomes = await Task.WhenAll(allocate, stopParticipating);
-        Assert.Equal(2, barrier.Arrivals);
+        // Serializable retries can reach SaveChanges again before the conflicting state is rejected.
+        Assert.True(barrier.Arrivals >= 2);
         Assert.Single(outcomes, exception => exception is null);
         if (outcomes[0] is not null)
         {

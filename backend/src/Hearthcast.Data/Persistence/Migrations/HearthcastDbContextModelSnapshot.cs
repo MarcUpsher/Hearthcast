@@ -243,6 +243,136 @@ namespace Hearthcast.Data.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPreset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AnnualInflationPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("AnnualInvestmentReturnPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("AnnualSavingsInterestPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("DurationYears")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("MonthlyInvestmentContribution")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("MonthlySavingsContribution")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("ShowInflationAdjustedValues")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ProjectionPresets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectionPresets_AnnualInflationPercent", "\"AnnualInflationPercent\" > -100 AND \"AnnualInflationPercent\" <= 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_AnnualInvestmentReturnPercent", "\"AnnualInvestmentReturnPercent\" > -100 AND \"AnnualInvestmentReturnPercent\" <= 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_AnnualSavingsInterestPercent", "\"AnnualSavingsInterestPercent\" > -100 AND \"AnnualSavingsInterestPercent\" <= 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_DurationYears", "\"DurationYears\" BETWEEN 1 AND 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_MonthlyInvestmentContribution", "\"MonthlyInvestmentContribution\" >= 0 AND \"MonthlyInvestmentContribution\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_MonthlySavingsContribution", "\"MonthlySavingsContribution\" >= 0 AND \"MonthlySavingsContribution\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_Name_NotBlank", "length(trim(\"Name\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetFinancedAsset", b =>
+                {
+                    b.Property<Guid>("ProjectionPresetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FinancedAssetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("AnnualAssetAppreciationPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("AnnualLoanInterestPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("MonthlyLoanPaymentInAssetCurrency")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("ProjectionPresetId", "FinancedAssetId");
+
+                    b.HasIndex("HouseholdId", "FinancedAssetId");
+
+                    b.HasIndex("HouseholdId", "ProjectionPresetId");
+
+                    b.ToTable("ProjectionPresetFinancedAssets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_AnnualAssetAppreciationPercent", "\"AnnualAssetAppreciationPercent\" > -100 AND \"AnnualAssetAppreciationPercent\" <= 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_AnnualLoanInterestPercent", "\"AnnualLoanInterestPercent\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_MonthlyLoanPaymentInAssetCurrency", "\"MonthlyLoanPaymentInAssetCurrency\" >= 0 AND \"MonthlyLoanPaymentInAssetCurrency\" < 'Infinity'::numeric");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetGroup", b =>
+                {
+                    b.Property<Guid>("ProjectionPresetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Bucket")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ProjectionPresetId", "GroupId");
+
+                    b.HasIndex("HouseholdId", "GroupId");
+
+                    b.HasIndex("HouseholdId", "ProjectionPresetId");
+
+                    b.ToTable("ProjectionPresetGroups", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectionPresetGroups_Bucket", "\"Bucket\" IN (1, 2)");
+                        });
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -920,6 +1050,49 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Household");
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPreset", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Households.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetFinancedAsset", b =>
+                {
+                    b.HasOne("Hearthcast.Data.FinancedAssets.FinancedAsset", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "FinancedAssetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Projections.ProjectionPreset", null)
+                        .WithMany("FinancedAssets")
+                        .HasForeignKey("HouseholdId", "ProjectionPresetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetGroup", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Classification.ItemGroup", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "GroupId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Projections.ProjectionPreset", null)
+                        .WithMany("Groups")
+                        .HasForeignKey("HouseholdId", "ProjectionPresetId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", b =>
                 {
                     b.HasOne("Hearthcast.Data.Classification.Category", null)
@@ -1183,6 +1356,13 @@ namespace Hearthcast.Data.Persistence.Migrations
             modelBuilder.Entity("Hearthcast.Data.Households.Household", b =>
                 {
                     b.Navigation("People");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPreset", b =>
+                {
+                    b.Navigation("FinancedAssets");
+
+                    b.Navigation("Groups");
                 });
 
             modelBuilder.Entity("Hearthcast.Data.Snapshots.FinancedAssetSnapshot", b =>
