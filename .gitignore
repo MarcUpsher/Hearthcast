@@ -55,3 +55,6 @@ yarn-error.log*
 *.xlsx
 *.xls
 *.csv
+
+# Local agent review handoffs
+/REVIEW.[mM][dD]

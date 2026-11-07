@@ -34,13 +34,7 @@ public sealed class ProjectionPreset
     {
         var name = RequiredText.Trim(settings.Name);
         var currency = RequiredAlphabeticCode.Normalize(settings.CurrencyCode, 3);
-        if (settings.DurationYears is < 1 or > 100)
-            throw new InvalidValueException("Duration must be between 1 and 100 years.", nameof(settings.DurationYears));
-        ProjectionRules.Contribution(settings.MonthlyInvestmentContribution, nameof(settings.MonthlyInvestmentContribution));
-        ProjectionRules.Contribution(settings.MonthlySavingsContribution, nameof(settings.MonthlySavingsContribution));
-        ProjectionRules.Rate(settings.AnnualInvestmentReturnPercent, nameof(settings.AnnualInvestmentReturnPercent));
-        ProjectionRules.Rate(settings.AnnualSavingsInterestPercent, nameof(settings.AnnualSavingsInterestPercent));
-        ProjectionRules.Rate(settings.AnnualInflationPercent, nameof(settings.AnnualInflationPercent));
+        ProjectionRules.ValidateAssumptions(settings);
         if (groups.Any(g => g is null))
             throw new InvalidValueException("Group selections cannot contain null entries.", nameof(groups));
         if (assets.Any(a => a is null))
@@ -52,9 +46,7 @@ public sealed class ProjectionPreset
             throw new InvalidValueException("A financed asset can only appear once.");
         foreach (var asset in assets)
         {
-            ProjectionRules.Contribution(asset.MonthlyLoanPaymentInAssetCurrency, nameof(asset.MonthlyLoanPaymentInAssetCurrency));
-            ProjectionRules.Rate(asset.AnnualLoanInterestPercent, nameof(asset.AnnualLoanInterestPercent), false);
-            ProjectionRules.Rate(asset.AnnualAssetAppreciationPercent, nameof(asset.AnnualAssetAppreciationPercent));
+            ProjectionRules.ValidateLoan(asset);
         }
         Name = name;
         CurrencyCode = currency;
