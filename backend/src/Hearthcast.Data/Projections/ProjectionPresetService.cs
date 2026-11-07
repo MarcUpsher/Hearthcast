@@ -74,7 +74,7 @@ public sealed class ProjectionPresetService(IDbContextFactory<HearthcastDbContex
         }, cancellationToken);
 
     private static IQueryable<ProjectionPreset> Graph(HearthcastDbContext context) =>
-        context.ProjectionPresets.Include(p => p.Groups).Include(p => p.FinancedAssets).AsSingleQuery();
+        context.ProjectionPresets.Include(p => p.Groups).Include(p => p.FinancedAssets).Include(p => p.Currencies).AsSingleQuery();
 
     private static async Task<ProjectionPreset> Find(HearthcastDbContext context, Guid householdId, Guid id, CancellationToken token) =>
         await Graph(context).SingleOrDefaultAsync(p => p.HouseholdId == householdId && p.Id == id, token)

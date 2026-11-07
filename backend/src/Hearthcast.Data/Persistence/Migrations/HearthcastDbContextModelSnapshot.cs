@@ -251,12 +251,6 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<decimal>("AnnualInflationPercent")
                         .HasColumnType("numeric");
 
-                    b.Property<decimal>("AnnualInvestmentReturnPercent")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("AnnualSavingsInterestPercent")
-                        .HasColumnType("numeric");
-
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -269,12 +263,6 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
-
-                    b.Property<decimal>("MonthlyInvestmentContribution")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("MonthlySavingsContribution")
-                        .HasColumnType("numeric");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -295,19 +283,47 @@ namespace Hearthcast.Data.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_ProjectionPresets_AnnualInflationPercent", "\"AnnualInflationPercent\" > -100 AND \"AnnualInflationPercent\" <= 100");
 
-                            t.HasCheckConstraint("CK_ProjectionPresets_AnnualInvestmentReturnPercent", "\"AnnualInvestmentReturnPercent\" > -100 AND \"AnnualInvestmentReturnPercent\" <= 100");
-
-                            t.HasCheckConstraint("CK_ProjectionPresets_AnnualSavingsInterestPercent", "\"AnnualSavingsInterestPercent\" > -100 AND \"AnnualSavingsInterestPercent\" <= 100");
-
                             t.HasCheckConstraint("CK_ProjectionPresets_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("CK_ProjectionPresets_DurationYears", "\"DurationYears\" BETWEEN 1 AND 100");
 
-                            t.HasCheckConstraint("CK_ProjectionPresets_MonthlyInvestmentContribution", "\"MonthlyInvestmentContribution\" >= 0 AND \"MonthlyInvestmentContribution\" < 'Infinity'::numeric");
-
-                            t.HasCheckConstraint("CK_ProjectionPresets_MonthlySavingsContribution", "\"MonthlySavingsContribution\" >= 0 AND \"MonthlySavingsContribution\" < 'Infinity'::numeric");
-
                             t.HasCheckConstraint("CK_ProjectionPresets_Name_NotBlank", "length(trim(\"Name\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetCurrency", b =>
+                {
+                    b.Property<Guid>("ProjectionPresetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("AnnualInvestmentReturnPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("AnnualSavingsInterestPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("MonthlyInvestmentContribution")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("MonthlySavingsContribution")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("ProjectionPresetId", "CurrencyCode");
+
+                    b.ToTable("ProjectionPresetCurrencies", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectionPresetCurrencies_AnnualInvestmentReturnPercent", "\"AnnualInvestmentReturnPercent\" > -100 AND \"AnnualInvestmentReturnPercent\" <= 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetCurrencies_AnnualSavingsInterestPercent", "\"AnnualSavingsInterestPercent\" > -100 AND \"AnnualSavingsInterestPercent\" <= 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetCurrencies_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetCurrencies_MonthlyInvestmentContribution", "\"MonthlyInvestmentContribution\" >= 0 AND \"MonthlyInvestmentContribution\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetCurrencies_MonthlySavingsContribution", "\"MonthlySavingsContribution\" >= 0 AND \"MonthlySavingsContribution\" < 'Infinity'::numeric");
                         });
                 });
 
@@ -325,8 +341,15 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<decimal>("AnnualLoanInterestPercent")
                         .HasColumnType("numeric");
 
+                    b.Property<decimal>("ExtraMonthlyLoanPaymentInAssetCurrency")
+                        .HasColumnType("numeric");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("InvestmentCurrencyAfterPayoff")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<decimal>("MonthlyLoanPaymentInAssetCurrency")
                         .HasColumnType("numeric");
@@ -337,11 +360,17 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.HasIndex("HouseholdId", "ProjectionPresetId");
 
+                    b.HasIndex("ProjectionPresetId", "InvestmentCurrencyAfterPayoff");
+
                     b.ToTable("ProjectionPresetFinancedAssets", null, t =>
                         {
                             t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_AnnualAssetAppreciationPercent", "\"AnnualAssetAppreciationPercent\" > -100 AND \"AnnualAssetAppreciationPercent\" <= 100");
 
                             t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_AnnualLoanInterestPercent", "\"AnnualLoanInterestPercent\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_ExtraPayment", "\"ExtraMonthlyLoanPaymentInAssetCurrency\" >= 0 AND \"ExtraMonthlyLoanPaymentInAssetCurrency\" < 'Infinity'::numeric");
+
+                            t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_InvestmentCurrency", "\"InvestmentCurrencyAfterPayoff\" ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("CK_ProjectionPresetFinancedAssets_MonthlyLoanPaymentInAssetCurrency", "\"MonthlyLoanPaymentInAssetCurrency\" >= 0 AND \"MonthlyLoanPaymentInAssetCurrency\" < 'Infinity'::numeric");
                         });
@@ -1059,6 +1088,15 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetCurrency", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Projections.ProjectionPreset", null)
+                        .WithMany("Currencies")
+                        .HasForeignKey("ProjectionPresetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPresetFinancedAsset", b =>
                 {
                     b.HasOne("Hearthcast.Data.FinancedAssets.FinancedAsset", null)
@@ -1073,6 +1111,12 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .HasForeignKey("HouseholdId", "ProjectionPresetId")
                         .HasPrincipalKey("HouseholdId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Projections.ProjectionPresetCurrency", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectionPresetId", "InvestmentCurrencyAfterPayoff")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
                 });
 
@@ -1360,6 +1404,8 @@ namespace Hearthcast.Data.Persistence.Migrations
 
             modelBuilder.Entity("Hearthcast.Data.Projections.ProjectionPreset", b =>
                 {
+                    b.Navigation("Currencies");
+
                     b.Navigation("FinancedAssets");
 
                     b.Navigation("Groups");

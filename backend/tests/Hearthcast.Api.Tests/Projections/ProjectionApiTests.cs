@@ -57,15 +57,17 @@ public sealed class ProjectionApiTests : IAsyncLifetime
         ["assumptions"] = new JsonObject
         {
             ["currencyCode"] = " zar ", ["durationYears"] = 1,
-            ["monthlyInvestmentContribution"] = 10, ["annualInvestmentReturnPercent"] = 0,
-            ["monthlySavingsContribution"] = 5, ["annualSavingsInterestPercent"] = 0,
-            ["annualInflationPercent"] = 0, ["showInflationAdjustedValues"] = false
+            ["annualInflationPercent"] = 0, ["showInflationAdjustedValues"] = false,
+            ["currencies"] = new JsonArray(new JsonObject { ["currencyCode"] = "ZAR",
+                ["monthlyInvestmentContribution"] = 10, ["annualInvestmentReturnPercent"] = 0,
+                ["monthlySavingsContribution"] = 5, ["annualSavingsInterestPercent"] = 0 })
         },
         ["groups"] = new JsonArray(new JsonObject { ["groupId"] = d.Group.ToString(), ["bucket"] = "Investment" }),
         ["financedAssets"] = new JsonArray(new JsonObject
         {
             ["financedAssetId"] = d.Asset.ToString(), ["monthlyLoanPaymentInAssetCurrency"] = 100,
-            ["annualLoanInterestPercent"] = 0, ["annualAssetAppreciationPercent"] = 0
+            ["annualLoanInterestPercent"] = 0, ["annualAssetAppreciationPercent"] = 0,
+            ["extraMonthlyLoanPaymentInAssetCurrency"] = 0, ["investmentCurrencyAfterPayoff"] = "ZAR"
         })
     };
     private static JsonObject Save(Data d, string name = "Baseline") => new() { ["name"] = name, ["inputs"] = Inputs(d) };
@@ -254,7 +256,7 @@ public sealed class ProjectionApiTests : IAsyncLifetime
             case "NoCurrency": input["assumptions"]!.AsObject().Remove("currencyCode"); break;
             case "NoYears": input["assumptions"]!.AsObject().Remove("durationYears"); break;
             case "NoToggle": input["assumptions"]!.AsObject().Remove("showInflationAdjustedValues"); break;
-            case "NoContribution": input["assumptions"]!.AsObject().Remove("monthlyInvestmentContribution"); break;
+            case "NoContribution": input["assumptions"]!["currencies"]![0]!.AsObject().Remove("monthlyInvestmentContribution"); break;
             case "NoGroups": input.Remove("groups"); break;
             case "NoAssets": input.Remove("financedAssets"); break;
             case "NullGroup": input["groups"] = new JsonArray((JsonNode?)null); break;
@@ -266,7 +268,7 @@ public sealed class ProjectionApiTests : IAsyncLifetime
             case "NumericBucket": input["groups"]![0]!["bucket"] = 1; break;
             case "UnknownBucket": input["groups"]![0]!["bucket"] = "Other"; break;
             case "MissingPayment": input["financedAssets"]![0]!.AsObject().Remove("monthlyLoanPaymentInAssetCurrency"); break;
-            case "NegativeContribution": input["assumptions"]!["monthlyInvestmentContribution"] = -1; break;
+            case "NegativeContribution": input["assumptions"]!["currencies"]![0]!["monthlyInvestmentContribution"] = -1; break;
             case "InvalidRate": input["assumptions"]!["annualInflationPercent"] = -100; break;
             case "ExtraRoot": request["extra"] = true; break;
             case "ExtraAssumption": input["assumptions"]!["extra"] = true; break;
@@ -302,18 +304,98 @@ public sealed class ProjectionApiTests : IAsyncLifetime
         var d = await Setup();
         var input = Inputs(d);
         input["assumptions"]!["durationYears"] = 100;
-        input["assumptions"]!["annualInvestmentReturnPercent"] = 100;
+        input["assumptions"]!["currencies"]![0]!["annualInvestmentReturnPercent"] = 100;
         using var run = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = input });
         Assert.Equal(HttpStatusCode.BadRequest, run.StatusCode);
         using var create = await _client.PostAsJsonAsync(Presets(d.Home), Save(d));
         var preset = (await create.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!;
         var invalid = Save(d, "Changed");
-        invalid["inputs"]!["assumptions"]!["monthlyInvestmentContribution"] = -1;
+        invalid["inputs"]!["assumptions"]!["currencies"]![0]!["monthlyInvestmentContribution"] = -1;
         using var update = await _client.PutAsJsonAsync(create.Headers.Location, invalid);
         Assert.Equal(HttpStatusCode.BadRequest, update.StatusCode);
         var after = (await _client.GetFromJsonAsync<ProjectionPresetResponse>(create.Headers.Location))!;
         Assert.Equal(preset.Name, after.Name);
-        Assert.Equal(preset.Inputs.Assumptions, after.Inputs.Assumptions);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(preset.Inputs.Assumptions), System.Text.Json.JsonSerializer.Serialize(after.Inputs.Assumptions));
+    }
+
+    [Theory]
+    [InlineData("MissingPots")]
+    [InlineData("EmptyPots")]
+    [InlineData("NullPot")]
+    [InlineData("DuplicatePot")]
+    [InlineData("MissingExtra")]
+    [InlineData("MissingDestination")]
+    [InlineData("UnknownDestination")]
+    [InlineData("NegativeExtra")]
+    public async Task InvalidCurrencyPotAndLoanBudgetRequestsAreRejected(string problem)
+    {
+        var d = await Setup();
+        var inputs = Inputs(d);
+        switch (problem)
+        {
+            case "MissingPots": inputs["assumptions"]!.AsObject().Remove("currencies"); break;
+            case "EmptyPots": inputs["assumptions"]!["currencies"] = new JsonArray(); break;
+            case "NullPot": inputs["assumptions"]!["currencies"] = new JsonArray((JsonNode?)null); break;
+            case "DuplicatePot":
+                var clone = inputs["assumptions"]!["currencies"]![0]!.DeepClone(); clone["currencyCode"] = " zar ";
+                inputs["assumptions"]!["currencies"]!.AsArray().Add(clone); break;
+            case "MissingExtra": inputs["financedAssets"]![0]!.AsObject().Remove("extraMonthlyLoanPaymentInAssetCurrency"); break;
+            case "MissingDestination": inputs["financedAssets"]![0]!.AsObject().Remove("investmentCurrencyAfterPayoff"); break;
+            case "UnknownDestination": inputs["financedAssets"]![0]!["investmentCurrencyAfterPayoff"] = "USD"; break;
+            case "NegativeExtra": inputs["financedAssets"]![0]!["extraMonthlyLoanPaymentInAssetCurrency"] = -1; break;
+        }
+        using var response = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = inputs });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MixedCurrencyScenarioPaysRegularAndExtraBudgetsAndPreservesNativePotsAcrossViews()
+    {
+        var d = await Setup(debt: 1_000_000);
+        var snapshotService = new SnapshotService(_database);
+        var person = (await new HouseholdService(_database).GetAsync(d.Home)).People.Single().Id;
+        var dummy = await new TrackedItemService(_database).CreateAsync(d.Home, d.Group, person, "Pounds", "GBP", "GB", false);
+        var amended = await snapshotService.AmendAsync(d.Home, d.Snapshot.Id, d.Snapshot.Revision, null, null, [new(dummy.Id, 0)]);
+        var enriched = await new SnapshotExchangeRateService(_database, snapshotService, new FixtureRates(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SnapshotExchangeRateService>.Instance).CaptureMissingAsync(d.Home, amended.Id, amended.Revision);
+        d = d with { Snapshot = enriched };
+        var input = Inputs(d);
+        input["assumptions"]!["currencyCode"] = "GBP";
+        input["assumptions"]!["durationYears"] = 10;
+        input["assumptions"]!["currencies"] = new JsonArray(
+            new JsonObject { ["currencyCode"] = "GBP", ["monthlyInvestmentContribution"] = 1000, ["annualInvestmentReturnPercent"] = 0, ["monthlySavingsContribution"] = 0, ["annualSavingsInterestPercent"] = 0 },
+            new JsonObject { ["currencyCode"] = "ZAR", ["monthlyInvestmentContribution"] = 500, ["annualInvestmentReturnPercent"] = 0, ["monthlySavingsContribution"] = 0, ["annualSavingsInterestPercent"] = 0 });
+        input["financedAssets"]![0]!["monthlyLoanPaymentInAssetCurrency"] = 20_000;
+        input["financedAssets"]![0]!["extraMonthlyLoanPaymentInAssetCurrency"] = 2000;
+        input["financedAssets"]![0]!["annualLoanInterestPercent"] = 12;
+        input["financedAssets"]![0]!["investmentCurrencyAfterPayoff"] = "GBP";
+        using var create = await _client.PostAsJsonAsync(Presets(d.Home), new JsonObject { ["name"] = "Mixed", ["inputs"] = input.DeepClone() });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var preset = (await create.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!;
+        Assert.Equal(2, preset.Inputs.Assumptions.Currencies.Count);
+        Assert.Equal(2000, preset.Inputs.FinancedAssets[0].ExtraMonthlyLoanPaymentInAssetCurrency);
+        using var first = await _client.PostAsJsonAsync(Run(d), new { presetId = preset.Id });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var gbp = (await first.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.True(gbp.CanCalculate);
+        Assert.Equal(988_000, gbp.Months![1].FinancedAssets[0].LoanBalance);
+        Assert.Equal(1000, gbp.Months[1].Currencies.Single(c => c.CurrencyCode == "GBP").Investments);
+        Assert.Equal(600, gbp.Months[1].Currencies.Single(c => c.CurrencyCode == "ZAR").Investments);
+        input["assumptions"]!["currencyCode"] = "ZAR";
+        using var second = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = input });
+        var zar = (await second.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.True(zar.CanCalculate);
+        Assert.Equal(gbp.Months[^1].Currencies, zar.Months![^1].Currencies);
+        Assert.Equal(gbp.Months[^1].FinancedAssets[0].PayoffDate, zar.Months[^1].FinancedAssets[0].PayoffDate);
+        Assert.Equal(1100, gbp.Months[^1].Currencies.Single(c => c.CurrencyCode == "GBP").RedirectedToInvestments);
+        Assert.Equal(0, _rates.Calls);
+    }
+
+    private sealed class FixtureRates : IExchangeRateProvider
+    {
+        public string Source => "Test";
+        public Task<IReadOnlyList<ExchangeRateQuote>> GetAsync(string baseCurrency, IReadOnlyList<string> quotes, DateOnly date, CancellationToken token) =>
+            Task.FromResult<IReadOnlyList<ExchangeRateQuote>>(quotes.Select(c => new ExchangeRateQuote(baseCurrency, c, baseCurrency == "ZAR" ? .05m : 20m, date)).ToArray());
     }
 
     [Theory]

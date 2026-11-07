@@ -32,6 +32,7 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<FinancedAssetSnapshotLoanHolder> FinancedAssetSnapshotLoanHolders => Set<FinancedAssetSnapshotLoanHolder>();
     public DbSet<FinancedAssetSnapshotHouseholdAllocation> FinancedAssetSnapshotHouseholdAllocations => Set<FinancedAssetSnapshotHouseholdAllocation>();
 
+    public DbSet<ProjectionPresetCurrency> ProjectionPresetCurrencies => Set<ProjectionPresetCurrency>();
     public DbSet<ProjectionPreset> ProjectionPresets => Set<ProjectionPreset>();
     public DbSet<ProjectionPresetGroup> ProjectionPresetGroups => Set<ProjectionPresetGroup>();
     public DbSet<ProjectionPresetFinancedAsset> ProjectionPresetFinancedAssets => Set<ProjectionPresetFinancedAsset>();

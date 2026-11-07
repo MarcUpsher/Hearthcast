@@ -1,7 +1,5 @@
 namespace Hearthcast.Data.Projections;
 
-public sealed record ProjectionPresetSettings(
-    string Name, string CurrencyCode, int DurationYears,
-    decimal MonthlyInvestmentContribution, decimal AnnualInvestmentReturnPercent,
-    decimal MonthlySavingsContribution, decimal AnnualSavingsInterestPercent,
-    decimal AnnualInflationPercent, bool ShowInflationAdjustedValues);
+/// <param name="CurrencyCode">Viewing currency only; native currency pots retain their own units.</param>
+public sealed record ProjectionPresetSettings(string Name, string CurrencyCode, int DurationYears,
+    decimal AnnualInflationPercent, bool ShowInflationAdjustedValues, IReadOnlyList<ProjectionCurrencySettings> Currencies);

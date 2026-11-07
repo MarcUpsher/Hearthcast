@@ -5,7 +5,7 @@ public enum ProjectionPreparationIssueKind
 {
     MissingGroup = 1, NoHouseholdItems = 2, DebtGroupSelected = 3,
     MissingFinancedAsset = 4, ExcludedFinancedAsset = 5,
-    MissingValue = 6, MissingExchangeRate = 7, CarriedValue = 8
+    MissingValue = 6, MissingExchangeRate = 7, CarriedValue = 8, MissingCurrencySettings = 9
 }
 
 public sealed record ProjectionPreparationIssue(ProjectionPreparationIssueKind Kind,

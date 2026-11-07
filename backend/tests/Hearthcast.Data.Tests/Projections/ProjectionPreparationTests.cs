@@ -21,7 +21,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
     private static readonly DateOnly January = new(2023, 1, 1);
     private ProjectionPreparationService Service => new(_database);
     private SnapshotService Snapshots => new(_database);
-    private static ProjectionPresetSettings Assumptions(string currency = "GBP") => new("", currency, 1, 10, 0, 5, 0, 0, false);
+    private static ProjectionPresetSettings Assumptions(string currency = "GBP") => new("", currency, 1, 0, false, new[] { "GBP", "ZAR", "USD" }.Select(c => new ProjectionCurrencySettings(c, c == currency ? 10 : 0, 0, c == currency ? 5 : 0, 0)).ToArray());
     public Task InitializeAsync() => _database.InitializeAsync();
     public Task DisposeAsync() => _database.DisposeAsync();
 
@@ -58,12 +58,12 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         await items.SetHouseholdAllocationAsync(d.HouseholdId, item.Id, false);
         await classification.RenameGroupAsync(d.HouseholdId, item.Group.CategoryId, d.GroupId, "Changed group");
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("ZAR"),
-            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.True(result.CanCalculate);
-        Assert.Equal(100, result.StartingPosition!.Investments);
-        Assert.Equal(0, result.StartingPosition.Savings);
-        Assert.Equal(1000, Assert.Single(result.StartingPosition.FinancedAssets).AssetValue);
-        Assert.Equal(200, result.StartingPosition.FinancedAssets[0].LoanBalance);
+        Assert.Equal(100, ProjectionCalculator.Calculate(result.Assumptions, result.StartingPosition!).Months[0].Nominal.Investments);
+        Assert.Equal(0, ProjectionCalculator.Calculate(result.Assumptions, result.StartingPosition!).Months[0].Nominal.Savings);
+        Assert.Equal(1000, Assert.Single(result.StartingPosition!.FinancedAssets).AssetValue);
+        Assert.Equal(200, result.StartingPosition!.FinancedAssets[0].LoanBalance);
         var initial = ProjectionCalculator.Calculate(result.Assumptions, result.StartingPosition).Months[0];
         Assert.Equal(900, initial.Nominal.NetPosition);
         Assert.Equal("Investment", result.Coverage.Single(c => c.SourceId == item.Id).Name);
@@ -91,10 +91,10 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
             .CaptureMissingAsync(d.HouseholdId, snapshot.Id, snapshot.Revision);
         Assert.Equal(1, provider.Calls);
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("USD"),
-            [new(d.GroupId, ProjectionBucket.Savings)], [new(asset.Id, 300, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Savings)], [new(asset.Id, 300, 0, 0, 0, "ZAR")]);
         Assert.True(result.CanCalculate);
-        Assert.Equal(48, result.StartingPosition!.Savings); // £10 + R200 = £20 -> $24, plus $24.
-        var loan = Assert.Single(result.StartingPosition.FinancedAssets);
+        Assert.Equal(48, ProjectionCalculator.Calculate(result.Assumptions, result.StartingPosition!).Months[0].Nominal.Savings); // £10 + R200 = £20 -> $24, plus $24.
+        var loan = Assert.Single(result.StartingPosition!.FinancedAssets);
         Assert.Equal(.06m, loan.ConversionRate);
         Assert.Equal(2000, loan.AssetValue);
         Assert.Equal(200, loan.LoanBalance);
@@ -111,7 +111,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var (d, item, asset) = await Setup();
         var snapshot = await Capture(d, item, asset);
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions(),
-            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.False(result.CanCalculate);
         Assert.Null(result.StartingPosition);
         Assert.Equal(ProjectionPreparationIssueKind.MissingExchangeRate, Assert.Single(result.Issues).Kind);
@@ -131,7 +131,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var snapshot = await Capture(d, item, asset, missing == "Item" ? null : 100,
             missing == "Valuation" ? null : 1000, missing == "Debt" ? null : 200);
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("ZAR"),
-            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.False(result.CanCalculate);
         Assert.Null(result.StartingPosition);
         Assert.Equal(ProjectionPreparationIssueKind.MissingValue, Assert.Single(result.Issues).Kind);
@@ -143,11 +143,11 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var (d, item, asset) = await Setup();
         var snapshot = await Capture(d, item, asset, debt: 0);
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("ZAR"),
-            [new(Guid.NewGuid(), ProjectionBucket.Investment)], [new(Guid.NewGuid(), 100, 0, 0)]);
+            [new(Guid.NewGuid(), ProjectionBucket.Investment)], [new(Guid.NewGuid(), 100, 0, 0, 0, "ZAR")]);
         Assert.False(result.CanCalculate);
         Assert.Contains(result.Issues, i => i.Kind == ProjectionPreparationIssueKind.MissingGroup);
         Assert.Contains(result.Issues, i => i.Kind == ProjectionPreparationIssueKind.MissingFinancedAsset);
-        result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("ZAR"), [], [new(asset.Id, 100, 0, 0)]);
+        result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("ZAR"), [], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.True(result.CanCalculate);
         Assert.Equal(100, ProjectionCalculator.Calculate(result.Assumptions, result.StartingPosition!).Months[1].RedirectedToInvestments);
     }
@@ -159,7 +159,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var first = await Capture(d, item, asset);
         var next = await Snapshots.CreateNextAsync(d.HouseholdId, January.AddMonths(1));
         var result = await Service.PrepareAsync(d.HouseholdId, next.Id, Assumptions("ZAR"),
-            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.True(result.CanCalculate);
         Assert.Equal(2, result.Issues.Count);
         Assert.All(result.Issues, i => Assert.Equal(ProjectionIssueSeverity.Warning, i.Severity));
@@ -174,11 +174,11 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var first = await Capture(d, item, asset);
         var next = await Snapshots.CreateNextAsync(d.HouseholdId, January.AddMonths(1), [new(item.Id, 250)]);
         var preset = await new ProjectionPresetService(_database).CreateAsync(d.HouseholdId, Assumptions("ZAR") with { Name = "Baseline" },
-            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         var old = await Service.PrepareSavedPresetAsync(d.HouseholdId, first.Id, preset.Id);
         var recent = await Service.PrepareSavedPresetAsync(d.HouseholdId, next.Id, preset.Id);
-        Assert.Equal(100, old.StartingPosition!.Investments);
-        Assert.Equal(250, recent.StartingPosition!.Investments);
+        Assert.Equal(100, old.StartingPosition!.Currencies.Single(c => c.CurrencyCode == "ZAR").Investments);
+        Assert.Equal(250, recent.StartingPosition!.Currencies.Single(c => c.CurrencyCode == "ZAR").Investments);
         Assert.Equal(first.Revision, old.SnapshotRevision);
         Assert.Equal(next.Revision, recent.SnapshotRevision);
         Assert.Equal(first.SnapshotDate, old.StartingPosition.Date);
@@ -203,7 +203,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
             [new(d.FirstPersonId, 10000)], [d.FirstPersonId], false, []);
         var snapshot = await Capture(d, item, asset);
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("ZAR"),
-            [new(group.Id, ProjectionBucket.Savings)], [new(asset.Id, 100, 0, 0)]);
+            [new(group.Id, ProjectionBucket.Savings)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.False(result.CanCalculate);
         Assert.Contains(result.Issues, i => i.Kind == ProjectionPreparationIssueKind.DebtGroupSelected);
         Assert.Contains(result.Issues, i => i.Kind == ProjectionPreparationIssueKind.ExcludedFinancedAsset);
@@ -250,7 +250,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
             .CaptureMissingAsync(d.HouseholdId, snapshot.Id, snapshot.Revision);
         var failure = await Assert.ThrowsAsync<InvalidValueException>(() => Service.PrepareAsync(d.HouseholdId,
             snapshot.Id, Assumptions("USD"), component == "Item" ? [new(d.GroupId, ProjectionBucket.Investment)] : [],
-            component == "Item" ? [] : [new(asset.Id, 0, 0, 0)]));
+            component == "Item" ? [] : [new(asset.Id, 0, 0, 0, 0, "ZAR")]));
         Assert.Contains("numeric precision", failure.Message);
     }
 
@@ -273,7 +273,7 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var stored = await Snapshots.GetAsync(d.HouseholdId, snapshot.Id);
         Assert.Equal(retained, Assert.Single(stored.ExchangeRates).QuoteCurrency);
         var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, Assumptions("USD"),
-            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0)]);
+            [new(d.GroupId, ProjectionBucket.Investment)], [new(asset.Id, 100, 0, 0, 0, "ZAR")]);
         Assert.False(result.CanCalculate);
         Assert.Null(result.StartingPosition);
         var issue = Assert.Single(result.Issues);
@@ -287,6 +287,18 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
         var items = new TrackedItemService(_database);
         await items.CreateAsync(d.HouseholdId, d.GroupId, d.FirstPersonId, "Pounds", "GBP", "GB", false);
         await items.CreateAsync(d.HouseholdId, d.GroupId, d.FirstPersonId, "Dollars", "USD", "US", false);
+    }
+
+    [Fact]
+    public async Task SelectedNativeCurrencyNeedsItsOwnConfiguredPotRatherThanUsingViewingCurrencyAssumptions()
+    {
+        var (d, item, asset) = await Setup();
+        var snapshot = await Capture(d, item, asset);
+        var settings = new ProjectionPresetSettings("", "ZAR", 1, 0, false, [new("GBP", 0, 0, 0, 0)]);
+        var result = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, settings, [new(d.GroupId, ProjectionBucket.Investment)], []);
+        Assert.False(result.CanCalculate);
+        Assert.Null(result.StartingPosition);
+        Assert.Contains(result.Issues, i => i.Kind == ProjectionPreparationIssueKind.MissingCurrencySettings);
     }
 
     private sealed class Rates : IExchangeRateProvider

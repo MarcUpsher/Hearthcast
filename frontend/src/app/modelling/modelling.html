@@ -1,0 +1,579 @@
+<section class="page-heading">
+  <div>
+    <h1>Modelling</h1>
+    <p class="muted">Explore what your next few years could look like.</p>
+  </div>
+</section>
+@if (!w.current()) {
+  <p class="notice">Create a household to start modelling.</p>
+  <a mat-flat-button routerLink="/setup">Set up household</a>
+} @else {
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+    <button mat-button (click)="retry()">Retry</button>
+  }
+  @if (loading() && !inventory().length) {
+    <p role="status" class="muted">Loading snapshots…</p>
+  }
+  @if (!loading() && !inventory().length && !error()) {
+    <p class="notice">Record a snapshot to use as your starting position.</p>
+    <a mat-flat-button routerLink="/record">Record snapshot</a>
+  }
+  @if (inventory().length) {
+    <div class="modelling-layout">
+      <aside class="panel controls" aria-label="Projection assumptions">
+        <h2>Starting point</h2>
+        <mat-form-field
+          ><mat-label>Starting snapshot</mat-label
+          ><mat-select
+            [ngModel]="snapshotId"
+            (ngModelChange)="selectSnapshot($event)"
+          >
+            @for (row of inventory(); track row.id) {
+              <mat-option [value]="row.id">{{ row.snapshotDate }}</mat-option>
+            }
+          </mat-select></mat-form-field
+        >
+        @if (loading()) {
+          <p role="status" class="muted">Loading snapshot…</p>
+        }
+        <fieldset [disabled]="loading() || !snapshot()">
+          <div class="two-fields">
+            <mat-form-field
+              ><mat-label>Viewing currency</mat-label
+              ><mat-select
+                [(ngModel)]="assumptions.currencyCode"
+                (ngModelChange)="viewCurrencyChanged()"
+                [disabled]="loading() || !snapshot()"
+              >
+                <mat-select-trigger>{{
+                  assumptions.currencyCode
+                }}</mat-select-trigger>
+                @if (currencies().length) {
+                  <mat-optgroup label="Suggested currencies">
+                    @for (code of currencies(); track code) {
+                      <mat-option [value]="code">{{ code }}</mat-option>
+                    }
+                  </mat-optgroup>
+                }
+                <mat-optgroup label="Other currencies">
+                  @for (currency of otherCurrencies(); track currency.id) {
+                    <mat-option [value]="currency.id">{{
+                      currency.name
+                    }}</mat-option>
+                  }
+                </mat-optgroup>
+              </mat-select></mat-form-field
+            >
+            <mat-form-field
+              ><mat-label>Duration (years)</mat-label
+              ><input
+                matInput
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                required
+                [(ngModel)]="assumptions.durationYears"
+                (ngModelChange)="changed()"
+            /></mat-form-field>
+          </div>
+          <p class="muted hint">
+            Choose the holdings to include. Amounts come from this snapshot;
+            contributions are new money each month.
+          </p>
+          <h2>Investments</h2>
+          <mat-form-field
+            ><mat-label>Investment groups</mat-label
+            ><mat-select
+              multiple
+              [ngModel]="investmentGroups()"
+              (ngModelChange)="setGroups('Investment', $event)"
+              [disabled]="loading() || !snapshot()"
+            >
+              @for (category of groups(); track category.category) {
+                <mat-optgroup [label]="category.category">
+                  @for (group of category.options; track group.id) {
+                    <mat-option
+                      [value]="group.id"
+                      [disabled]="savingsGroups().includes(group.id)"
+                      >{{ group.name
+                      }}{{
+                        group.missing ? " · Not available in snapshot" : ""
+                      }}</mat-option
+                    >
+                  }
+                </mat-optgroup>
+              }
+            </mat-select></mat-form-field
+          >
+
+          <h2>Savings</h2>
+          <mat-form-field
+            ><mat-label>Savings groups</mat-label
+            ><mat-select
+              multiple
+              [ngModel]="savingsGroups()"
+              (ngModelChange)="setGroups('Savings', $event)"
+              [disabled]="loading() || !snapshot()"
+            >
+              @for (category of groups(); track category.category) {
+                <mat-optgroup [label]="category.category">
+                  @for (group of category.options; track group.id) {
+                    <mat-option
+                      [value]="group.id"
+                      [disabled]="investmentGroups().includes(group.id)"
+                      >{{ group.name
+                      }}{{
+                        group.missing ? " · Not available in snapshot" : ""
+                      }}</mat-option
+                    >
+                  }
+                </mat-optgroup>
+              }
+            </mat-select></mat-form-field
+          >
+
+          <h2>Currency pots</h2>
+          <p class="muted hint">
+            Contributions and returns stay in each pot's currency. Changing the
+            viewing currency does not change these amounts.
+          </p>
+          <mat-form-field
+            ><mat-label>Add a currency pot</mat-label
+            ><mat-select
+              [value]="null"
+              #currencyPicker
+              (selectionChange)="
+                addCurrency($event.value); currencyPicker.value = null
+              "
+            >
+              @for (currency of currencyChoices; track currency.id) {
+                <mat-option
+                  [value]="currency.id"
+                  [disabled]="potCodes().includes(currency.id)"
+                  >{{ currency.name }}</mat-option
+                >
+              }
+            </mat-select></mat-form-field
+          >
+          @for (pot of assumptions.currencies; track pot.currencyCode) {
+            <section class="loan-controls currency-pot">
+              <h3>{{ pot.currencyCode }}</h3>
+              <div class="two-fields">
+                <mat-form-field
+                  ><mat-label>Invest monthly</mat-label
+                  ><input
+                    matInput
+                    type="text"
+                    inputmode="decimal"
+                    appMoney="number"
+                    required
+                    [(ngModel)]="pot.monthlyInvestmentContribution"
+                    (ngModelChange)="changed()"
+                  /><span matTextPrefix
+                    >{{ symbol(pot.currencyCode) }}&nbsp;</span
+                  ></mat-form-field
+                ><mat-form-field
+                  ><mat-label>Invest return (%)</mat-label
+                  ><input
+                    matInput
+                    type="number"
+                    min="-100"
+                    max="100"
+                    step="0.01"
+                    required
+                    [(ngModel)]="pot.annualInvestmentReturnPercent"
+                    (ngModelChange)="changed()" /></mat-form-field
+                ><mat-form-field
+                  ><mat-label>Save monthly</mat-label
+                  ><input
+                    matInput
+                    type="text"
+                    inputmode="decimal"
+                    appMoney="number"
+                    required
+                    [(ngModel)]="pot.monthlySavingsContribution"
+                    (ngModelChange)="changed()"
+                  /><span matTextPrefix
+                    >{{ symbol(pot.currencyCode) }}&nbsp;</span
+                  ></mat-form-field
+                ><mat-form-field
+                  ><mat-label>Save interest (%)</mat-label
+                  ><input
+                    matInput
+                    type="number"
+                    min="-100"
+                    max="100"
+                    step="0.01"
+                    required
+                    [(ngModel)]="pot.annualSavingsInterestPercent"
+                    (ngModelChange)="changed()"
+                /></mat-form-field>
+              </div>
+              <button
+                mat-button
+                [disabled]="isDestination(pot.currencyCode)"
+                (click)="removeCurrency(pot.currencyCode)"
+              >
+                Remove {{ pot.currencyCode }} pot
+              </button>
+              @if (isDestination(pot.currencyCode)) {
+                <small class="muted"
+                  >Used as a loan's investment destination.</small
+                >
+              }
+            </section>
+          }
+          <h2>Financed assets</h2>
+          <mat-form-field
+            ><mat-label>Assets to include</mat-label
+            ><mat-select
+              multiple
+              [ngModel]="selectedAssets()"
+              (ngModelChange)="setAssets($event)"
+              [disabled]="loading() || !snapshot()"
+            >
+              @for (asset of assets(); track asset.id) {
+                <mat-option [value]="asset.id"
+                  >{{ asset.name
+                  }}{{
+                    asset.missing ? " · Not available in snapshot" : ""
+                  }}</mat-option
+                >
+              }
+            </mat-select></mat-form-field
+          >
+          @for (asset of chosenAssets(); track asset.id) {
+            <section class="loan-controls">
+              <h3>{{ asset.name }}</h3>
+              @if (asset.missing) {
+                <p class="notice">
+                  Not available to this model in this snapshot. Remove the
+                  selection or choose another snapshot.
+                </p>
+              } @else {
+                <p class="muted hint">
+                  Value {{ money(asset.value, asset.currency) }} · Owing
+                  {{ money(asset.debt, asset.currency) }}
+                </p>
+              }
+              <mat-form-field
+                ><mat-label>Regular payment ({{ asset.currency }})</mat-label
+                ><input
+                  matInput
+                  type="text"
+                  inputmode="decimal"
+                  appMoney="number"
+                  required
+                  [(ngModel)]="
+                    loans[asset.id].monthlyLoanPaymentInAssetCurrency
+                  "
+                  (ngModelChange)="changed()"
+                /><span matTextPrefix
+                  >{{ symbol(asset.currency) }}&nbsp;</span
+                ></mat-form-field
+              >
+              <mat-form-field
+                ><mat-label>Extra payment ({{ asset.currency }})</mat-label
+                ><input
+                  matInput
+                  type="text"
+                  inputmode="decimal"
+                  appMoney="number"
+                  required
+                  [(ngModel)]="
+                    loans[asset.id].extraMonthlyLoanPaymentInAssetCurrency
+                  "
+                  (ngModelChange)="changed()"
+                /><span matTextPrefix
+                  >{{ symbol(asset.currency) }}&nbsp;</span
+                ></mat-form-field
+              >
+              <mat-form-field
+                ><mat-label>Invest after payoff in</mat-label
+                ><mat-select
+                  [(ngModel)]="loans[asset.id].investmentCurrencyAfterPayoff"
+                  (ngModelChange)="changed()"
+                >
+                  @for (code of potCodes(); track code) {
+                    <mat-option [value]="code">{{ code }}</mat-option>
+                  }
+                </mat-select></mat-form-field
+              >
+              <div class="two-fields">
+                <mat-form-field
+                  ><mat-label>Loan interest (%/year)</mat-label
+                  ><input
+                    matInput
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    required
+                    [(ngModel)]="loans[asset.id].annualLoanInterestPercent"
+                    (ngModelChange)="changed()"
+                /></mat-form-field>
+                <mat-form-field
+                  ><mat-label>Asset growth (%/year)</mat-label
+                  ><input
+                    matInput
+                    type="number"
+                    min="-100"
+                    max="100"
+                    step="0.01"
+                    required
+                    [(ngModel)]="loans[asset.id].annualAssetAppreciationPercent"
+                    (ngModelChange)="changed()"
+                /></mat-form-field>
+              </div>
+            </section>
+          }
+          <p class="muted hint">
+            Once a loan is paid off, its regular and extra payments move into
+            the chosen investment pot. Set each loan's payment and rate
+            explicitly.
+          </p>
+          <h2>Inflation</h2>
+          <mat-form-field
+            ><mat-label>Annual inflation (%)</mat-label
+            ><input
+              matInput
+              type="number"
+              min="-100"
+              max="100"
+              step="0.01"
+              required
+              [(ngModel)]="assumptions.annualInflationPercent"
+              (ngModelChange)="changed()"
+          /></mat-form-field>
+          <p class="muted hint">
+            Returns and inflation are illustrative assumptions you can change.
+            Contributions stay fixed; exchange rates use the starting snapshot.
+          </p>
+        </fieldset>
+      </aside>
+      <div class="results" [attr.aria-busy]="pending() || loading()">
+        <div class="result-heading">
+          <div>
+            <h2>Your projection</h2>
+            <p class="muted">
+              {{
+                snapshot()?.snapshotDate
+                  ? "Starting from " + snapshot()!.snapshotDate
+                  : "Choose a starting snapshot"
+              }}
+            </p>
+          </div>
+          <mat-slide-toggle
+            [ngModel]="adjusted()"
+            (ngModelChange)="adjusted.set($event); hovered.set(null)"
+            >Adjust for inflation</mat-slide-toggle
+          >
+        </div>
+        @if (pending()) {
+          <p class="update-status" role="status">
+            Updating projection…
+            @if (result()?.months) {
+              <span>Showing previous results.</span>
+            }
+          </p>
+        }
+        @if (validation()) {
+          <p class="error" role="alert">{{ validation() }}</p>
+        }
+        @if (result(); as report) {
+          @if (report.issues.length) {
+            <section class="notice" aria-label="Snapshot data notices">
+              @for (issue of report.issues; track $index) {
+                <p [class.blocking]="issue.severity === 'Error'">
+                  {{ issue.message }}
+                </p>
+              }
+            </section>
+          }
+          @if (report.canCalculate && chart(); as plot) {
+            @if (balances(); as amounts) {
+              <div class="balance-cards">
+                <div class="panel">
+                  <small>Starting modelled total</small>
+                  <div class="amount">
+                    {{
+                      money(amounts.starting.netPosition, report.currencyCode)
+                    }}
+                  </div>
+                </div>
+                <div class="panel">
+                  <small>Projected modelled total</small>
+                  <div class="amount">
+                    {{ money(amounts.final.netPosition, report.currencyCode) }}
+                  </div>
+                </div>
+              </div>
+            }
+            <section
+              class="panel projection-chart"
+              aria-label="Projection graph"
+            >
+              <div class="legend">
+                @for (line of lines; track line.key) {
+                  <span [style.color]="line.color">{{ line.label }}</span>
+                }
+              </div>
+              <p class="muted hint">
+                {{ report.currencyCode }} ·
+                {{
+                  adjusted()
+                    ? "Inflation-adjusted to the starting date"
+                    : "Nominal values"
+                }}
+                · Hover to inspect a month
+              </p>
+              <div class="chart-scroll">
+                <svg
+                  viewBox="0 0 1000 420"
+                  tabindex="0"
+                  role="img"
+                  aria-label="Projected investments, savings, equity and total. Use left and right arrow keys to inspect months."
+                  (mousemove)="hover($event)"
+                  (mouseleave)="hovered.set(null)"
+                  (blur)="hovered.set(null)"
+                  (keydown.arrowright)="moveReading(1, $event)"
+                  (keydown.arrowleft)="moveReading(-1, $event)"
+                >
+                  @for (tick of plot.ticks; track tick.y) {
+                    <line
+                      class="grid"
+                      x1="88"
+                      x2="920"
+                      [attr.y1]="tick.y"
+                      [attr.y2]="tick.y"
+                    />
+                    <text
+                      class="axis"
+                      x="78"
+                      [attr.y]="tick.y + 4"
+                      text-anchor="end"
+                    >
+                      {{ tick.label }}
+                    </text>
+                  }
+                  @for (date of plot.dates; track date.x) {
+                    <text
+                      class="axis"
+                      [attr.x]="date.x"
+                      y="395"
+                      text-anchor="middle"
+                    >
+                      {{ date.label }}
+                    </text>
+                  }
+                  @for (line of plot.lines; track line.key) {
+                    <path
+                      class="projection-line"
+                      [attr.d]="line.path"
+                      [attr.stroke]="line.color"
+                      [attr.stroke-width]="
+                        line.key === 'netPosition' ? 3.5 : 2.5
+                      "
+                    />
+                  }
+                  @if (plot.hoverX !== null) {
+                    <line
+                      class="crosshair"
+                      [attr.x1]="plot.hoverX"
+                      [attr.x2]="plot.hoverX"
+                      y1="25"
+                      y2="355"
+                    />
+                  }
+                </svg>
+              </div>
+              @if (reading(); as read) {
+                <div class="reading" role="tooltip">
+                  <strong>{{ read.date }}</strong>
+                  @for (line of lines; track line.key) {
+                    <div>
+                      <span [style.color]="line.color">{{ line.label }}</span
+                      ><b>{{
+                        money(read.values[line.key], report.currencyCode)
+                      }}</b>
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+            @if (reading(); as read) {
+              <p class="sr-only" aria-live="polite">
+                {{ read.date }}: Modelled total
+                {{ money(read.values.netPosition, report.currencyCode) }}
+              </p>
+            }
+            @if (payoffs().length) {
+              <section class="panel">
+                <h2>Loan payoff</h2>
+                @for (asset of payoffs(); track asset.financedAssetId) {
+                  <p>
+                    {{ assetName(asset.financedAssetId) }} ·
+                    {{
+                      asset.payoffDate
+                        ? "Paid off by " + asset.payoffDate
+                        : "Not paid off within this projection"
+                    }}
+                  </p>
+                }
+              </section>
+            }
+          }
+          @if (report.warnings.length) {
+            <section class="notice">
+              <h2>Loan payment warnings</h2>
+              @for (warning of report.warnings; track warning.financedAssetId) {
+                <p>
+                  {{ assetName(warning.financedAssetId) }}: the payment does not
+                  reduce the loan balance. Check the payment and interest
+                  assumptions.
+                </p>
+              }
+            </section>
+          }
+          <p class="muted hint">
+            Modelled totals cover selected holdings only. They may differ from
+            your full household net worth.
+          </p>
+          @if (omitted().length) {
+            <details class="panel">
+              <summary>
+                {{ omitted().length }} holdings outside this model
+              </summary>
+              <ul>
+                @for (entry of omitted(); track entry.sourceId) {
+                  <li>
+                    {{ entry.name }} · {{ entry.groupName }} ·
+                    {{
+                      entry.disposition === "ExcludedFromHousehold"
+                        ? "Excluded from household"
+                        : "Not selected"
+                    }}
+                  </li>
+                }
+              </ul>
+            </details>
+          }
+        } @else if (!pending() && !loading() && !validation() && !error()) {
+          <section class="panel empty-model">
+            <h2>Choose your starting balances</h2>
+            <p>
+              Select investment and savings groups and any financed assets on
+              the left.
+            </p>
+            <p class="muted">
+              You can also enter monthly contributions to model new savings from
+              zero.
+            </p>
+          </section>
+        }
+      </div>
+    </div>
+  }
+}

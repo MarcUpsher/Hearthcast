@@ -14,10 +14,11 @@ public sealed class ProjectionPreparationService(IDbContextFactory<HearthcastDbC
         ArgumentNullException.ThrowIfNull(assumptions);
         ArgumentNullException.ThrowIfNull(groups);
         ArgumentNullException.ThrowIfNull(assets);
-        ProjectionRules.ValidateAssumptions(assumptions);
+        assumptions = ProjectionRules.Normalize(assumptions);
         var selections = groups.ToArray();
-        var loans = assets.ToArray();
+        var loans = assets.Select(ProjectionRules.NormalizeLoan).ToArray();
         ProjectionRules.ValidateSelections(selections, loans);
+        ProjectionRules.ValidateDestinations(loans, assumptions.Currencies);
         var currency = RequiredAlphabeticCode.Normalize(assumptions.CurrencyCode, 3);
         var snapshot = await new SnapshotService(contextFactory).GetAsync(householdId, snapshotId, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -36,12 +37,13 @@ public sealed class ProjectionPreparationService(IDbContextFactory<HearthcastDbC
     {
         var p = await new ProjectionPresetService(contextFactory).GetAsync(householdId, presetId, cancellationToken);
         return await PrepareAsync(householdId, snapshotId,
-            new(p.Name, p.CurrencyCode, p.DurationYears, p.MonthlyInvestmentContribution,
-                p.AnnualInvestmentReturnPercent, p.MonthlySavingsContribution, p.AnnualSavingsInterestPercent,
-                p.AnnualInflationPercent, p.ShowInflationAdjustedValues),
+            new(p.Name, p.CurrencyCode, p.DurationYears, p.AnnualInflationPercent, p.ShowInflationAdjustedValues,
+                p.Currencies.Select(c => new ProjectionCurrencySettings(c.CurrencyCode, c.MonthlyInvestmentContribution,
+                    c.AnnualInvestmentReturnPercent, c.MonthlySavingsContribution, c.AnnualSavingsInterestPercent)).ToArray()),
             p.Groups.Select(g => new ProjectionGroupSelection(g.GroupId, g.Bucket)).ToArray(),
             p.FinancedAssets.Select(a => new ProjectionFinancedAssetSettings(a.FinancedAssetId,
-                a.MonthlyLoanPaymentInAssetCurrency, a.AnnualLoanInterestPercent, a.AnnualAssetAppreciationPercent)).ToArray(),
+                a.MonthlyLoanPaymentInAssetCurrency, a.AnnualLoanInterestPercent, a.AnnualAssetAppreciationPercent,
+                a.ExtraMonthlyLoanPaymentInAssetCurrency, a.InvestmentCurrencyAfterPayoff)).ToArray(),
             cancellationToken);
     }
 }

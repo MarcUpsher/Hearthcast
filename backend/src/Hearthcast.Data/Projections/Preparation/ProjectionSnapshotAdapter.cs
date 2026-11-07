@@ -15,8 +15,7 @@ internal static class ProjectionSnapshotAdapter
         var issues = new List<ProjectionPreparationIssue>();
         var coverage = new List<ProjectionCoverageEntry>();
         var preparedAssets = new List<ProjectionFinancedAssetInput>();
-        var investments = 0m;
-        var savings = 0m;
+        var balances = assumptions.Currencies.ToDictionary(c => c.CurrencyCode, _ => (Investments: 0m, Savings: 0m));
         var missingCurrencies = new HashSet<string>();
         var invalidGroups = new HashSet<Guid>();
         foreach (var selection in selections.OrderBy(g => g.GroupId))
@@ -46,12 +45,15 @@ internal static class ProjectionSnapshotAdapter
             if (carried) Carried(item.TrackedItemId, item.ItemName);
             if (item.Amount is null)
                 Error(ProjectionPreparationIssueKind.MissingValue, item.TrackedItemId, $"{item.ItemName} has no known balance.");
+            var configured = balances.TryGetValue(item.CurrencyCode, out var native);
+            if (!configured) Error(ProjectionPreparationIssueKind.MissingCurrencySettings, item.TrackedItemId,
+                $"Configure a {item.CurrencyCode} currency pot for {item.ItemName}.");
             var rate = Rate(item.CurrencyCode);
             if (item.Amount is { } amount && rate is { } factor)
             {
-                var converted = Convert(amount, factor);
-                if (bucket == ProjectionBucket.Investment) investments += converted;
-                else savings += converted;
+                _ = Convert(amount, factor);
+                if (configured) balances[item.CurrencyCode] = bucket == ProjectionBucket.Investment
+                    ? (native.Investments + amount, native.Savings) : (native.Investments, native.Savings + amount);
             }
         }
         foreach (var asset in snapshot.FinancedAssetSnapshots.OrderBy(a => a.AssetName, StringComparer.Ordinal).ThenBy(a => a.Id))
@@ -88,8 +90,23 @@ internal static class ProjectionSnapshotAdapter
             if (!snapshot.FinancedAssetSnapshots.Any(a => a.FinancedAssetId == asset.FinancedAssetId))
                 Error(ProjectionPreparationIssueKind.MissingFinancedAsset, asset.FinancedAssetId, "A selected financed asset is absent from this snapshot; its loan cannot be assumed paid off.");
 
+        var currencyPositions = new List<ProjectionCurrencyPosition>();
+        foreach (var pot in assumptions.Currencies.OrderBy(c => c.CurrencyCode))
+        {
+            var native = balances[pot.CurrencyCode];
+            var used = native.Investments != 0 || native.Savings != 0 || pot.MonthlyInvestmentContribution != 0
+                || pot.MonthlySavingsContribution != 0 || loans.Any(l => l.InvestmentCurrencyAfterPayoff == pot.CurrencyCode
+                    && (l.MonthlyLoanPaymentInAssetCurrency != 0 || l.ExtraMonthlyLoanPaymentInAssetCurrency != 0));
+            var rate = Rate(pot.CurrencyCode, used);
+            if (rate is { } factor)
+            {
+                _ = Convert(native.Investments, factor);
+                _ = Convert(native.Savings, factor);
+            }
+            currencyPositions.Add(new(pot.CurrencyCode, native.Investments, native.Savings, rate));
+        }
         ProjectionStartingPosition? starting = issues.Any(i => i.Severity == ProjectionIssueSeverity.Error) ? null
-            : new(snapshot.SnapshotDate, investments, savings, preparedAssets.AsReadOnly());
+            : new(snapshot.SnapshotDate, currencyPositions.AsReadOnly(), preparedAssets.AsReadOnly());
         return new(snapshot.Id, snapshot.Revision, assumptions, starting, issues.AsReadOnly(), coverage.AsReadOnly());
 
         void Error(ProjectionPreparationIssueKind kind, Guid? id, string message) =>
@@ -98,7 +115,7 @@ internal static class ProjectionSnapshotAdapter
             ProjectionIssueSeverity.Warning, id, $"{name} uses carried-forward values."));
         decimal? BaseRate(string currency) => currency == snapshot.ExchangeRateBaseCurrency ? 1m
             : snapshot.ExchangeRates.SingleOrDefault(r => r.BaseCurrency == snapshot.ExchangeRateBaseCurrency && r.QuoteCurrency == currency)?.Rate;
-        decimal? Rate(string currency)
+        decimal? Rate(string currency, bool required = true)
         {
             if (currency == assumptions.CurrencyCode) return 1;
             if (BaseRate(currency) is { } source && BaseRate(assumptions.CurrencyCode) is { } target)
@@ -107,7 +124,7 @@ internal static class ProjectionSnapshotAdapter
                 if (factor <= 0) throw new InvalidValueException("The saved exchange rate exceeds supported numeric precision.");
                 return factor;
             }
-            if (missingCurrencies.Add(currency)) Error(ProjectionPreparationIssueKind.MissingExchangeRate, null,
+            if (required && missingCurrencies.Add(currency)) Error(ProjectionPreparationIssueKind.MissingExchangeRate, null,
                 $"No saved conversion from {currency} to {assumptions.CurrencyCode} is available in this snapshot.");
             return null;
         }

@@ -24,5 +24,6 @@ public sealed record ProjectionInputsRequest : IValidatableObject
     internal ProjectionGroupSelection[] ToGroups() => Groups!.Select(g => new ProjectionGroupSelection(g!.GroupId!.Value, g.Bucket!.Value)).ToArray();
     internal ProjectionFinancedAssetSettings[] ToAssets() => FinancedAssets!.Select(a => new ProjectionFinancedAssetSettings(
         a!.FinancedAssetId!.Value, a.MonthlyLoanPaymentInAssetCurrency!.Value,
-        a.AnnualLoanInterestPercent!.Value, a.AnnualAssetAppreciationPercent!.Value)).ToArray();
+        a.AnnualLoanInterestPercent!.Value, a.AnnualAssetAppreciationPercent!.Value,
+        a.ExtraMonthlyLoanPaymentInAssetCurrency!.Value, a.InvestmentCurrencyAfterPayoff!)).ToArray();
 }

@@ -16,11 +16,7 @@ public sealed class ProjectionPresetConfiguration : IEntityTypeConfiguration<Pro
             table.HasCheckConstraint("CK_ProjectionPresets_Name_NotBlank", "length(trim(\"Name\")) > 0");
             table.HasCheckConstraint("CK_ProjectionPresets_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
             table.HasCheckConstraint("CK_ProjectionPresets_DurationYears", "\"DurationYears\" BETWEEN 1 AND 100");
-            table.HasCheckConstraint("CK_ProjectionPresets_AnnualInvestmentReturnPercent", "\"AnnualInvestmentReturnPercent\" > -100 AND \"AnnualInvestmentReturnPercent\" <= 100");
-            table.HasCheckConstraint("CK_ProjectionPresets_AnnualSavingsInterestPercent", "\"AnnualSavingsInterestPercent\" > -100 AND \"AnnualSavingsInterestPercent\" <= 100");
             table.HasCheckConstraint("CK_ProjectionPresets_AnnualInflationPercent", "\"AnnualInflationPercent\" > -100 AND \"AnnualInflationPercent\" <= 100");
-            table.HasCheckConstraint("CK_ProjectionPresets_MonthlyInvestmentContribution", "\"MonthlyInvestmentContribution\" >= 0 AND \"MonthlyInvestmentContribution\" < 'Infinity'::numeric");
-            table.HasCheckConstraint("CK_ProjectionPresets_MonthlySavingsContribution", "\"MonthlySavingsContribution\" >= 0 AND \"MonthlySavingsContribution\" < 'Infinity'::numeric");
         });
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Id).ValueGeneratedNever();
@@ -28,12 +24,9 @@ public sealed class ProjectionPresetConfiguration : IEntityTypeConfiguration<Pro
         builder.HasIndex(p => new { p.HouseholdId, p.Name }).IsUnique();
         builder.Property(p => p.Name).IsRequired();
         builder.Property(p => p.CurrencyCode).IsRequired();
-        builder.Property(p => p.AnnualInvestmentReturnPercent).HasColumnType("numeric");
-        builder.Property(p => p.AnnualSavingsInterestPercent).HasColumnType("numeric");
         builder.Property(p => p.AnnualInflationPercent).HasColumnType("numeric");
-        builder.Property(p => p.MonthlyInvestmentContribution).HasColumnType("numeric");
-        builder.Property(p => p.MonthlySavingsContribution).HasColumnType("numeric");
         builder.HasOne<Household>().WithMany().HasForeignKey(p => p.HouseholdId).OnDelete(DeleteBehavior.Restrict);
+        builder.Navigation(p => p.Currencies).HasField("_currencies").UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(p => p.Groups).HasField("_groups").UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(p => p.FinancedAssets).HasField("_financedAssets").UsePropertyAccessMode(PropertyAccessMode.Field);
     }

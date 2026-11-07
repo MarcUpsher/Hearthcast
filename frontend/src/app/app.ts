@@ -21,6 +21,8 @@ import { Workspace } from "./core/api";
           >Snapshots</a
         ><a mat-button routerLink="/history" routerLinkActive="active"
           >History</a
+        ><a mat-button routerLink="/modelling" routerLinkActive="active"
+          >Modelling</a
         ><a mat-button routerLink="/record" routerLinkActive="active"
           >Record snapshot</a
         ><a mat-button routerLink="/setup" routerLinkActive="active"

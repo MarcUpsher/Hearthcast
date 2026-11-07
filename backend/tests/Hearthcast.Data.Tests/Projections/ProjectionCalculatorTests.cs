@@ -7,13 +7,13 @@ namespace Hearthcast.Data.Tests.Projections;
 public sealed class ProjectionCalculatorTests
 {
     private static readonly DateOnly Start = new(2024, 1, 31);
-    private static ProjectionPresetSettings Assumptions => new("", "GBP", 1, 0, 0, 0, 0, 0, false);
+    private static ProjectionPresetSettings Assumptions => new("", "GBP", 1, 0, false, [new("GBP", 0, 0, 0, 0)]);
     private static ProjectionFinancedAssetInput Loan(decimal balance = 250, decimal payment = 100,
         decimal interest = 0, decimal growth = 0, decimal value = 1000, string currency = "GBP", decimal fx = 1) =>
-        new(currency, fx, value, balance, new(Guid.NewGuid(), payment, interest, growth));
+        new(currency, fx, value, balance, new(Guid.NewGuid(), payment, interest, growth, 0, "GBP"));
     private static ProjectionResult Calculate(ProjectionPresetSettings? assumptions = null, decimal investments = 0,
         decimal savings = 0, params ProjectionFinancedAssetInput[] loans) =>
-        ProjectionCalculator.Calculate(assumptions ?? Assumptions, new(Start, investments, savings, loans));
+        ProjectionCalculator.Calculate(assumptions ?? Assumptions, new(Start, [new("GBP", investments, savings, 1)], loans));
     private static void Near(decimal expected, decimal actual) => Assert.InRange(actual, expected - .000001m, expected + .000001m);
 
     [Fact]
@@ -34,7 +34,7 @@ public sealed class ProjectionCalculatorTests
     [Fact]
     public void EndOfMonthContributionsAccumulateWithoutGrowth()
     {
-        var result = Calculate(Assumptions with { MonthlyInvestmentContribution = 100, MonthlySavingsContribution = 50 }, 1000, 200);
+        var result = Calculate(Assumptions with { Currencies = [Assumptions.Currencies[0] with { MonthlyInvestmentContribution = 100, MonthlySavingsContribution = 50 }] }, 1000, 200);
         Assert.Equal(1100, result.Months[1].Nominal.Investments);
         Assert.Equal(2200, result.Months[^1].Nominal.Investments);
         Assert.Equal(800, result.Months[^1].Nominal.Savings);
@@ -47,7 +47,7 @@ public sealed class ProjectionCalculatorTests
     [InlineData(0, 1000)]
     public void AnnualGrowthCompoundsToSpecifiedAnnualReturn(int annualRate, int final)
     {
-        var a = Assumptions with { AnnualInvestmentReturnPercent = annualRate, AnnualSavingsInterestPercent = annualRate };
+        var a = Assumptions with { Currencies = [Assumptions.Currencies[0] with { AnnualInvestmentReturnPercent = annualRate, AnnualSavingsInterestPercent = annualRate }] };
         var result = Calculate(a, 1000, 1000, Loan(balance: 0, payment: 0, growth: annualRate));
         Near(final, result.Months[^1].Nominal.Investments);
         Near(final, result.Months[^1].Nominal.Savings);
@@ -57,7 +57,7 @@ public sealed class ProjectionCalculatorTests
     [Fact]
     public void NewContributionsDoNotReceiveGrowthForTheMonthTheyAreAdded()
     {
-        var result = Calculate(Assumptions with { MonthlyInvestmentContribution = 100, AnnualInvestmentReturnPercent = 12 });
+        var result = Calculate(Assumptions with { Currencies = [Assumptions.Currencies[0] with { MonthlyInvestmentContribution = 100, AnnualInvestmentReturnPercent = 12 }] });
         Assert.Equal(100, result.Months[1].Nominal.Investments);
         Near(100 * (decimal)Math.Pow(1.12, 1d / 12) + 100, result.Months[2].Nominal.Investments);
     }
@@ -65,7 +65,7 @@ public sealed class ProjectionCalculatorTests
     [Fact]
     public void RedirectsFinalPaymentRemainderAndAllSubsequentPayments()
     {
-        var result = Calculate(Assumptions with { MonthlyInvestmentContribution = 10 }, loans: [Loan()]);
+        var result = Calculate(Assumptions with { Currencies = [Assumptions.Currencies[0] with { MonthlyInvestmentContribution = 10 }] }, loans: [Loan()]);
         Assert.Equal(150, result.Months[1].Nominal.LoanBalance);
         Assert.Equal(50, result.Months[2].Nominal.LoanBalance);
         var payoff = result.Months[3];
@@ -180,11 +180,7 @@ public sealed class ProjectionCalculatorTests
     {
         const decimal rate = -99.999999999999999999m;
         const decimal initial = 100_000_000_000_000_000_000m;
-        var result = Calculate(Assumptions with
-        {
-            AnnualInvestmentReturnPercent = rate,
-            AnnualSavingsInterestPercent = rate
-        }, initial, initial, Loan(balance: 0, payment: 0, growth: rate, value: initial));
+        var result = Calculate(Assumptions with { Currencies = [Assumptions.Currencies[0] with { AnnualInvestmentReturnPercent = rate, AnnualSavingsInterestPercent = rate }] }, initial, initial, Loan(balance: 0, payment: 0, growth: rate, value: initial));
         Assert.All(result.Months, month =>
         {
             Assert.True(month.Nominal.Investments > 0);
@@ -212,13 +208,7 @@ public sealed class ProjectionCalculatorTests
     public void UnsupportedCompoundingUnderflowIsReportedInsteadOfSilentlyErasingBalances(string component)
     {
         const decimal rate = -99.999999999999999999m;
-        var assumptions = Assumptions with
-        {
-            DurationYears = 2,
-            AnnualInvestmentReturnPercent = component == "Investment" ? rate : 0,
-            AnnualSavingsInterestPercent = component == "Savings" ? rate : 0,
-            AnnualInflationPercent = component == "Inflation" ? rate : 0
-        };
+        var assumptions = Assumptions with { DurationYears = 2, AnnualInflationPercent = component == "Inflation" ? rate : 0, Currencies = [Assumptions.Currencies[0] with { AnnualInvestmentReturnPercent = component == "Investment" ? rate : 0, AnnualSavingsInterestPercent = component == "Savings" ? rate : 0 }] };
         var failure = Assert.Throws<InvalidValueException>(() => Calculate(assumptions,
             investments: component == "Investment" ? 1 : 0,
             savings: component == "Savings" ? 1 : 0,
@@ -288,10 +278,10 @@ public sealed class ProjectionCalculatorTests
     [Fact]
     public void RejectsInvalidAssumptionsDatesAndUnrepresentableResults()
     {
-        Assert.Throws<InvalidValueException>(() => Calculate(Assumptions with { AnnualInvestmentReturnPercent = -100 }));
+        Assert.Throws<InvalidValueException>(() => Calculate(Assumptions with { Currencies = [Assumptions.Currencies[0] with { AnnualInvestmentReturnPercent = -100 }] }));
         Assert.Throws<InvalidValueException>(() => Calculate(Assumptions with { DurationYears = 0 }));
         Assert.Throws<InvalidValueException>(() => Calculate(investments: -1));
-        Assert.Throws<InvalidValueException>(() => ProjectionCalculator.Calculate(Assumptions, new(new(9999, 1, 1), 0, 0, [])));
-        Assert.Throws<InvalidValueException>(() => Calculate(Assumptions with { DurationYears = 100, AnnualInvestmentReturnPercent = 100 }, 1_000_000));
+        Assert.Throws<InvalidValueException>(() => ProjectionCalculator.Calculate(Assumptions, new(new(9999, 1, 1), [new("GBP", 0, 0, 1)], [])));
+        Assert.Throws<InvalidValueException>(() => Calculate(Assumptions with { DurationYears = 100, Currencies = [Assumptions.Currencies[0] with { AnnualInvestmentReturnPercent = 100 }] }, 1_000_000));
     }
 }

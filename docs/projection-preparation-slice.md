@@ -1,5 +1,10 @@
 # Snapshot-to-projection preparation
 
+> Updated model: see [Native currency projection pots](native-currency-projection-slice.md)
+> for the current schema, request shape and per-currency calculation. The original
+> single-currency slice notes below describe the preceding implementation.
+
+
 `ProjectionPreparationService` prepares a selected household snapshot with either
 unsaved assumptions/selections (`PrepareAsync`) or a saved preset
 (`PrepareSavedPresetAsync`). It returns preparation data, not a saved projection or

@@ -1,5 +1,10 @@
 # Monthly projection calculator
 
+> Updated model: see [Native currency projection pots](native-currency-projection-slice.md)
+> for the current schema, request shape and per-currency calculation. The original
+> single-currency slice notes below describe the preceding implementation.
+
+
 `ProjectionCalculator.Calculate(assumptions, startingPosition)` is a pure function.
 It takes unsaved or saved assumptions plus prepared, known starting balances. It
 has no database access, HTTP calls, snapshot lookup or writes. The snapshot adapter

@@ -22,6 +22,11 @@ bootstrapApplication(App, {
           import("./app/history/history").then((m) => m.History),
       },
       {
+        path: "modelling",
+        loadComponent: () =>
+          import("./app/modelling/modelling").then((m) => m.Modelling),
+      },
+      {
         path: "record",
         canDeactivate: [
           (component: import("./app/snapshots/editor").SnapshotEditor) =>

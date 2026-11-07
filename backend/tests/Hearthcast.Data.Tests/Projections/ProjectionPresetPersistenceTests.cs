@@ -15,7 +15,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     private readonly PostgresTestDatabase _database = new();
     private ProjectionPresetService Service => new(_database);
     private static ProjectionPresetSettings Settings(string name = "Baseline") =>
-        new(name, "GBP", 10, 500m, 6m, 100m, 2m, 3m, true);
+        new(name, "GBP", 10, 3m, true, [new("GBP", 500m, 6m, 100m, 2m)]);
 
     public Task InitializeAsync() => _database.InitializeAsync();
     public Task DisposeAsync() => _database.DisposeAsync();
@@ -33,15 +33,16 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     public async Task RoundTripKeepsIndependentLoansAndExactAssumptionsWithoutASnapshot()
     {
         var data = await Setup();
-        var settings = Settings(" Big saving ") with { CurrencyCode = " gbp ", AnnualInvestmentReturnPercent = -2.125m };
+        var settings = Settings(" Big saving ") with { CurrencyCode = " gbp ", Currencies = [Settings(" Big saving ").Currencies[0] with { AnnualInvestmentReturnPercent = -2.125m }] };
         var saved = await Service.CreateAsync(data.Household, settings,
             [new(data.Group, ProjectionBucket.Investment)],
-            [new(data.Asset, 1000m, 9.25m, -1m), new(data.SecondAsset, 200m, 0m, 3m)]);
+            [new(data.Asset, 1000m, 9.25m, -1m, 0, "GBP"), new(data.SecondAsset, 200m, 0m, 3m, 0, "GBP")]);
         var loaded = await Service.GetAsync(data.Household, saved.Id);
-        Assert.Equal(settings with { Name = "Big saving", CurrencyCode = "GBP" },
-            new(loaded.Name, loaded.CurrencyCode, loaded.DurationYears, loaded.MonthlyInvestmentContribution,
-                loaded.AnnualInvestmentReturnPercent, loaded.MonthlySavingsContribution,
-                loaded.AnnualSavingsInterestPercent, loaded.AnnualInflationPercent, loaded.ShowInflationAdjustedValues));
+        Assert.Equal("Big saving", loaded.Name);
+        Assert.Equal("GBP", loaded.CurrencyCode);
+        var currency = Assert.Single(loaded.Currencies);
+        Assert.Equal(settings.Currencies[0], new ProjectionCurrencySettings(currency.CurrencyCode,
+            currency.MonthlyInvestmentContribution, currency.AnnualInvestmentReturnPercent, currency.MonthlySavingsContribution, currency.AnnualSavingsInterestPercent));
         Assert.InRange((saved.CreatedAtUtc - loaded.CreatedAtUtc).Duration(), TimeSpan.Zero, TimeSpan.FromMicroseconds(1));
         Assert.True(loaded.UpdatedAtUtc >= loaded.CreatedAtUtc);
         Assert.Equal(ProjectionBucket.Investment, Assert.Single(loaded.Groups).Bucket);
@@ -56,9 +57,9 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     {
         var d = await Setup();
         var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Investment)],
-            [new(d.Asset, 1000, 9, 2), new(d.SecondAsset, 200, 5, 1)]);
+            [new(d.Asset, 1000, 9, 2, 0, "GBP"), new(d.SecondAsset, 200, 5, 1, 0, "GBP")]);
         await Service.UpdateAsync(d.Household, saved.Id, Settings("Changed") with { DurationYears = 25 },
-            [new(d.Group, ProjectionBucket.Savings)], [new(d.Asset, 1200, 8, 3)]);
+            [new(d.Group, ProjectionBucket.Savings)], [new(d.Asset, 1200, 8, 3, 0, "GBP")]);
         var loaded = await Service.GetAsync(d.Household, saved.Id);
         Assert.InRange((saved.CreatedAtUtc - loaded.CreatedAtUtc).Duration(), TimeSpan.Zero, TimeSpan.FromMicroseconds(1));
         Assert.Equal(25, loaded.DurationYears);
@@ -75,10 +76,10 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     {
         var d = await Setup();
         var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Investment)],
-            [new(d.Asset, 1000, 9, 2)]);
+            [new(d.Asset, 1000, 9, 2, 0, "GBP")]);
         var before = await Service.GetAsync(d.Household, saved.Id);
         await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.UpdateAsync(d.Household, saved.Id,
-            Settings("Changed"), [], [new(Guid.NewGuid(), 100, 2, 1)]));
+            Settings("Changed"), [], [new(Guid.NewGuid(), 100, 2, 1, 0, "GBP")]));
         var loaded = await Service.GetAsync(d.Household, saved.Id);
         Assert.Equal("Baseline", loaded.Name);
         Assert.Single(loaded.Groups);
@@ -93,7 +94,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     {
         var d = await Setup();
         var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Investment)],
-            [new(d.Asset, 1000, 9, 2)]);
+            [new(d.Asset, 1000, 9, 2, 0, "GBP")]);
         await Assert.ThrowsAsync<InvalidValueException>(() => Service.UpdateAsync(d.Household, saved.Id,
             Settings("Changed"), nullAsset ? [] : [null!], nullAsset ? [null!] : []));
         var loaded = await Service.GetAsync(d.Household, saved.Id);
@@ -106,7 +107,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     public async Task NativeLoanPaymentsDoNotChangeWhenThePresetCurrencyChanges()
     {
         var d = await Setup();
-        var assets = new ProjectionFinancedAssetSettings[] { new(d.Asset, 20_000, 9, 2), new(d.SecondAsset, 1000, 5, 1) };
+        var assets = new ProjectionFinancedAssetSettings[] { new(d.Asset, 20_000, 9, 2, 0, "GBP"), new(d.SecondAsset, 1000, 5, 1, 0, "GBP") };
         var saved = await Service.CreateAsync(d.Household, Settings(), [], assets);
         await Service.UpdateAsync(d.Household, saved.Id, Settings() with { CurrencyCode = "ZAR" }, [], assets);
         var loaded = await Service.GetAsync(d.Household, saved.Id);
@@ -123,7 +124,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     {
         var d = await Setup();
         var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Investment)],
-            [new(d.Asset, 1000, 9, 2)]);
+            [new(d.Asset, 1000, 9, 2, 0, "GBP")]);
         var before = await Service.GetAsync(d.Household, saved.Id);
         await using var context = _database.CreateDbContext();
         await context.Database.ExecuteSqlRawAsync("""
@@ -147,7 +148,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
             """);
         var failure = await Assert.ThrowsAsync<PostgresException>(() => Service.UpdateAsync(d.Household, saved.Id,
             Settings("Changed"), [new(d.Group, ProjectionBucket.Savings)],
-            [new(d.Asset, 2000, 8, 3), new(d.SecondAsset, 500, 5, 1)]));
+            [new(d.Asset, 2000, 8, 3, 0, "GBP"), new(d.SecondAsset, 500, 5, 1, 0, "GBP")]));
         Assert.Equal("Synthetic preset child failure after writes", failure.MessageText);
         var loaded = await Service.GetAsync(d.Household, saved.Id);
         Assert.Equal("Baseline", loaded.Name);
@@ -158,6 +159,29 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
         Assert.Equal(1000, loan.MonthlyLoanPaymentInAssetCurrency);
         Assert.Equal(9, loan.AnnualLoanInterestPercent);
         Assert.Equal(2, loan.AnnualAssetAppreciationPercent);
+    }
+
+    [Fact]
+    public async Task CurrencyPotsExtraPaymentAndDestinationPersistAndCanBeReassignedAtomically()
+    {
+        var d = await Setup();
+        var settings = new ProjectionPresetSettings("Mixed", "GBP", 10, 3, false,
+            [new("GBP", 1000, 5, 100, 2), new("ZAR", 500, 8, 200, 4)]);
+        var saved = await Service.CreateAsync(d.Household, settings, [], [new(d.Asset, 20_000, 9, 2, 2000, "GBP")]);
+        var read = await Service.GetAsync(d.Household, saved.Id);
+        Assert.Equal(2, read.Currencies.Count);
+        Assert.Equal(2000, Assert.Single(read.FinancedAssets).ExtraMonthlyLoanPaymentInAssetCurrency);
+        Assert.Equal("GBP", read.FinancedAssets.Single().InvestmentCurrencyAfterPayoff);
+        await Service.UpdateAsync(d.Household, saved.Id, settings with { Currencies = [settings.Currencies[1]] }, [],
+            [new(d.Asset, 20_000, 9, 2, 3000, "ZAR")]);
+        read = await Service.GetAsync(d.Household, saved.Id);
+        Assert.Equal("GBP", read.CurrencyCode); // Viewing currency does not require a matching native pot.
+        Assert.Equal("ZAR", Assert.Single(read.Currencies).CurrencyCode);
+        Assert.Equal("ZAR", read.FinancedAssets.Single().InvestmentCurrencyAfterPayoff);
+        Assert.Equal(3000, read.FinancedAssets.Single().ExtraMonthlyLoanPaymentInAssetCurrency);
+        await Assert.ThrowsAsync<InvalidValueException>(() => Service.UpdateAsync(d.Household, saved.Id, settings with { Currencies = [settings.Currencies[1]] }, [],
+            [new(d.Asset, 20_000, 9, 2, 0, "GBP")]));
+        Assert.Equal("ZAR", (await Service.GetAsync(d.Household, saved.Id)).FinancedAssets.Single().InvestmentCurrencyAfterPayoff);
     }
 
     [Fact]
@@ -198,7 +222,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
         await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.UpdateAsync(second.Household, saved.Id, Settings(), [], []));
         await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.DeleteAsync(second.Household, saved.Id));
         await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.CreateAsync(first.Household, Settings("Group"), [new(second.Group, ProjectionBucket.Savings)], []));
-        await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.CreateAsync(first.Household, Settings("Asset"), [], [new(second.Asset, 1, 1, 1)]));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.CreateAsync(first.Household, Settings("Asset"), [], [new(second.Asset, 1, 1, 1, 0, "GBP")]));
         await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.ListAsync(Guid.NewGuid()));
         await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.CreateAsync(Guid.NewGuid(), Settings(), [], []));
     }
@@ -212,7 +236,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
         await Assert.ThrowsAsync<InvalidValueException>(() => Service.CreateAsync(d.Household, Settings(),
             [new(d.Group, (ProjectionBucket)99)], []));
         await Assert.ThrowsAsync<InvalidValueException>(() => Service.CreateAsync(d.Household, Settings(), [],
-            [new(d.Asset, 1, 1, 1), new(d.Asset, 2, 2, 2)]));
+            [new(d.Asset, 1, 1, 1, 0, "GBP"), new(d.Asset, 2, 2, 2, 0, "GBP")]));
         var classification = new ClassificationService(_database);
         var category = await classification.CreateCategoryAsync(d.Household, "Debts", FinancialType.Debt);
         var group = await classification.CreateGroupAsync(d.Household, category.Id, "Loan");
@@ -241,15 +265,15 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
             "Currency" => Settings() with { CurrencyCode = "12!" },
             "YearsLow" => Settings() with { DurationYears = 0 },
             "YearsHigh" => Settings() with { DurationYears = 101 },
-            "InvestmentContribution" => Settings() with { MonthlyInvestmentContribution = -1 },
-            "SavingsContribution" => Settings() with { MonthlySavingsContribution = -1 },
-            "InvestmentReturn" => Settings() with { AnnualInvestmentReturnPercent = -100 },
-            "SavingsReturn" => Settings() with { AnnualSavingsInterestPercent = 101 },
+            "InvestmentContribution" => Settings() with { Currencies = [Settings().Currencies[0] with { MonthlyInvestmentContribution = -1 }] },
+            "SavingsContribution" => Settings() with { Currencies = [Settings().Currencies[0] with { MonthlySavingsContribution = -1 }] },
+            "InvestmentReturn" => Settings() with { Currencies = [Settings().Currencies[0] with { AnnualInvestmentReturnPercent = -100 }] },
+            "SavingsReturn" => Settings() with { Currencies = [Settings().Currencies[0] with { AnnualSavingsInterestPercent = 101 }] },
             "Inflation" => Settings() with { AnnualInflationPercent = -100 },
             _ => Settings()
         };
         var asset = new ProjectionFinancedAssetSettings(d.Asset,
-            field == "Payment" ? -1 : 0, field == "LoanInterest" ? -1 : 0, field == "Appreciation" ? -100 : 0);
+            field == "Payment" ? -1 : 0, field == "LoanInterest" ? -1 : 0, field == "Appreciation" ? -100 : 0, 0, "GBP");
         await Assert.ThrowsAnyAsync<ArgumentException>(() => Service.CreateAsync(d.Household, settings, [], [asset]));
         Assert.Empty(await Service.ListAsync(d.Household));
     }
@@ -258,7 +282,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     public async Task DeleteCascadesOnlyPresetChildren()
     {
         var d = await Setup();
-        var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Savings)], [new(d.Asset, 1, 1, 1)]);
+        var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Savings)], [new(d.Asset, 1, 1, 1, 0, "GBP")]);
         await Service.DeleteAsync(d.Household, saved.Id);
         await using var context = _database.CreateDbContext();
         Assert.Empty(await context.ProjectionPresets.ToArrayAsync());
@@ -292,8 +316,8 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
         Assert.Equal(PostgresErrorCodes.UniqueViolation, exception.SqlState);
         exception = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "ProjectionPresetFinancedAssets" ("ProjectionPresetId", "HouseholdId", "FinancedAssetId",
-                "MonthlyLoanPaymentInAssetCurrency", "AnnualLoanInterestPercent", "AnnualAssetAppreciationPercent")
-            VALUES ({saved.Id}, {first.Household}, {second.Asset}, {1}, {1}, {1})
+                "MonthlyLoanPaymentInAssetCurrency", "AnnualLoanInterestPercent", "AnnualAssetAppreciationPercent", "ExtraMonthlyLoanPaymentInAssetCurrency", "InvestmentCurrencyAfterPayoff")
+            VALUES ({saved.Id}, {first.Household}, {second.Asset}, {1}, {1}, {1}, {0}, {"GBP"})
             """));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
     }
@@ -316,7 +340,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
                 UPDATE "ProjectionPresets" SET "AnnualInflationPercent" = 'NaN'::numeric WHERE "Id" = {saved.Id}
                 """),
             _ => context.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE "ProjectionPresets" SET "MonthlyInvestmentContribution" = 'Infinity'::numeric WHERE "Id" = {saved.Id}
+                UPDATE "ProjectionPresetCurrencies" SET "MonthlyInvestmentContribution" = 'Infinity'::numeric WHERE "ProjectionPresetId" = {saved.Id}
                 """)
         });
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);

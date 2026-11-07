@@ -4,6 +4,7 @@ namespace Hearthcast.Data.Projections;
 
 public sealed class ProjectionPreset
 {
+    private readonly List<ProjectionPresetCurrency> _currencies = [];
     private readonly List<ProjectionPresetGroup> _groups = [];
     private readonly List<ProjectionPresetFinancedAsset> _financedAssets = [];
     private ProjectionPreset() { }
@@ -18,33 +19,36 @@ public sealed class ProjectionPreset
     public string Name { get; private set; } = string.Empty;
     public string CurrencyCode { get; private set; } = string.Empty;
     public int DurationYears { get; private set; }
-    public decimal MonthlyInvestmentContribution { get; private set; }
-    public decimal AnnualInvestmentReturnPercent { get; private set; }
-    public decimal MonthlySavingsContribution { get; private set; }
-    public decimal AnnualSavingsInterestPercent { get; private set; }
     public decimal AnnualInflationPercent { get; private set; }
     public bool ShowInflationAdjustedValues { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
+    public IReadOnlyCollection<ProjectionPresetCurrency> Currencies => _currencies.AsReadOnly();
     public IReadOnlyCollection<ProjectionPresetGroup> Groups => _groups.AsReadOnly();
     public IReadOnlyCollection<ProjectionPresetFinancedAsset> FinancedAssets => _financedAssets.AsReadOnly();
 
     internal void Update(ProjectionPresetSettings settings, IReadOnlyCollection<ProjectionGroupSelection> groups,
         IReadOnlyCollection<ProjectionFinancedAssetSettings> assets)
     {
+        settings = ProjectionRules.Normalize(settings);
+        assets = assets.Select(ProjectionRules.NormalizeLoan).ToArray();
         var name = RequiredText.Trim(settings.Name);
         var currency = RequiredAlphabeticCode.Normalize(settings.CurrencyCode, 3);
         ProjectionRules.ValidateAssumptions(settings);
         ProjectionRules.ValidateSelections(groups, assets);
+        ProjectionRules.ValidateDestinations(assets, settings.Currencies);
         Name = name;
         CurrencyCode = currency;
         DurationYears = settings.DurationYears;
-        MonthlyInvestmentContribution = settings.MonthlyInvestmentContribution;
-        AnnualInvestmentReturnPercent = settings.AnnualInvestmentReturnPercent;
-        MonthlySavingsContribution = settings.MonthlySavingsContribution;
-        AnnualSavingsInterestPercent = settings.AnnualSavingsInterestPercent;
         AnnualInflationPercent = settings.AnnualInflationPercent;
         ShowInflationAdjustedValues = settings.ShowInflationAdjustedValues;
+        _currencies.RemoveAll(row => !settings.Currencies.Any(c => c.CurrencyCode == row.CurrencyCode));
+        foreach (var currencySettings in settings.Currencies)
+        {
+            var existing = _currencies.SingleOrDefault(c => c.CurrencyCode == currencySettings.CurrencyCode);
+            if (existing is null) _currencies.Add(new(this, currencySettings));
+            else existing.Update(currencySettings);
+        }
         // Update retained children in place: EF tracks their composite identities.
         _groups.RemoveAll(row => !groups.Any(g => g.GroupId == row.GroupId));
         foreach (var selection in groups)
