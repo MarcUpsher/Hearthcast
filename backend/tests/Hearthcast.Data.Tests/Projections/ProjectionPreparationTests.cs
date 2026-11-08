@@ -43,6 +43,29 @@ public sealed class ProjectionPreparationTests : IAsyncLifetime
              new(asset.Id, FinancedAssetBalanceKind.AvailableToWithdraw, 100)]);
 
     [Fact]
+    public async Task ExpenseCurrencyUsesSavedQuotesAndCannotInventAMissingConversion()
+    {
+        var (d, item, asset) = await Setup();
+        await AddExcludedCurrencies(d);
+        var snapshot = await Capture(d, item, asset);
+        var settings = Assumptions("ZAR") with { ExpenseTarget = new(1200, "GBP", 4, false) };
+        var missing = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, settings, [], []);
+        Assert.False(missing.CanCalculate);
+        Assert.Equal(ProjectionPreparationIssueKind.MissingExchangeRate, Assert.Single(missing.Issues).Kind);
+        var provider = new Rates();
+        snapshot = await new SnapshotExchangeRateService(_database, Snapshots, provider,
+            NullLogger<SnapshotExchangeRateService>.Instance).CaptureMissingAsync(d.HouseholdId, snapshot.Id, snapshot.Revision);
+        var prepared = await Service.PrepareAsync(d.HouseholdId, snapshot.Id, settings, [], []);
+        Assert.True(prepared.CanCalculate);
+        Assert.Equal(20, prepared.StartingPosition!.ExpenseCurrencyConversionRate);
+        var result = ProjectionCalculator.Calculate(prepared.Assumptions, prepared.StartingPosition);
+        Assert.Equal(600000, result.Months[0].ExpenseTarget!.NominalRequiredCapital);
+        Assert.Equal(30000, result.ExpenseTarget!.RequiredCapitalInExpenseCurrency);
+        Assert.Equal(1, provider.Calls);
+        Assert.Equal(snapshot.Revision, (await Snapshots.GetAsync(d.HouseholdId, snapshot.Id)).Revision);
+    }
+
+    [Fact]
     public async Task UsesCopiedHouseholdScopeAndDoesNotDoubleCountGroupAssetsOrAllocations()
     {
         var (d, item, asset) = await Setup();

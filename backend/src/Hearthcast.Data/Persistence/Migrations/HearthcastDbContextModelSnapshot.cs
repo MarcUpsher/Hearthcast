@@ -248,7 +248,13 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("AnnualExpenses")
+                        .HasColumnType("numeric");
+
                     b.Property<decimal>("AnnualInflationPercent")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("AnnualWithdrawalRatePercent")
                         .HasColumnType("numeric");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
@@ -261,8 +267,14 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<int>("DurationYears")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ExpenseCurrencyCode")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IncludeSavingsInExpenseTarget")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDefault")
                         .HasColumnType("boolean");
@@ -294,6 +306,8 @@ namespace Hearthcast.Data.Persistence.Migrations
                             t.HasCheckConstraint("CK_ProjectionPresets_CurrencyCode", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("CK_ProjectionPresets_DurationYears", "\"DurationYears\" BETWEEN 1 AND 100");
+
+                            t.HasCheckConstraint("CK_ProjectionPresets_ExpenseTarget", "(\"AnnualExpenses\" IS NULL AND \"ExpenseCurrencyCode\" IS NULL AND \"AnnualWithdrawalRatePercent\" IS NULL AND NOT \"IncludeSavingsInExpenseTarget\")\nOR (\"AnnualExpenses\" IS NOT NULL AND \"ExpenseCurrencyCode\" IS NOT NULL AND \"AnnualWithdrawalRatePercent\" IS NOT NULL\n    AND \"AnnualExpenses\" > 0 AND \"AnnualExpenses\" < 'Infinity'::numeric\n    AND \"ExpenseCurrencyCode\" ~ '^[A-Z]{3}$'\n    AND \"AnnualWithdrawalRatePercent\" > 0 AND \"AnnualWithdrawalRatePercent\" <= 100)");
 
                             t.HasCheckConstraint("CK_ProjectionPresets_Name_NotBlank", "length(trim(\"Name\")) > 0");
                         });

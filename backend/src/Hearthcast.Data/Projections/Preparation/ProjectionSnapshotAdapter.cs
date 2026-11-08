@@ -105,8 +105,9 @@ internal static class ProjectionSnapshotAdapter
             }
             currencyPositions.Add(new(pot.CurrencyCode, native.Investments, native.Savings, rate));
         }
+        var expenseRate = assumptions.ExpenseTarget is { } target ? Rate(target.CurrencyCode) : null;
         ProjectionStartingPosition? starting = issues.Any(i => i.Severity == ProjectionIssueSeverity.Error) ? null
-            : new(snapshot.SnapshotDate, currencyPositions.AsReadOnly(), preparedAssets.AsReadOnly());
+            : new(snapshot.SnapshotDate, currencyPositions.AsReadOnly(), preparedAssets.AsReadOnly(), expenseRate);
         return new(snapshot.Id, snapshot.Revision, assumptions, starting, issues.AsReadOnly(), coverage.AsReadOnly());
 
         void Error(ProjectionPreparationIssueKind kind, Guid? id, string message) =>

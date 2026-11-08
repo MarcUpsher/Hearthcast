@@ -39,7 +39,7 @@ public sealed class ProjectionPreparationService(IDbContextFactory<HearthcastDbC
         return await PrepareAsync(householdId, snapshotId,
             new(p.Name, p.CurrencyCode, p.DurationYears, p.AnnualInflationPercent, p.ShowInflationAdjustedValues,
                 p.Currencies.Select(c => new ProjectionCurrencySettings(c.CurrencyCode, c.MonthlyInvestmentContribution,
-                    c.AnnualInvestmentReturnPercent, c.MonthlySavingsContribution, c.AnnualSavingsInterestPercent)).ToArray()),
+                    c.AnnualInvestmentReturnPercent, c.MonthlySavingsContribution, c.AnnualSavingsInterestPercent)).ToArray(), p.ExpenseTarget),
             p.Groups.Select(g => new ProjectionGroupSelection(g.GroupId, g.Bucket)).ToArray(),
             p.FinancedAssets.Select(a => new ProjectionFinancedAssetSettings(a.FinancedAssetId,
                 a.MonthlyLoanPaymentInAssetCurrency, a.AnnualLoanInterestPercent, a.AnnualAssetAppreciationPercent,

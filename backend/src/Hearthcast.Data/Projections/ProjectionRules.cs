@@ -8,7 +8,8 @@ internal static class ProjectionRules
     {
         ValidateAssumptions(settings);
         return settings with { CurrencyCode = RequiredAlphabeticCode.Normalize(settings.CurrencyCode, 3),
-            Currencies = settings.Currencies.Select(c => c with { CurrencyCode = RequiredAlphabeticCode.Normalize(c.CurrencyCode, 3) }).ToArray() };
+            Currencies = settings.Currencies.Select(c => c with { CurrencyCode = RequiredAlphabeticCode.Normalize(c.CurrencyCode, 3) }).ToArray(),
+            ExpenseTarget = settings.ExpenseTarget is { } target ? target with { CurrencyCode = RequiredAlphabeticCode.Normalize(target.CurrencyCode, 3) } : null };
     }
 
     public static ProjectionFinancedAssetSettings NormalizeLoan(ProjectionFinancedAssetSettings asset)
@@ -41,6 +42,14 @@ internal static class ProjectionRules
             Rate(c.AnnualSavingsInterestPercent, nameof(c.AnnualSavingsInterestPercent));
         }
         Rate(settings.AnnualInflationPercent, nameof(settings.AnnualInflationPercent));
+        if (settings.ExpenseTarget is { } target)
+        {
+            _ = RequiredAlphabeticCode.Normalize(target.CurrencyCode, 3);
+            if (target.AnnualExpenses <= 0)
+                throw new InvalidValueException("Annual expenses must be greater than zero.", nameof(target.AnnualExpenses));
+            if (target.AnnualWithdrawalRatePercent <= 0 || target.AnnualWithdrawalRatePercent > 100)
+                throw new InvalidValueException("The withdrawal rate must be greater than zero and at most 100 percent.", nameof(target.AnnualWithdrawalRatePercent));
+        }
     }
 
     public static void ValidateLoan(ProjectionFinancedAssetSettings asset)

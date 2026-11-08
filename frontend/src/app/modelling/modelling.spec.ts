@@ -52,37 +52,67 @@ const snapshot = (id = "latest"): ModellingSnapshot => ({
     },
   ],
 });
-const report = (value = 100): ProjectionRun => ({
-  snapshotId: "latest",
-  snapshotRevision: "r1",
-  currencyCode: "GBP",
-  canCalculate: true,
-  months: Array.from({ length: 13 }, (_, i) => ({
-    month: i,
-    date: `${2026 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01`,
-    nominal: {
-      investments: value + i,
-      savings: 10,
-      financedAssetValue: 1000,
-      loanBalance: 500 - i,
-      equity: 500 + i,
-      netPosition: value + 510 + i * 2,
+const report = (value = 100): ProjectionRun => {
+  const inflation = (month: number) => Math.pow(1.03, month / 12);
+  const nominalGrowth = {
+    startingNetPosition: value + 510,
+    investmentReturns: 12,
+    savingsInterest: 0,
+    financedAssetValueChange: 0,
+    investmentContributions: 0,
+    savingsContributions: 0,
+    loanBalanceReduction: 12,
+    reinvestedLoanPayments: 0,
+    inflationEffect: 0,
+    finalNetPosition: value + 534,
+  };
+  const realChange = Array.from(
+    { length: 12 },
+    (_, i) => 1 / inflation(i + 1),
+  ).reduce((sum, n) => sum + n, 0);
+  return {
+    snapshotId: "latest",
+    snapshotRevision: "r1",
+    currencyCode: "GBP",
+    canCalculate: true,
+    growthBreakdown: {
+      nominal: nominalGrowth,
+      inflationAdjusted: {
+        ...nominalGrowth,
+        investmentReturns: realChange,
+        loanBalanceReduction: realChange,
+        inflationEffect:
+          (value + 534) / inflation(12) - (value + 510) - realChange * 2,
+        finalNetPosition: (value + 534) / inflation(12),
+      },
     },
-    inflationAdjusted: {
-      investments: value / 2 + i,
-      savings: 5,
-      financedAssetValue: 500,
-      loanBalance: 250,
-      equity: 250,
-      netPosition: value / 2 + 255 + i,
-    },
-    redirectedToInvestments: 0,
-    financedAssets: [],
-  })),
-  issues: [],
-  warnings: [],
-  coverage: [],
-});
+    months: Array.from({ length: 13 }, (_, i) => ({
+      month: i,
+      date: `${2026 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01`,
+      nominal: {
+        investments: value + i,
+        savings: 10,
+        financedAssetValue: 1000,
+        loanBalance: 500 - i,
+        equity: 500 + i,
+        netPosition: value + 510 + i * 2,
+      },
+      inflationAdjusted: {
+        investments: (value + i) / inflation(i),
+        savings: 10 / inflation(i),
+        financedAssetValue: 1000 / inflation(i),
+        loanBalance: (500 - i) / inflation(i),
+        equity: (500 + i) / inflation(i),
+        netPosition: (value + 510 + i * 2) / inflation(i),
+      },
+      redirectedToInvestments: 0,
+      financedAssets: [],
+    })),
+    issues: [],
+    warnings: [],
+    coverage: [],
+  };
+};
 const payoffReport = (events: { id: string; month: number | null }[]) => {
   const result = report();
   for (const row of result.months!)
@@ -94,6 +124,36 @@ const payoffReport = (events: { id: string; month: number | null }[]) => {
           ? result.months![event.month].date
           : null,
     }));
+  return result;
+};
+const expenseReport = (
+  capital = 106,
+  includeSavings = false,
+): ProjectionRun => {
+  const result = report();
+  for (const row of result.months!) {
+    const inflation = Math.pow(1.03, row.month / 12);
+    const eligible =
+      row.nominal.investments + (includeSavings ? row.nominal.savings : 0);
+    row.expenseTarget = {
+      nominalRequiredCapital: capital * inflation,
+      inflationAdjustedRequiredCapital: capital,
+      nominalEligibleBalance: eligible,
+      inflationAdjustedEligibleBalance: eligible / inflation,
+      isCovered:
+        Math.round(eligible * 100) >= Math.round(capital * inflation * 100),
+    };
+  }
+  const first = result.months!.find((m) => m.expenseTarget!.isCovered);
+  result.expenseTarget = {
+    expenseCurrencyCode: "GBP",
+    annualExpenses: capital * 0.04,
+    annualWithdrawalRatePercent: 4,
+    includeSavings,
+    requiredCapitalInExpenseCurrency: capital,
+    firstReachedDate: first?.date ?? null,
+    alreadyReachedAtStart: first?.month === 0,
+  };
   return result;
 };
 const pause = () => new Promise((resolve) => setTimeout(resolve, 340));
@@ -115,6 +175,7 @@ const preset = (id = "baseline", isDefault = false): ProjectionPreset => ({
       durationYears: 20,
       annualInflationPercent: 4,
       showInflationAdjustedValues: true,
+      expenseTarget: null,
       currencies: [
         {
           currencyCode: "GBP",
@@ -193,6 +254,156 @@ async function setup(
 }
 
 describe("Modelling", () => {
+  it("loads and saves expense settings without reinterpreting their currency when the graph changes currency", async () => {
+    const saved = preset("usual", true);
+    saved.inputs.assumptions.expenseTarget = {
+      annualExpenses: 40000,
+      currencyCode: "GBP",
+      annualWithdrawalRatePercent: 3.5,
+      includeSavings: true,
+    };
+    const { page, send } = await setup(snapshot(), [saved]);
+    expect(page.assumptions.expenseTarget).toEqual(
+      saved.inputs.assumptions.expenseTarget,
+    );
+    expect(page.presetDirty()).toBe(false);
+    page.assumptions.currencyCode = "ZAR";
+    page.viewCurrencyChanged();
+    expect(page.assumptions.expenseTarget!.currencyCode).toBe("GBP");
+    page.assumptions.expenseTarget!.annualWithdrawalRatePercent = 5;
+    send.mockResolvedValueOnce({
+      ...saved,
+      inputs: { ...saved.inputs, assumptions: { ...page.assumptions } },
+    });
+    await page.savePreset();
+    const body = (
+      send.mock.calls[0] as unknown as [
+        string,
+        string,
+        { inputs: { assumptions: { expenseTarget: unknown } } },
+      ]
+    )[2];
+    expect(body.inputs.assumptions.expenseTarget).toEqual({
+      annualExpenses: 40000,
+      currencyCode: "GBP",
+      annualWithdrawalRatePercent: 5,
+      includeSavings: true,
+    });
+    expect(
+      saved.inputs.assumptions.expenseTarget.annualWithdrawalRatePercent,
+    ).toBe(3.5);
+  });
+  it("validates an enabled expense target and can calculate a target even with no selected holdings", async () => {
+    const { page, send } = await setup();
+    page.setExpenseTarget(true);
+    expect(page.assumptions.expenseTarget!.annualWithdrawalRatePercent).toBe(4);
+    expect(page.assumptions.expenseTarget!.includeSavings).toBe(false);
+    expect(page.validation()).toContain("annual expenses");
+    page.assumptions.expenseTarget!.annualExpenses = 40000;
+    page.assumptions.expenseTarget!.annualWithdrawalRatePercent = 0;
+    page.changed();
+    expect(page.validation()).toContain("withdrawal rate");
+    expect(send).not.toHaveBeenCalled();
+    page.assumptions.expenseTarget!.annualWithdrawalRatePercent = 4;
+    send.mockResolvedValueOnce(expenseReport());
+    page.changed();
+    await pause();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(page.expenseMilestone()).not.toBeNull();
+    page.setExpenseTarget(false);
+    expect(page.assumptions.expenseTarget).toBeNull();
+    expect(page.result()).toBeNull();
+  });
+  it("freezes nested expense inputs when sending a projection request", async () => {
+    const { page, send } = await setup();
+    page.setExpenseTarget(true);
+    page.assumptions.expenseTarget!.annualExpenses = 40000;
+    page.changed();
+    await pause();
+    const body = (
+      send.mock.calls[0] as unknown as [
+        string,
+        string,
+        {
+          inputs: {
+            assumptions: { expenseTarget: { annualExpenses: number } };
+          };
+        },
+      ]
+    )[2];
+    page.assumptions.expenseTarget!.annualExpenses = 50000;
+    expect(body.inputs.assumptions.expenseTarget.annualExpenses).toBe(40000);
+  });
+  it("shows the first expense crossing on the eligible curve with focus details and a local inflation toggle", async () => {
+    const { page, fixture, send } = await setup();
+    const r = expenseReport();
+    page.result.set(r);
+    fixture.detectChanges();
+    const milestone = page.expenseMilestone()!;
+    const marker = fixture.nativeElement.querySelector(".expense-marker");
+    expect(milestone.index).toBeGreaterThan(0);
+    expect(marker.getAttribute("aria-label")).toContain(
+      r.expenseTarget!.firstReachedDate,
+    );
+    expect(
+      fixture.nativeElement.querySelector(".expense-summary").textContent,
+    ).toContain("First reached on");
+    marker.dispatchEvent(new Event("focus"));
+    expect(page.reading()!.expenseTarget!.isCovered).toBe(true);
+    const before = page.chart()!.expenseTarget!;
+    page.adjusted.set(true);
+    fixture.detectChanges();
+    expect(page.chart()!.expenseTarget!.marker!.x).toBe(before.marker!.x);
+    expect(page.chart()!.expenseTarget!.path).not.toBe(before.path);
+    expect(page.expenseMilestone()!.firstReachedDate).toBe(
+      r.expenseTarget!.firstReachedDate,
+    );
+    expect(
+      fixture.nativeElement.querySelectorAll(".projection-line"),
+    ).toHaveLength(4);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("supports already-reached and unreachable targets and shows a combined curve only when savings count", async () => {
+    const { page, fixture } = await setup();
+    page.result.set(expenseReport(106, true));
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector(".expense-summary").textContent,
+    ).toContain("Already reached at the starting snapshot");
+    expect(page.chart()!.expenseTarget!.marker!.index).toBe(0);
+    expect(
+      fixture.nativeElement.querySelectorAll(".projection-line"),
+    ).toHaveLength(5);
+    expect(page.expenseMilestone()!.basis).toBe("Investments + savings");
+    page.result.set(expenseReport(200));
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector(".expense-summary").textContent,
+    ).toContain("Not reached within this projection");
+    expect(
+      fixture.nativeElement.querySelector(".expense-target-line"),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector(".expense-marker")).toBeNull();
+  });
+  it("shows when a previously reached target is no longer covered at the end", async () => {
+    const { page, fixture } = await setup();
+    const r = expenseReport(100);
+    r.months!.at(-1)!.expenseTarget!.isCovered = false;
+    page.result.set(r);
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector(".expense-summary").textContent,
+    ).toContain("Below target at the end");
+    page.result.set({
+      ...r,
+      canCalculate: false,
+      months: null,
+      expenseTarget: null,
+    });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector(".expense-summary")).toBeNull();
+    expect(page.expenseMilestone()).toBeNull();
+  });
   it("keeps snapshots usable if presets fail to load and retries without replacing the draft", async () => {
     const { page, get } = await setup(
       snapshot(),
@@ -578,7 +789,141 @@ describe("Modelling", () => {
     fixture.detectChanges();
     expect(
       fixture.nativeElement.querySelector('[role="tooltip"]').textContent,
-    ).toContain("£ 50.00");
+    ).toContain("£ 100.00");
+  });
+  it("shows a formatted growth breakdown with zero contributions and the same final total as the card", async () => {
+    const { page, fixture } = await setup();
+    page.result.set(report());
+    fixture.detectChanges();
+    const table = fixture.nativeElement.querySelector(".growth-breakdown");
+    expect(table.textContent).toContain("2026-01-01 → 2027-01-01");
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(9);
+    expect(
+      table.querySelector('[data-component="investmentContributions"]')
+        .textContent,
+    ).toContain("£ 0.00");
+    expect(
+      table.querySelector('[data-component="savingsContributions"]')
+        .textContent,
+    ).toContain("£ 0.00");
+    expect(
+      table.querySelector('[data-component="investmentReturns"]').textContent,
+    ).toContain("+£ 12.00");
+    expect(
+      table.querySelector('[data-component="inflationEffect"]'),
+    ).toBeNull();
+    const final = table.querySelector(".growth-final td").textContent.trim();
+    expect(final).toBe("£ 634.00");
+    expect(
+      fixture.nativeElement
+        .querySelectorAll(".balance-cards .amount")[1]
+        .textContent.trim(),
+    ).toBe(final);
+  });
+  it("switches the breakdown to starting-date money locally while preserving the starting value", async () => {
+    const { page, fixture, send } = await setup();
+    page.result.set(report());
+    const starting = page.growth()!.starting;
+    page.adjusted.set(true);
+    fixture.detectChanges();
+    expect(page.growth()!.starting).toBe(starting);
+    expect(page.growth()!.final).toBeCloseTo(634 / 1.03);
+    const table = fixture.nativeElement.querySelector(".growth-breakdown");
+    expect(table.querySelectorAll("tbody tr")).toHaveLength(10);
+    expect(
+      table.querySelector('[data-component="inflationEffect"]').textContent,
+    ).toContain("-£");
+    expect(table.textContent).toContain("Starting-date purchasing power");
+    expect(table.querySelector(".growth-final td").textContent.trim()).toBe(
+      fixture.nativeElement
+        .querySelectorAll(".balance-cards .amount")[1]
+        .textContent.trim(),
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("preserves negative component amounts instead of presenting losses or debt increases as gains", async () => {
+    const { page, fixture } = await setup();
+    const r = report();
+    r.growthBreakdown!.nominal = {
+      ...r.growthBreakdown!.nominal,
+      investmentReturns: -50,
+      savingsInterest: -10,
+      loanBalanceReduction: -30,
+      finalNetPosition: 520,
+    };
+    r.months!.at(-1)!.nominal = {
+      investments: 50,
+      savings: 0,
+      financedAssetValue: 1000,
+      loanBalance: 530,
+      equity: 470,
+      netPosition: 520,
+    };
+    page.result.set(r);
+    fixture.detectChanges();
+    const table = fixture.nativeElement.querySelector(".growth-breakdown");
+    expect(
+      table.querySelector('[data-component="investmentReturns"]').textContent,
+    ).toContain("-£ 50.00");
+    expect(
+      table.querySelector('[data-component="savingsInterest"]').textContent,
+    ).toContain("-£ 10.00");
+    expect(
+      table.querySelector('[data-component="loanBalanceReduction"]')
+        .textContent,
+    ).toContain("-£ 30.00");
+  });
+  it("does not display signed zero for sub-cent rounding remnants", async () => {
+    const { page, fixture } = await setup();
+    const r = report();
+    r.growthBreakdown!.nominal.investmentReturns = 0.000000001;
+    r.growthBreakdown!.nominal.savingsInterest = -0.000000001;
+    page.result.set(r);
+    fixture.detectChanges();
+    for (const key of ["investmentReturns", "savingsInterest"])
+      expect(
+        fixture.nativeElement
+          .querySelector(`[data-component="${key}"] td`)
+          .textContent.trim(),
+      ).toBe("£ 0.00");
+  });
+  it("keeps previous breakdown amounts labelled with their result's dates and currency during recalculation", async () => {
+    const { page, fixture } = await setup();
+    page.result.set(report());
+    page.assumptions.currencyCode = "ZAR";
+    page.assumptions.durationYears = 30;
+    page.setGroups("Investment", ["group"]);
+    fixture.detectChanges();
+    const table = fixture.nativeElement.querySelector(".growth-breakdown");
+    expect(page.pending()).toBe(true);
+    expect(table.textContent).toContain("2027-01-01 · GBP");
+    expect(table.querySelector(".growth-final td").textContent).toContain(
+      "£ 634.00",
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      "Showing previous results",
+    );
+  });
+  it("hides the breakdown for blocked results and when invalid inputs clear the result", async () => {
+    const { page, fixture } = await setup();
+    page.result.set({
+      ...report(),
+      canCalculate: false,
+      months: null,
+      growthBreakdown: null,
+    });
+    fixture.detectChanges();
+    expect(page.growth()).toBeNull();
+    expect(fixture.nativeElement.querySelector(".growth-breakdown")).toBeNull();
+    page.result.set(report());
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector(".growth-breakdown"),
+    ).not.toBeNull();
+    page.assumptions.durationYears = null;
+    page.changed();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector(".growth-breakdown")).toBeNull();
   });
   it("groups loan payoffs by month and includes the final month without marking unpaid loans", async () => {
     const { page, fixture } = await setup();
@@ -657,7 +1002,9 @@ describe("Modelling", () => {
     expect(adjusted.y).not.toBe(nominal.y);
     expect(send).not.toHaveBeenCalled();
     page.hovered.set(6);
-    expect(page.reading()?.values.equity).toBe(250);
+    expect(page.reading()?.values.equity).toBeCloseTo(
+      506 / Math.pow(1.03, 0.5),
+    );
   });
   it("marks an already-paid loan at the start and removes markers when results no longer contain payoffs", async () => {
     const { page, fixture } = await setup();

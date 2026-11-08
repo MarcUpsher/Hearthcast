@@ -71,6 +71,111 @@ public sealed class ProjectionApiTests : IAsyncLifetime
         })
     };
     private static JsonObject Save(Data d, string name = "Baseline") => new() { ["name"] = name, ["inputs"] = Inputs(d) };
+    private static JsonObject ExpenseTarget(decimal annual = 4, string currency = "ZAR") => new()
+    {
+        ["annualExpenses"] = annual, ["currencyCode"] = currency,
+        ["annualWithdrawalRatePercent"] = 4, ["includeSavings"] = false
+    };
+
+    [Fact]
+    public async Task ExpenseTargetRoundTripsUpdatesClearsAndMarksTheInvestmentPortfolioOnly()
+    {
+        var d = await Setup();
+        var body = Save(d);
+        body["inputs"]!["assumptions"]!["expenseTarget"] = ExpenseTarget(currency: " zar ");
+        using var create = await _client.PostAsJsonAsync(Presets(d.Home), body);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var preset = (await create.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!;
+        Assert.Equal("ZAR", preset.Inputs.Assumptions.ExpenseTarget!.CurrencyCode);
+        using var run = await _client.PostAsJsonAsync(Run(d), new { presetId = preset.Id });
+        var result = (await run.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.True(result.ExpenseTarget!.AlreadyReachedAtStart);
+        Assert.Equal(d.Snapshot.SnapshotDate, result.ExpenseTarget.FirstReachedDate);
+        Assert.Equal(100, result.Months![0].ExpenseTarget!.NominalEligibleBalance);
+        Assert.Equal(100, result.ExpenseTarget.RequiredCapitalInExpenseCurrency);
+
+        body["inputs"]!["assumptions"]!["expenseTarget"]!["annualExpenses"] = 40;
+        using var updated = await _client.PutAsJsonAsync(create.Headers.Location, body);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        using var laterRun = await _client.PostAsJsonAsync(Run(d), new { presetId = preset.Id });
+        var later = (await laterRun.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.False(later.ExpenseTarget!.AlreadyReachedAtStart);
+        Assert.Equal(new DateOnly(2023, 12, 1), later.ExpenseTarget.FirstReachedDate);
+        body["inputs"]!["assumptions"]!.AsObject().Remove("expenseTarget");
+        using var cleared = await _client.PutAsJsonAsync(create.Headers.Location, body);
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        Assert.Null((await cleared.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!.Inputs.Assumptions.ExpenseTarget);
+        using var clearRun = await _client.PostAsJsonAsync(Run(d), new { presetId = preset.Id });
+        var without = (await clearRun.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.Null(without.ExpenseTarget);
+        Assert.All(without.Months!, m => Assert.Null(m.ExpenseTarget));
+        Assert.Equal(0, _rates.Calls);
+    }
+
+    [Theory]
+    [InlineData("AnnualZero")]
+    [InlineData("RateZero")]
+    [InlineData("RateHigh")]
+    [InlineData("MissingAnnual")]
+    [InlineData("MissingRate")]
+    [InlineData("MissingCurrency")]
+    [InlineData("MissingSavings")]
+    [InlineData("UnknownField")]
+    public async Task InvalidOrIncompleteExpenseTargetsReturnBadRequest(string problem)
+    {
+        var d = await Setup();
+        var inputs = Inputs(d);
+        var target = ExpenseTarget();
+        switch (problem)
+        {
+            case "AnnualZero": target["annualExpenses"] = 0; break;
+            case "RateZero": target["annualWithdrawalRatePercent"] = 0; break;
+            case "RateHigh": target["annualWithdrawalRatePercent"] = 101; break;
+            case "MissingAnnual": target.Remove("annualExpenses"); break;
+            case "MissingRate": target.Remove("annualWithdrawalRatePercent"); break;
+            case "MissingCurrency": target.Remove("currencyCode"); break;
+            case "MissingSavings": target.Remove("includeSavings"); break;
+            case "UnknownField": target["returnPercent"] = 4; break;
+        }
+        inputs["assumptions"]!["expenseTarget"] = target;
+        using var response = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = inputs });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ForeignExpenseCurrencyUsesSnapshotQuotesAndKeepsItsCrossingDateAcrossViews()
+    {
+        var d = await Setup();
+        var person = (await new HouseholdService(_database).GetAsync(d.Home)).People.Single().Id;
+        await new TrackedItemService(_database).CreateAsync(d.Home, d.Group, person, "Pounds", "GBP", "GB", false);
+        var snapshots = new SnapshotService(_database);
+        d = d with { Snapshot = await snapshots.CreateAsync(d.Home, new(2023, 2, 1), [new(d.Item, 100)],
+            financedAssetValues: [new(d.Asset, FinancedAssetBalanceKind.CurrentValuation, 1000),
+                new(d.Asset, FinancedAssetBalanceKind.OutstandingLoanBalance, 250)]) };
+        var inputs = Inputs(d);
+        inputs["assumptions"]!["expenseTarget"] = ExpenseTarget(2, "GBP");
+        using var missing = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = inputs.DeepClone() });
+        var blocked = (await missing.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.False(blocked.CanCalculate);
+        Assert.Null(blocked.ExpenseTarget);
+        Assert.Contains(blocked.Issues, i => i.Kind == "MissingExchangeRate");
+        await new SnapshotExchangeRateService(_database, snapshots, new FixtureRates(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SnapshotExchangeRateService>.Instance)
+            .CaptureMissingAsync(d.Home, d.Snapshot.Id, d.Snapshot.Revision);
+        using var zarRun = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = inputs.DeepClone() });
+        var zar = (await zarRun.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        inputs["assumptions"]!["currencyCode"] = "GBP";
+        using var gbpRun = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = inputs });
+        var gbp = (await gbpRun.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.True(zar.CanCalculate);
+        Assert.True(gbp.CanCalculate);
+        Assert.Equal(zar.ExpenseTarget, gbp.ExpenseTarget);
+        Assert.Equal(d.Snapshot.SnapshotDate.AddMonths(11), gbp.ExpenseTarget!.FirstReachedDate);
+        Assert.Equal(1000, zar.Months![0].ExpenseTarget!.NominalRequiredCapital);
+        Assert.Equal(50, gbp.Months![0].ExpenseTarget!.NominalRequiredCapital);
+        Assert.Equal(zar.Months.Select(m => m.ExpenseTarget!.IsCovered), gbp.Months.Select(m => m.ExpenseTarget!.IsCovered));
+        Assert.Equal(0, _rates.Calls);
+    }
 
     [Fact]
     public async Task DefaultRoundTripsAndSavingAnotherReplacesIt()
@@ -145,6 +250,15 @@ public sealed class ProjectionApiTests : IAsyncLifetime
         Assert.Equal(100, result.Months[4].RedirectedToInvestments);
         Assert.Equal(1170, result.Months[^1].Nominal.Investments);
         Assert.Equal(60, result.Months[^1].Nominal.Savings);
+        var breakdown = Assert.IsType<Hearthcast.Data.Projections.Calculation.ProjectionGrowthSummary>(result.GrowthBreakdown);
+        Assert.Equal(850, breakdown.Nominal.StartingNetPosition);
+        Assert.Equal(result.Months[^1].Nominal.NetPosition, breakdown.Nominal.FinalNetPosition);
+        Assert.Equal(120, breakdown.Nominal.InvestmentContributions);
+        Assert.Equal(60, breakdown.Nominal.SavingsContributions);
+        Assert.Equal(250, breakdown.Nominal.LoanBalanceReduction);
+        Assert.Equal(950, breakdown.Nominal.ReinvestedLoanPayments);
+        Assert.Equal(0, breakdown.Nominal.InvestmentReturns);
+        Assert.Equal(breakdown.Nominal, breakdown.InflationAdjusted);
         Assert.Equal(2, result.Coverage.Count);
         Assert.Contains(result.Coverage, c => c.Disposition == "Investment");
         Assert.Empty(result.Issues);
@@ -169,6 +283,10 @@ public sealed class ProjectionApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.Equal(await unsaved.Content.ReadAsStringAsync(), await saved.Content.ReadAsStringAsync());
         var projection = (await saved.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        var breakdown = Assert.IsType<Hearthcast.Data.Projections.Calculation.ProjectionGrowthSummary>(projection.GrowthBreakdown);
+        Assert.Equal(projection.Months![^1].InflationAdjusted.NetPosition, breakdown.InflationAdjusted.FinalNetPosition);
+        Assert.InRange(breakdown.InflationAdjusted.InvestmentContributions, 119.999999m, 120.000001m);
+        Assert.True(breakdown.InflationAdjusted.InflationEffect < 0);
         Assert.InRange(projection.Months![12].Nominal.Investments - projection.Months[11].Nominal.Investments, 110.299999m, 110.300001m);
         Assert.InRange(projection.Months[12].Nominal.Savings - projection.Months[11].Nominal.Savings, 5.149999m, 5.150001m);
         var after = (await _client.GetFromJsonAsync<ProjectionPresetResponse>(create.Headers.Location))!;
@@ -195,6 +313,7 @@ public sealed class ProjectionApiTests : IAsyncLifetime
         var result = (await response.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
         Assert.False(result.CanCalculate);
         Assert.Null(result.Months);
+        Assert.Null(result.GrowthBreakdown);
         Assert.Contains(result.Issues, i => i.Kind == issue && i.Severity == "Error");
         Assert.Empty(result.Warnings);
         Assert.Equal(0, _rates.Calls);

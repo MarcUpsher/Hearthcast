@@ -109,6 +109,9 @@
       transform: rotate(45deg);
     }
   }
+  .expense-target-key {
+    color: #c4a5ff;
+  }
 }
 .chart-scroll {
   overflow: auto;
@@ -178,8 +181,89 @@ svg {
   margin: 8px 0 0;
   max-width: 320px;
 }
+.expense-target-line {
+  fill: none;
+  stroke: #c4a5ff;
+  stroke-width: 2;
+}
+.expense-marker {
+  cursor: pointer;
+  fill: var(--mat-sys-surface-container);
+  stroke: #c4a5ff;
+  stroke-width: 2;
+  &:focus {
+    outline: none;
+  }
+  &:focus path,
+  &:hover path {
+    fill: #c4a5ff;
+    stroke-width: 3;
+  }
+  .milestone-hit-area {
+    fill: transparent;
+    stroke: none;
+  }
+}
+.expense-summary {
+  h2 {
+    margin-top: 0;
+  }
+  p {
+    margin: 8px 0;
+  }
+  .expense-status {
+    color: #c4a5ff;
+    font-weight: 600;
+  }
+}
+.expense-reading {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  margin-top: 8px;
+  padding-top: 4px;
+  p {
+    margin: 8px 0 0;
+    color: #c4a5ff;
+  }
+}
 .notice p {
   margin: 6px 0;
+}
+.growth-breakdown {
+  h2 {
+    margin-top: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th,
+  td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+  th {
+    text-align: left;
+    font-weight: 400;
+  }
+  thead th {
+    color: var(--mat-sys-on-surface-variant);
+    font-size: 13px;
+  }
+  .growth-value {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .growth-total th,
+  .growth-total td {
+    font-weight: 600;
+  }
+  .growth-final {
+    background: var(--mat-sys-surface-container);
+  }
+  .growth-notes {
+    margin-top: 16px;
+  }
 }
 .blocking {
   color: var(--mat-sys-error);

@@ -13,6 +13,29 @@ export interface Assumptions {
   currencies: CurrencyPot[];
   annualInflationPercent: number | null;
   showInflationAdjustedValues: boolean;
+  expenseTarget?: ExpenseTargetSettings | null;
+}
+export interface ExpenseTargetSettings {
+  annualExpenses: number | null;
+  currencyCode: string;
+  annualWithdrawalRatePercent: number | null;
+  includeSavings: boolean;
+}
+export interface ExpenseTargetMonth {
+  nominalRequiredCapital: number;
+  inflationAdjustedRequiredCapital: number;
+  nominalEligibleBalance: number;
+  inflationAdjustedEligibleBalance: number;
+  isCovered: boolean;
+}
+export interface ExpenseTargetSummary {
+  expenseCurrencyCode: string;
+  annualExpenses: number;
+  annualWithdrawalRatePercent: number;
+  includeSavings: boolean;
+  requiredCapitalInExpenseCurrency: number;
+  firstReachedDate: string | null;
+  alreadyReachedAtStart: boolean;
 }
 export interface CurrencyPot {
   currencyCode: string;
@@ -55,6 +78,7 @@ export interface ProjectionMonth {
   nominal: Balances;
   inflationAdjusted: Balances;
   redirectedToInvestments: number;
+  expenseTarget?: ExpenseTargetMonth | null;
   financedAssets: {
     financedAssetId: string;
     currencyCode: string;
@@ -66,6 +90,11 @@ export interface ProjectionRun {
   snapshotRevision: string;
   currencyCode: string;
   canCalculate: boolean;
+  expenseTarget?: ExpenseTargetSummary | null;
+  growthBreakdown: {
+    nominal: ProjectionGrowthBreakdown;
+    inflationAdjusted: ProjectionGrowthBreakdown;
+  } | null;
   months: ProjectionMonth[] | null;
   issues: {
     kind: string;
@@ -87,4 +116,16 @@ export interface ProjectionRun {
     value: number | null;
     loanBalance: number | null;
   }[];
+}
+export interface ProjectionGrowthBreakdown {
+  startingNetPosition: number;
+  investmentReturns: number;
+  savingsInterest: number;
+  financedAssetValueChange: number;
+  investmentContributions: number;
+  savingsContributions: number;
+  loanBalanceReduction: number;
+  reinvestedLoanPayments: number;
+  inflationEffect: number;
+  finalNetPosition: number;
 }

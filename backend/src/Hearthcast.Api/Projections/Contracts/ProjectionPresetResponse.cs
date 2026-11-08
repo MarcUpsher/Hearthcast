@@ -13,7 +13,7 @@ public sealed record ProjectionPresetResponse(Guid Id, Guid HouseholdId, string 
     internal static ProjectionPresetResponse From(ProjectionPreset p) => new(p.Id, p.HouseholdId, p.Name, p.IsDefault,
         new(ProjectionAssumptionsResponse.From(new(p.Name, p.CurrencyCode, p.DurationYears, p.AnnualInflationPercent, p.ShowInflationAdjustedValues,
                 p.Currencies.OrderBy(c => c.CurrencyCode).Select(c => new ProjectionCurrencySettings(c.CurrencyCode, c.MonthlyInvestmentContribution,
-                    c.AnnualInvestmentReturnPercent, c.MonthlySavingsContribution, c.AnnualSavingsInterestPercent)).ToArray())),
+                    c.AnnualInvestmentReturnPercent, c.MonthlySavingsContribution, c.AnnualSavingsInterestPercent)).ToArray(), p.ExpenseTarget)),
             p.Groups.OrderBy(g => g.GroupId).Select(g => new ProjectionGroupResponse(g.GroupId, g.Bucket.ToString())).ToArray(),
             p.FinancedAssets.OrderBy(a => a.FinancedAssetId).Select(a => new ProjectionFinancedAssetResponse(a.FinancedAssetId,
                 a.MonthlyLoanPaymentInAssetCurrency, a.AnnualLoanInterestPercent, a.AnnualAssetAppreciationPercent,

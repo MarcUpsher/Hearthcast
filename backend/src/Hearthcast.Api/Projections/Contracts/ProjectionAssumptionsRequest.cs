@@ -18,6 +18,7 @@ public sealed record ProjectionAssumptionsRequest : IValidatableObject
     public bool? ShowInflationAdjustedValues { get; init; }
 
     [Required] public IReadOnlyList<ProjectionCurrencyRequest?>? Currencies { get; init; }
+    public ProjectionExpenseTargetRequest? ExpenseTarget { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext context)
     {
@@ -28,5 +29,5 @@ public sealed record ProjectionAssumptionsRequest : IValidatableObject
 
     internal ProjectionPresetSettings ToSettings(string name = "") =>
         new(name, CurrencyCode!, DurationYears!.Value, AnnualInflationPercent!.Value,
-            ShowInflationAdjustedValues!.Value, Currencies!.Select(c => c!.ToSettings()).ToArray());
+            ShowInflationAdjustedValues!.Value, Currencies!.Select(c => c!.ToSettings()).ToArray(), ExpenseTarget?.ToSettings());
 }

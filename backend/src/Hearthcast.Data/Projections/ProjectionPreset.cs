@@ -22,6 +22,12 @@ public sealed class ProjectionPreset
     public int DurationYears { get; private set; }
     public decimal AnnualInflationPercent { get; private set; }
     public bool ShowInflationAdjustedValues { get; private set; }
+    public decimal? AnnualExpenses { get; private set; }
+    public string? ExpenseCurrencyCode { get; private set; }
+    public decimal? AnnualWithdrawalRatePercent { get; private set; }
+    public bool IncludeSavingsInExpenseTarget { get; private set; }
+    public ProjectionExpenseTargetSettings? ExpenseTarget => AnnualExpenses is { } amount
+        ? new(amount, ExpenseCurrencyCode!, AnnualWithdrawalRatePercent!.Value, IncludeSavingsInExpenseTarget) : null;
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
     public IReadOnlyCollection<ProjectionPresetCurrency> Currencies => _currencies.AsReadOnly();
@@ -45,6 +51,10 @@ public sealed class ProjectionPreset
         DurationYears = settings.DurationYears;
         AnnualInflationPercent = settings.AnnualInflationPercent;
         ShowInflationAdjustedValues = settings.ShowInflationAdjustedValues;
+        AnnualExpenses = settings.ExpenseTarget?.AnnualExpenses;
+        ExpenseCurrencyCode = settings.ExpenseTarget?.CurrencyCode;
+        AnnualWithdrawalRatePercent = settings.ExpenseTarget?.AnnualWithdrawalRatePercent;
+        IncludeSavingsInExpenseTarget = settings.ExpenseTarget?.IncludeSavings ?? false;
         _currencies.RemoveAll(row => !settings.Currencies.Any(c => c.CurrencyCode == row.CurrencyCode));
         foreach (var currencySettings in settings.Currencies)
         {

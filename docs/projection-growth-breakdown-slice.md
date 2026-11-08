@@ -1,6 +1,6 @@
-# Projection growth breakdown — proposed slice
+# Projection growth breakdown
 
-Status: planned; implementation has not started.
+Status: implemented; verification results are recorded below.
 
 ## Purpose and scope
 
@@ -100,11 +100,11 @@ Monthly components can be reconciled against the produced balances:
 - Financed asset value change = current valuation total − previous valuation total.
 - Loan balance reduction = previous debt total − current debt total.
 
-Accumulate nominal and inflation-adjusted components during the run. Proposed
+Accumulate nominal and inflation-adjusted components during the run. The
 immutable output types are `ProjectionGrowthBreakdown` for a set of starting,
 component and final amounts, and `ProjectionGrowthSummary` containing `Nominal`
-and `InflationAdjusted` breakdowns. Final naming should follow the implementation's
-existing descriptive record conventions.
+and `InflationAdjusted` breakdowns. `ProjectionGrowthAccumulator` performs the
+monthly accounting independently of the existing balance updates.
 
 Add the summary to `ProjectionResult` and as an additive `GrowthBreakdown` property
 on the existing projection HTTP response. It is null when preparation is blocked,
@@ -140,4 +140,27 @@ constant-real-contribution case and negative net worth. Use decimal tolerances
 consistent with the existing calculator; do not disguise unexplained residuals
 as an Other row. Preserve the current numeric-limit error behaviour.
 
-No commits, pushes, live financial data changes or deployment are part of planning.
+## Verification
+
+All 165 backend projection tests passed: 113 data/calculation tests and 52 API
+tests. They include fourteen new breakdown cases covering reconciliation, cash-flow
+attribution, inflation/deflation, negative net worth and currency changes. Existing
+balance and payoff regressions passed. The solution and production frontend builds
+passed.
+
+All 112 frontend tests passed. Six additional cases check formatted/zero/negative
+rows, local inflation switching, unchanged starting value, final-card agreement,
+pending currency/date labels, blocked/cleared results and sub-cent signed-zero
+formatting. The existing report fixture now has consistent nominal/real starting
+values and inflation-adjusted totals.
+
+Chromium verified both tables reconcile within display rounding, both final values
+match the projected-total card, the starting value is unchanged between views,
+switching inflation display makes no request, the inflation row appears only in the
+real view, and the 430px layout has no page overflow. Browser fixtures were generated
+by the actual calculator with generic sample data; no database was accessed and no
+presets or snapshots were saved by these checks. Screenshots remain under `/tmp`.
+
+The local API and web app were rebuilt. A calculation-only request for the saved
+live preset verified that both breakdowns reconcile and exactly match the graph's
+final totals. No preset settings, snapshots or schema were changed by this slice.

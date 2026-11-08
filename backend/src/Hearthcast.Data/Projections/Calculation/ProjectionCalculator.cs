@@ -74,6 +74,9 @@ public static class ProjectionCalculator
         var assets = starting.FinancedAssets.Select(asset => new AssetState(asset, starting.Date)).ToArray();
         var months = new List<ProjectionMonth>();
         var warnings = new List<ProjectionWarning>();
+        var growth = new ProjectionGrowthAccumulator();
+        var expenseTarget = a.ExpenseTarget is { } target ? new ProjectionExpenseTargetTracker(target, currency,
+            starting.ExpenseCurrencyConversionRate, starting.Currencies) : null;
 
         var inflation = 1m;
         for (var month = 0; month <= a.DurationYears * 12; month++)
@@ -82,6 +85,9 @@ public static class ProjectionCalculator
             var date = starting.Date.AddMonths(month);
             foreach (var pot in pots.Values) pot.Redirected = 0;
             var redirected = 0m;
+            var investmentContributions = 0m;
+            var savingsContributions = 0m;
+            var previousInflation = inflation;
             var loans = new List<ProjectionLoanMonth>();
             foreach (var asset in assets)
             {
@@ -125,10 +131,14 @@ public static class ProjectionCalculator
                 foreach (var pot in pots.Values)
                 {
                     // Entered contributions are in starting-snapshot money, preserving their real value.
+                    var investmentContribution = Multiply(pot.Settings.MonthlyInvestmentContribution, inflation);
+                    var savingsContribution = Multiply(pot.Settings.MonthlySavingsContribution, inflation);
                     pot.Investments = Multiply(pot.Investments, pot.InvestmentFactor)
-                        + Multiply(pot.Settings.MonthlyInvestmentContribution, inflation) + pot.Redirected;
+                        + investmentContribution + pot.Redirected;
                     pot.Savings = Multiply(pot.Savings, pot.SavingsFactor)
-                        + Multiply(pot.Settings.MonthlySavingsContribution, inflation);
+                        + savingsContribution;
+                    investmentContributions += Convert(investmentContribution, pot.Position.ConversionRate);
+                    savingsContributions += Convert(savingsContribution, pot.Position.ConversionRate);
                 }
             }
             var nominal = new ProjectionBalances(pots.Values.Sum(p => Convert(p.Investments, p.Position.ConversionRate)),
@@ -140,11 +150,17 @@ public static class ProjectionCalculator
             // Force derived totals to be checked here, rather than fail later during rendering.
             _ = nominal.NetPosition;
             _ = adjusted.NetPosition;
-            months.Add(new(month, date, nominal, adjusted, redirected, loans.AsReadOnly(),
-                Array.AsReadOnly(pots.Values.OrderBy(p => p.Settings.CurrencyCode).Select(p => new ProjectionCurrencyMonth(p.Settings.CurrencyCode,
-                    p.Investments, p.Savings, p.Redirected)).ToArray())));
+            if (month > 0)
+                growth.Add(months[^1].Nominal, nominal, investmentContributions, savingsContributions,
+                    redirected, previousInflation, inflation);
+            var nativeMonths = Array.AsReadOnly(pots.Values.OrderBy(p => p.Settings.CurrencyCode)
+                .Select(p => new ProjectionCurrencyMonth(p.Settings.CurrencyCode, p.Investments, p.Savings, p.Redirected)).ToArray());
+            months.Add(new(month, date, nominal, adjusted, redirected, loans.AsReadOnly(), nativeMonths,
+                expenseTarget?.Record(date, nativeMonths, nominal, adjusted, inflation)));
         }
-        return new(currency, months.AsReadOnly(), warnings.AsReadOnly());
+        return new(currency, months.AsReadOnly(), warnings.AsReadOnly(),
+            growth.Finish(months[0].Nominal.NetPosition, months[^1].Nominal.NetPosition, months[^1].InflationAdjusted.NetPosition),
+            expenseTarget?.Finish(starting.Date));
     }
 
     // Effective annual growth is preserved across 12 months. Loan APR uses rate / 12 instead.

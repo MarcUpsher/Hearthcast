@@ -35,6 +35,7 @@ const defaults = (): Assumptions => ({
   currencies: [],
   annualInflationPercent: 3,
   showInflationAdjustedValues: false,
+  expenseTarget: null,
 });
 const newPot = (currencyCode: string): CurrencyPot => ({
   currencyCode,
@@ -56,6 +57,16 @@ const series = [
   { key: "savings", label: "Savings", color: "#b9e769" },
   { key: "equity", label: "Financed equity", color: "#ffc35a" },
   { key: "netPosition", label: "Modelled total", color: "#ec8cda" },
+] as const;
+const growthComponents = [
+  { key: "investmentReturns", label: "Investment returns" },
+  { key: "savingsInterest", label: "Savings interest" },
+  { key: "financedAssetValueChange", label: "Financed asset value change" },
+  { key: "investmentContributions", label: "Investment contributions" },
+  { key: "savingsContributions", label: "Savings contributions" },
+  { key: "loanBalanceReduction", label: "Loan balance reduction" },
+  { key: "reinvestedLoanPayments", label: "Reinvested loan payments" },
+  { key: "inflationEffect", label: "Inflation effect" },
 ] as const;
 type GroupOption = {
   id: string;
@@ -215,6 +226,28 @@ export class Modelling {
       ? { starting: rows[0][key], final: rows.at(-1)![key] }
       : null;
   });
+  growth = computed(() => {
+    const report = this.result();
+    if (
+      !report?.canCalculate ||
+      !report.months?.length ||
+      !report.growthBreakdown
+    )
+      return null;
+    const real = this.adjusted();
+    const breakdown = real
+      ? report.growthBreakdown.inflationAdjusted
+      : report.growthBreakdown.nominal;
+    return {
+      starting: breakdown.startingNetPosition,
+      final: breakdown.finalNetPosition,
+      startDate: report.months[0].date,
+      endDate: report.months.at(-1)!.date,
+      rows: growthComponents
+        .filter((row) => real || row.key !== "inflationEffect")
+        .map((row) => ({ ...row, value: breakdown[row.key] })),
+    };
+  });
   omitted = computed(
     () =>
       this.result()?.coverage.filter((c) =>
@@ -239,11 +272,41 @@ export class Modelling {
     }
     return [...events.values()].sort((a, b) => a.index - b.index);
   });
+  expenseMilestone = computed(() => {
+    const report = this.result();
+    const target = report?.expenseTarget;
+    const months = report?.months;
+    if (
+      !report?.canCalculate ||
+      !target ||
+      !months?.length ||
+      months.some((m) => !m.expenseTarget)
+    )
+      return null;
+    return {
+      ...target,
+      index: months.findIndex((m) => m.date === target.firstReachedDate),
+      finalCovered: months.at(-1)!.expenseTarget!.isCovered,
+      basis: target.includeSavings ? "Investments + savings" : "Investments",
+    };
+  });
   chart = computed(() => {
     const months = this.result()?.months;
     if (!months?.length) return null;
     const key = this.adjusted() ? "inflationAdjusted" : "nominal";
-    const values = months.flatMap((m) => series.map((s) => m[key][s.key]));
+    const expense = this.expenseMilestone();
+    const required = (i: number) =>
+      this.adjusted()
+        ? months[i].expenseTarget!.inflationAdjustedRequiredCapital
+        : months[i].expenseTarget!.nominalRequiredCapital;
+    const eligible = (i: number) =>
+      this.adjusted()
+        ? months[i].expenseTarget!.inflationAdjustedEligibleBalance
+        : months[i].expenseTarget!.nominalEligibleBalance;
+    const values = months.flatMap((m, i) => [
+      ...series.map((s) => m[key][s.key]),
+      ...(expense ? [required(i), eligible(i)] : []),
+    ]);
     const min = Math.min(0, ...values),
       maxObserved = Math.max(0, ...values);
     const max =
@@ -251,12 +314,41 @@ export class Modelling {
     const x = (i: number) => 88 + (i / Math.max(1, months.length - 1)) * 832;
     const y = (value: number) => 25 + ((max - value) / (max - min)) * 330;
     return {
-      lines: series.map((s) => ({
-        ...s,
-        path: smoothPath(
-          months.map((m, i) => ({ x: x(i), y: y(m[key][s.key]) })),
-        ),
-      })),
+      lines: [
+        ...series.map((s) => ({
+          ...s,
+          path: smoothPath(
+            months.map((m, i) => ({ x: x(i), y: y(m[key][s.key]) })),
+          ),
+        })),
+        ...(expense?.includeSavings
+          ? [
+              {
+                key: "eligiblePortfolio",
+                label: "Investments + savings",
+                color: "#57ddc8",
+                path: smoothPath(
+                  months.map((_, i) => ({ x: x(i), y: y(eligible(i)) })),
+                ),
+              },
+            ]
+          : []),
+      ],
+      expenseTarget: expense
+        ? {
+            path: smoothPath(
+              months.map((_, i) => ({ x: x(i), y: y(required(i)) })),
+            ),
+            marker:
+              expense.index >= 0
+                ? {
+                    index: expense.index,
+                    x: x(expense.index),
+                    y: y(eligible(expense.index)),
+                  }
+                : null,
+          }
+        : null,
       payoffs: this.payoffEvents().map((event) => ({
         ...event,
         x: x(event.index),
@@ -287,6 +379,17 @@ export class Modelling {
           date: month.date,
           values: this.adjusted() ? month.inflationAdjusted : month.nominal,
           payoff: this.payoffEvents().find((event) => event.index === i),
+          expenseTarget: month.expenseTarget
+            ? {
+                required: this.adjusted()
+                  ? month.expenseTarget.inflationAdjustedRequiredCapital
+                  : month.expenseTarget.nominalRequiredCapital,
+                eligible: this.adjusted()
+                  ? month.expenseTarget.inflationAdjustedEligibleBalance
+                  : month.expenseTarget.nominalEligibleBalance,
+                isCovered: month.expenseTarget.isCovered,
+              }
+            : null,
         }
       : null;
   });
@@ -378,6 +481,9 @@ export class Modelling {
         ...this.assumptions,
         currencies: this.assumptions.currencies.map((c) => ({ ...c })),
         showInflationAdjustedValues: this.adjusted(),
+        expenseTarget: this.assumptions.expenseTarget
+          ? { ...this.assumptions.expenseTarget }
+          : null,
       },
       groups: [
         ...this.investmentGroups().map((groupId) => ({
@@ -672,6 +778,17 @@ export class Modelling {
       this.assumptions.currencies.push(newPot(this.assumptions.currencyCode));
     this.changed();
   }
+  setExpenseTarget(enabled: boolean) {
+    this.assumptions.expenseTarget = enabled
+      ? {
+          annualExpenses: null,
+          currencyCode: this.assumptions.currencyCode,
+          annualWithdrawalRatePercent: 4,
+          includeSavings: false,
+        }
+      : null;
+    this.changed();
+  }
   addCurrency(code: string) {
     if (!this.potCodes().includes(code))
       this.assumptions.currencies.push(newPot(code));
@@ -753,6 +870,17 @@ export class Modelling {
     if (!rate(a.annualInflationPercent))
       return "Inflation must be greater than −100% and at most 100%.";
     if (!a.currencyCode) return "Select a projection currency.";
+    if (a.expenseTarget) {
+      const target = a.expenseTarget;
+      if (!amount(target.annualExpenses) || target.annualExpenses! <= 0)
+        return "Enter annual expenses greater than zero.";
+      if (!target.currencyCode) return "Select an expense currency.";
+      if (
+        !rate(target.annualWithdrawalRatePercent, false) ||
+        target.annualWithdrawalRatePercent! <= 0
+      )
+        return "The withdrawal rate must be greater than zero and at most 100%.";
+    }
     if (this.investmentGroups().some((id) => this.savingsGroups().includes(id)))
       return "A group can only be included in one bucket.";
     for (const id of this.selectedAssets()) {
@@ -782,7 +910,8 @@ export class Modelling {
       !this.investmentGroups().length &&
       !this.savingsGroups().length &&
       !this.selectedAssets().length &&
-      !this.hasContributions()
+      !this.hasContributions() &&
+      !this.assumptions.expenseTarget
     ) {
       this.result.set(null);
       return;
@@ -840,7 +969,7 @@ export class Modelling {
         Math.max(0, Math.min(length - 1, (this.hovered() ?? 0) + delta)),
       );
   }
-  inspectPayoff(index: number, event: Event) {
+  inspectMonth(index: number, event: Event) {
     event.preventDefault();
     event.stopPropagation();
     this.hovered.set(index);
@@ -848,6 +977,10 @@ export class Modelling {
   payoffLabel(event: PayoffEvent) {
     const names = event.assetIds.map((id) => this.assetName(id)).join(", ");
     return `${names} · ${event.index === 0 ? "Already paid off at start" : "Loan paid off"} · ${event.date}`;
+  }
+  signedMoney(value: number, currency: string) {
+    if (Math.abs(value) < 0.005) return money(0, currency);
+    return (value > 0 ? "+" : "") + money(value, currency);
   }
   assetName(id: string) {
     return this.assetNames.get(id)?.name ?? id;

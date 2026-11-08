@@ -65,9 +65,21 @@ Buckets accept strings `Investment`/`Savings` (case-insensitive on input), not
 numeric enum values. Other code fields in projection responses are also readable
 strings: issue kind/severity, coverage kind/disposition/financial type, warning kind.
 Amounts and rates remain JSON numbers. Loan payment amounts remain in each asset's
-native currency; investment/savings contributions use the projection currency.
+native currency; investment/savings contributions use each configured pot's currency.
 
 ## Run without saving
+
+Assumptions can include an optional `expenseTarget`; both monthly output and the
+run-level response then include coverage results. See the
+[expense target slice](projection-expense-target-slice.md) for the contract,
+persistence, currency and inflation rules. Existing bodies without a target
+retain their behaviour.
+
+Projection run responses also include `growthBreakdown`, containing `nominal` and
+`inflationAdjusted` explanations of the complete horizon. It is null for blocked
+runs. See [Projection growth breakdown](projection-growth-breakdown-slice.md) for
+the fields, inflation accounting and reconciliation rules. The growth breakdown
+adds no request settings or persisted calculation results.
 
 `POST /api/households/{householdId}/snapshots/{snapshotId}/projection`
 

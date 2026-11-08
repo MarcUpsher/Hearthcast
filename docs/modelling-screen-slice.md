@@ -58,6 +58,16 @@ so a pending currency change never relabels old amounts with new currency symbol
 
 ## Results
 
+An optional [expense target](projection-expense-target-slice.md) compares selected
+investments (and optionally savings) with inflation-indexed spending at a chosen
+withdrawal rate. It adds a guide, first-crossing marker and status card without
+changing projected balances or starting withdrawals.
+
+The graph is followed by a [growth breakdown](projection-growth-breakdown-slice.md)
+showing how starting net worth becomes the projected final amount. Its nominal
+and inflation-adjusted views use the existing display toggle and reconcile to the
+projected-total card. No additional assumptions or tracking fields are required.
+
 The graph shows smooth solid lines for investments, savings, financed equity and
 modelled total. It includes 10% axis headroom, hover readings for all four values
 at the nearest month, and keyboard left/right inspection. Currency values reuse
