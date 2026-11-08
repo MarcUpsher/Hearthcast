@@ -50,17 +50,36 @@ public sealed class MultiCurrencyProjectionTests
         Assert.Equal(1100, after.FinancedAssets[0].InvestmentAmountRedirected);
     }
 
-    [Fact]
-    public void ChangingTheViewingCurrencyDoesNotChangeNativeBalancesCashFlowsOrPayoffDates()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public void ChangingTheViewingCurrencyDoesNotChangeNativeBalancesCashFlowsOrPayoffDates(int inflation)
     {
-        var gbp = ProjectionCalculator.Calculate(Settings(), Starting());
-        var zar = ProjectionCalculator.Calculate(Settings("ZAR"), Starting("ZAR"));
+        var gbp = ProjectionCalculator.Calculate(Settings() with { AnnualInflationPercent = inflation }, Starting());
+        var zar = ProjectionCalculator.Calculate(Settings("ZAR") with { AnnualInflationPercent = inflation }, Starting("ZAR"));
         for (var i = 0; i < gbp.Months.Count; i++)
         {
             Assert.Equal(gbp.Months[i].Currencies, zar.Months[i].Currencies);
             Assert.Equal(gbp.Months[i].FinancedAssets, zar.Months[i].FinancedAssets);
             Assert.InRange(zar.Months[i].Nominal.NetPosition - gbp.Months[i].Nominal.NetPosition * 20, -.000001m, .000001m);
         }
+    }
+
+    [Fact]
+    public void EveryNativePotIndexesContributionsUsingTheSameScenarioInflation()
+    {
+        var result = ProjectionCalculator.Calculate(Settings() with { AnnualInflationPercent = 3 }, Starting());
+        var before = result.Months[11];
+        var after = result.Months[12];
+        var gbpBefore = before.Currencies.Single(c => c.CurrencyCode == "GBP");
+        var gbpAfter = after.Currencies.Single(c => c.CurrencyCode == "GBP");
+        var zarBefore = before.Currencies.Single(c => c.CurrencyCode == "ZAR");
+        var zarAfter = after.Currencies.Single(c => c.CurrencyCode == "ZAR");
+        Assert.InRange(gbpAfter.Investments - gbpBefore.Investments, 1029.999999m, 1030.000001m);
+        Assert.InRange(gbpAfter.Savings - gbpBefore.Savings, 20.599999m, 20.600001m);
+        Assert.InRange(zarAfter.Investments - zarBefore.Investments, 514.999999m, 515.000001m);
+        Assert.InRange(zarAfter.Savings - zarBefore.Savings, 102.999999m, 103.000001m);
+        Assert.Equal(22_000, after.FinancedAssets[0].PaymentApplied);
     }
 
     [Fact]

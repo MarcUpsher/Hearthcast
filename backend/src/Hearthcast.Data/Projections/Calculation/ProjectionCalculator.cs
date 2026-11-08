@@ -121,12 +121,15 @@ public static class ProjectionCalculator
             }
             if (month > 0)
             {
+                inflation = Multiply(inflation, inflationFactor);
                 foreach (var pot in pots.Values)
                 {
-                    pot.Investments = Multiply(pot.Investments, pot.InvestmentFactor) + pot.Settings.MonthlyInvestmentContribution + pot.Redirected;
-                    pot.Savings = Multiply(pot.Savings, pot.SavingsFactor) + pot.Settings.MonthlySavingsContribution;
+                    // Entered contributions are in starting-snapshot money, preserving their real value.
+                    pot.Investments = Multiply(pot.Investments, pot.InvestmentFactor)
+                        + Multiply(pot.Settings.MonthlyInvestmentContribution, inflation) + pot.Redirected;
+                    pot.Savings = Multiply(pot.Savings, pot.SavingsFactor)
+                        + Multiply(pot.Settings.MonthlySavingsContribution, inflation);
                 }
-                inflation = Multiply(inflation, inflationFactor);
             }
             var nominal = new ProjectionBalances(pots.Values.Sum(p => Convert(p.Investments, p.Position.ConversionRate)),
                 pots.Values.Sum(p => Convert(p.Savings, p.Position.ConversionRate)),

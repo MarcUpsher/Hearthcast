@@ -160,14 +160,21 @@ public sealed class ProjectionApiTests : IAsyncLifetime
     public async Task SavedAndUnsavedRunsAgreeAndPresetRemainsUnchanged()
     {
         var d = await Setup();
-        using var create = await _client.PostAsJsonAsync(Presets(d.Home), Save(d));
+        var body = Save(d);
+        body["inputs"]!["assumptions"]!["annualInflationPercent"] = 3;
+        using var create = await _client.PostAsJsonAsync(Presets(d.Home), body);
         var preset = (await create.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!;
         using var saved = await _client.PostAsJsonAsync(Run(d), new { presetId = preset.Id });
-        using var unsaved = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = Inputs(d) });
+        using var unsaved = await _client.PostAsJsonAsync(Run(d), new JsonObject { ["inputs"] = body["inputs"]!.DeepClone() });
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
         Assert.Equal(await unsaved.Content.ReadAsStringAsync(), await saved.Content.ReadAsStringAsync());
+        var projection = (await saved.Content.ReadFromJsonAsync<ProjectionRunResponse>())!;
+        Assert.InRange(projection.Months![12].Nominal.Investments - projection.Months[11].Nominal.Investments, 110.299999m, 110.300001m);
+        Assert.InRange(projection.Months[12].Nominal.Savings - projection.Months[11].Nominal.Savings, 5.149999m, 5.150001m);
         var after = (await _client.GetFromJsonAsync<ProjectionPresetResponse>(create.Headers.Location))!;
         Assert.Equal(preset.UpdatedAtUtc.ToUnixTimeMilliseconds(), after.UpdatedAtUtc.ToUnixTimeMilliseconds());
+        Assert.Equal(10, Assert.Single(after.Inputs.Assumptions.Currencies).MonthlyInvestmentContribution);
+        Assert.Equal(5, Assert.Single(after.Inputs.Assumptions.Currencies).MonthlySavingsContribution);
     }
 
     [Theory]

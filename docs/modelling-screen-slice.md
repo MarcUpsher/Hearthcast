@@ -48,7 +48,10 @@ used. Household switches reset the scenario. Selections/assumptions remain only 
 memory and are discarded when leaving the page in this slice.
 
 The inflation switch operates locally on the two returned series and makes no API
-request. Nominal contributions/payments remain fixed. API errors and invalid input
+request. Investment/savings inputs represent starting-snapshot purchasing power;
+their nominal monthly contributions increase with the scenario inflation rate in
+every currency pot. Loan payment budgets remain fixed in nominal terms, including
+amounts redirected to investments after payoff. API errors and invalid input
 clear results; while a valid recalculation is pending the page explicitly labels
 any previous results still shown. Starting/modelled totals use the result currency,
 so a pending currency change never relabels old amounts with new currency symbols.
@@ -60,6 +63,20 @@ modelled total. It includes 10% axis headroom, hover readings for all four value
 at the nearest month, and keyboard left/right inspection. Currency values reuse
 existing formatting with symbols and spaced thousands. The timeline starts at the
 snapshot date and ends at the projection horizon.
+
+Loan payoff months have focusable diamond markers on the combined equity line.
+Hovering, focusing or activating a marker shows its date and the assets paid off;
+loans paid off in the same month share a marker. An already-paid loan is marked at
+the start, and loans unpaid within the horizon have no marker. Markers follow the
+nominal/inflation-adjusted equity display. Equity continues after payoff as the
+asset's full value, growing at its own asset-growth assumption; inflation is a
+separate display adjustment.
+
+Payoff marker verification: all 106 frontend tests and the 31 existing pure
+calculator tests passed, as did the production frontend build. Chromium verified
+marker labels, hover details, keyboard focus, inflation-adjusted positioning and
+the 430px layout against generic in-memory sample data. No backend/schema changes
+were required.
 
 Starting and final modelled totals, loan payoff dates and non-amortising warnings
 are displayed alongside the graph. Missing balances/rates/selections block plotting

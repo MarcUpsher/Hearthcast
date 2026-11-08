@@ -83,6 +83,19 @@ const report = (value = 100): ProjectionRun => ({
   warnings: [],
   coverage: [],
 });
+const payoffReport = (events: { id: string; month: number | null }[]) => {
+  const result = report();
+  for (const row of result.months!)
+    row.financedAssets = events.map((event) => ({
+      financedAssetId: event.id,
+      currencyCode: "ZAR",
+      payoffDate:
+        event.month !== null && row.month >= event.month
+          ? result.months![event.month].date
+          : null,
+    }));
+  return result;
+};
 const pause = () => new Promise((resolve) => setTimeout(resolve, 340));
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -566,6 +579,103 @@ describe("Modelling", () => {
     expect(
       fixture.nativeElement.querySelector('[role="tooltip"]').textContent,
     ).toContain("£ 50.00");
+  });
+  it("groups loan payoffs by month and includes the final month without marking unpaid loans", async () => {
+    const { page, fixture } = await setup();
+    page.result.set(
+      payoffReport([
+        { id: "asset", month: 3 },
+        { id: "second", month: 3 },
+        { id: "last", month: 12 },
+        { id: "unpaid", month: null },
+      ]),
+    );
+    fixture.detectChanges();
+    expect(page.payoffEvents()).toEqual([
+      { index: 3, date: "2026-04-01", assetIds: ["asset", "second"] },
+      { index: 12, date: "2027-01-01", assetIds: ["last"] },
+    ]);
+    expect(
+      fixture.nativeElement.querySelectorAll(".payoff-marker"),
+    ).toHaveLength(2);
+    expect(
+      fixture.nativeElement.querySelectorAll(".projection-line"),
+    ).toHaveLength(4);
+    expect(fixture.nativeElement.textContent).toContain(
+      "Equity remains in the model after payoff",
+    );
+  });
+  it("inspects payoff markers by hover, keyboard focus and activation", async () => {
+    const s = snapshot();
+    s.financedAssetSnapshots.push({
+      ...s.financedAssetSnapshots[0],
+      financedAssetId: "second",
+      assetName: "Car",
+    });
+    const { page, fixture } = await setup(s);
+    page.result.set(
+      payoffReport([
+        { id: "asset", month: 3 },
+        { id: "second", month: 3 },
+      ]),
+    );
+    fixture.detectChanges();
+    const marker = fixture.nativeElement.querySelector(".payoff-marker");
+    const svg = fixture.nativeElement.querySelector("svg");
+    svg.getBoundingClientRect = () => ({ width: 1000, left: 0 });
+    marker.dispatchEvent(
+      new MouseEvent("mousemove", { bubbles: true, clientX: 920 }),
+    );
+    fixture.detectChanges();
+    expect(page.hovered()).toBe(3); // The parent chart must not select a different month.
+    expect(
+      fixture.nativeElement.querySelector('[role="tooltip"]').textContent,
+    ).toContain("Home, Car · Loan paid off · 2026-04-01");
+    expect(marker.getAttribute("aria-label")).toContain("Home, Car");
+    page.hovered.set(null);
+    marker.dispatchEvent(new Event("focus"));
+    expect(page.reading()?.date).toBe("2026-04-01");
+    page.hovered.set(null);
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    marker.dispatchEvent(enter);
+    expect(page.hovered()).toBe(3);
+    expect(enter.defaultPrevented).toBe(true);
+  });
+  it("repositions payoff markers for inflation-adjusted equity without changing dates", async () => {
+    const { page, fixture, send } = await setup();
+    page.result.set(payoffReport([{ id: "asset", month: 6 }]));
+    const nominal = page.chart()!.payoffs[0];
+    page.adjusted.set(true);
+    fixture.detectChanges();
+    const adjusted = page.chart()!.payoffs[0];
+    expect(adjusted.x).toBe(nominal.x);
+    expect(adjusted.date).toBe(nominal.date);
+    expect(adjusted.y).not.toBe(nominal.y);
+    expect(send).not.toHaveBeenCalled();
+    page.hovered.set(6);
+    expect(page.reading()?.values.equity).toBe(250);
+  });
+  it("marks an already-paid loan at the start and removes markers when results no longer contain payoffs", async () => {
+    const { page, fixture } = await setup();
+    page.result.set(payoffReport([{ id: "asset", month: 0 }]));
+    fixture.detectChanges();
+    expect(page.chart()!.payoffs[0].x).toBe(88);
+    const marker = fixture.nativeElement.querySelector(".payoff-marker");
+    expect(marker.getAttribute("aria-label")).toContain(
+      "Already paid off at start",
+    );
+    page.result.set(payoffReport([{ id: "asset", month: null }]));
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelectorAll(".payoff-marker"),
+    ).toHaveLength(0);
+    page.result.set({ ...report(), canCalculate: false, months: null });
+    expect(page.payoffEvents()).toEqual([]);
+    expect(page.chart()).toBeNull();
   });
   it("retains missing selections and the chosen currency when moving into history", async () => {
     const { page, get } = await setup();

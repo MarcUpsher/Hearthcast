@@ -71,6 +71,11 @@ type AssetOption = {
   debt: number | null;
   missing?: boolean;
 };
+type PayoffEvent = {
+  index: number;
+  date: string;
+  assetIds: string[];
+};
 
 @Component({
   imports: [
@@ -216,6 +221,24 @@ export class Modelling {
         ["NotSelected", "ExcludedFromHousehold"].includes(c.disposition),
       ) ?? [],
   );
+  payoffEvents = computed(() => {
+    const months = this.result()?.months;
+    if (!months?.length) return [];
+    const events = new Map<number, PayoffEvent>();
+    for (const asset of months.at(-1)!.financedAssets) {
+      if (!asset.payoffDate) continue;
+      const index = months.findIndex((m) => m.date === asset.payoffDate);
+      if (index < 0) continue;
+      const event = events.get(index) ?? {
+        index,
+        date: months[index].date,
+        assetIds: [],
+      };
+      event.assetIds.push(asset.financedAssetId);
+      events.set(index, event);
+    }
+    return [...events.values()].sort((a, b) => a.index - b.index);
+  });
   chart = computed(() => {
     const months = this.result()?.months;
     if (!months?.length) return null;
@@ -233,6 +256,11 @@ export class Modelling {
         path: smoothPath(
           months.map((m, i) => ({ x: x(i), y: y(m[key][s.key]) })),
         ),
+      })),
+      payoffs: this.payoffEvents().map((event) => ({
+        ...event,
+        x: x(event.index),
+        y: y(months[event.index][key].equity),
       })),
       ticks: Array.from({ length: 5 }, (_, i) => {
         const v = min + ((max - min) * i) / 4;
@@ -258,6 +286,7 @@ export class Modelling {
       ? {
           date: month.date,
           values: this.adjusted() ? month.inflationAdjusted : month.nominal,
+          payoff: this.payoffEvents().find((event) => event.index === i),
         }
       : null;
   });
@@ -810,6 +839,15 @@ export class Modelling {
       this.hovered.set(
         Math.max(0, Math.min(length - 1, (this.hovered() ?? 0) + delta)),
       );
+  }
+  inspectPayoff(index: number, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.hovered.set(index);
+  }
+  payoffLabel(event: PayoffEvent) {
+    const names = event.assetIds.map((id) => this.assetName(id)).join(", ");
+    return `${names} · ${event.index === 0 ? "Already paid off at start" : "Loan paid off"} · ${event.date}`;
   }
   assetName(id: string) {
     return this.assetNames.get(id)?.name ?? id;

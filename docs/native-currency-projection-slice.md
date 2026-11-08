@@ -94,7 +94,10 @@ Each month:
    represent new household income, not an unmodelled transfer from existing wealth.
 4. The unused payoff-month budget, and the full combined budget in later months,
    converts into the chosen native investment currency and is added at month-end.
-5. Regular investment/savings contributions are added in their own currencies.
+5. Regular investment/savings contributions are added in their own currencies,
+   increased by cumulative scenario inflation to preserve their starting purchasing
+   power. The same scenario inflation rate applies to every pot. Loan budgets and
+   their redirected amounts are not indexed.
 6. Viewing totals convert the resulting native balances using saved fixed quotes.
 
 For R1m debt, R20k regular payment, R2k extra and an illustrative 12% annual rate,
@@ -108,6 +111,24 @@ in addition to converted nominal/inflation-adjusted totals. Per-loan output reco
 both native unused budget and `InvestmentAmountRedirected` with its destination
 currency. The model still covers selected holdings only, and does not infer market
 exposure of underlying funds or model withdrawals, fees, tax or currency forecasts.
+
+Contribution inputs are in starting-snapshot money: at month `m`, each nominal
+contribution is `entered amount × (1 + inflation/100)^(m/12)`. Thus a 1,000 monthly
+contribution becomes 1,030 at month 12 with 3% inflation, still 1,000 in starting-date
+purchasing power. Zero inflation retains the previous fixed nominal contributions;
+negative inflation lowers them nominally. Expected returns remain nominal. The
+display toggle changes only the returned series being shown, and never the inputs
+or calculation. Saved contribution amounts are unchanged; this rule also applies
+when reloading existing presets. No new fields or migration are needed.
+
+Indexation verification: all 151 backend projection tests (99 data/calculation and
+52 API) and 106 frontend tests passed. The solution and production frontend builds
+passed. Regressions cover constant real contributions, zero inflation, deflation,
+unchanged nominal loan budgets/payoff redirection, native pots and viewing-currency
+invariance, numeric limits, and matching saved/unsaved HTTP runs without modifying
+stored contribution amounts.
+The local API/frontend were rebuilt, and a calculation-only live API check verified
+indexed nominal values and constant real contributions without saving any data.
 
 ## Migration preservation
 

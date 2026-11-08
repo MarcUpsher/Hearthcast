@@ -42,6 +42,57 @@ public sealed class ProjectionCalculatorTests
     }
 
     [Theory]
+    [InlineData(3)]
+    [InlineData(0)]
+    [InlineData(-10)]
+    public void ContributionsKeepTheirStartingPurchasingPowerWithInflationOrDeflation(int inflation)
+    {
+        var settings = Assumptions with { DurationYears = 2, AnnualInflationPercent = inflation,
+            Currencies = [new("GBP", 1000, inflation, 250, inflation)] };
+        var result = Calculate(settings);
+        // When balances grow exactly with inflation, each new contribution adds its entered real value.
+        foreach (var month in result.Months)
+        {
+            Near(1000 * month.Month, month.InflationAdjusted.Investments);
+            Near(250 * month.Month, month.InflationAdjusted.Savings);
+        }
+        var yearEnd = result.Months[12];
+        var priceLevel = 1m + inflation / 100m;
+        Near(12_000 * priceLevel, yearEnd.Nominal.Investments);
+        Near(3000 * priceLevel, yearEnd.Nominal.Savings);
+        Assert.Equal(1000, settings.Currencies[0].MonthlyInvestmentContribution);
+        Assert.Equal(250, settings.Currencies[0].MonthlySavingsContribution);
+    }
+
+    [Fact]
+    public void InflationIndexesRegularContributionsWithoutChangingLoanBudgetsOrReleasedPayments()
+    {
+        var result = Calculate(Assumptions with { AnnualInflationPercent = 12,
+            Currencies = [new("GBP", 100, 0, 50, 0)] }, loans: [Loan()]);
+        Assert.Equal(result.Months[3].Date, result.Months[^1].FinancedAssets[0].PayoffDate);
+        Assert.Equal(50, result.Months[3].FinancedAssets[0].PaymentApplied);
+        Assert.Equal(50, result.Months[3].RedirectedToInvestments);
+        Assert.Equal(100, result.Months[4].RedirectedToInvestments);
+        Assert.Equal(100, result.Months[12].RedirectedToInvestments);
+        Near(112, result.Months[12].Nominal.Investments - result.Months[11].Nominal.Investments - 100);
+        Near(56, result.Months[12].Nominal.Savings - result.Months[11].Nominal.Savings);
+        Assert.Equal(1000, result.Months[12].Nominal.FinancedAssetValue);
+    }
+
+    [Fact]
+    public void InflationIndexedContributionsRejectOverflowAndUnderflow()
+    {
+        var large = Assumptions with { Currencies = [new("GBP", decimal.MaxValue / 14m, 0, 0, 0)] };
+        Calculate(large); // Fixed contributions fit; indexing them does not.
+        var overflow = Assert.Throws<InvalidValueException>(() => Calculate(large with { AnnualInflationPercent = 100 }));
+        Assert.Contains("numeric limits", overflow.Message);
+        var tiny = Assumptions with { AnnualInflationPercent = -99,
+            Currencies = [new("GBP", .0000000000000000000000000001m, 0, 0, 0)] };
+        var underflow = Assert.Throws<InvalidValueException>(() => Calculate(tiny));
+        Assert.Contains("numeric limits", underflow.Message);
+    }
+
+    [Theory]
     [InlineData(12, 1120)]
     [InlineData(-20, 800)]
     [InlineData(0, 1000)]

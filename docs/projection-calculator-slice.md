@@ -41,9 +41,12 @@ possible rather than drifting after February.
    annual rate with monthly rate `rate/1200` (no daily accrual or banking fees).
 3. Apply up to the monthly payment budget against debt plus interest. Debt is never
    reduced below zero. Any budget left over goes into investments at month-end.
-4. Add the regular investment/savings contributions at month-end. They and redirected
-   loan payments begin earning returns in the next month. Contributions and payment
-   budgets stay fixed in nominal terms throughout the projection.
+4. Add the regular investment/savings contributions at month-end, increased by
+   cumulative scenario inflation since the starting snapshot. Entered contributions
+   retain their real value; indexing is monthly, using the effective annual rate.
+   Contributions and redirected loan payments begin earning returns in the next
+   month. Loan payment budgets and the amounts redirected after payoff stay fixed
+   in nominal terms.
 
 Every loan pays off independently. In the payoff month the remainder is redirected;
 subsequent months redirect its full budget. A confirmed zero starting debt redirects

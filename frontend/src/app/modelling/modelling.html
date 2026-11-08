@@ -224,7 +224,9 @@
           <h2>Currency pots</h2>
           <p class="muted hint">
             Contributions and returns stay in each pot's currency. Changing the
-            viewing currency does not change these amounts.
+            viewing currency does not change these amounts. Enter monthly
+            contributions in the starting snapshot's purchasing power; they rise
+            with inflation throughout the projection.
           </p>
           <mat-form-field
             ><mat-label>Add a currency pot</mat-label
@@ -438,7 +440,9 @@
           /></mat-form-field>
           <p class="muted hint">
             Returns and inflation are illustrative assumptions you can change.
-            Contributions stay fixed; exchange rates use the starting snapshot.
+            The inflation rate applies to contributions in every currency pot,
+            keeping them constant in real terms. Loan payments stay fixed;
+            exchange rates use the starting snapshot.
           </p>
         </fieldset>
       </aside>
@@ -509,6 +513,9 @@
                 @for (line of lines; track line.key) {
                   <span [style.color]="line.color">{{ line.label }}</span>
                 }
+                @if (plot.payoffs.length) {
+                  <span class="payoff-key">Loan paid off</span>
+                }
               </div>
               <p class="muted hint">
                 {{ report.currencyCode }} ·
@@ -523,8 +530,8 @@
                 <svg
                   viewBox="0 0 1000 420"
                   tabindex="0"
-                  role="img"
-                  aria-label="Projected investments, savings, equity and total. Use left and right arrow keys to inspect months."
+                  role="group"
+                  aria-label="Projected investments, savings, equity and total. Use left and right arrow keys to inspect months. Focus loan payoff markers for details."
                   (mousemove)="hover($event)"
                   (mouseleave)="hovered.set(null)"
                   (blur)="hovered.set(null)"
@@ -568,6 +575,25 @@
                       "
                     />
                   }
+                  @for (event of plot.payoffs; track event.index) {
+                    <g
+                      class="payoff-marker"
+                      [attr.transform]="
+                        'translate(' + event.x + ' ' + event.y + ')'
+                      "
+                      tabindex="0"
+                      role="button"
+                      [attr.aria-label]="payoffLabel(event)"
+                      (focus)="hovered.set(event.index)"
+                      (mousemove)="inspectPayoff(event.index, $event)"
+                      (click)="inspectPayoff(event.index, $event)"
+                      (keydown.enter)="inspectPayoff(event.index, $event)"
+                      (keydown.space)="inspectPayoff(event.index, $event)"
+                    >
+                      <circle class="payoff-hit-area" r="12" />
+                      <path d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" />
+                    </g>
+                  }
                   @if (plot.hoverX !== null) {
                     <line
                       class="crosshair"
@@ -590,6 +616,9 @@
                       }}</b>
                     </div>
                   }
+                  @if (read.payoff; as event) {
+                    <p class="payoff-reading">{{ payoffLabel(event) }}</p>
+                  }
                 </div>
               }
             </section>
@@ -597,11 +626,19 @@
               <p class="sr-only" aria-live="polite">
                 {{ read.date }}: Modelled total
                 {{ money(read.values.netPosition, report.currencyCode) }}
+                @if (read.payoff; as event) {
+                  · {{ payoffLabel(event) }}
+                }
               </p>
             }
             @if (payoffs().length) {
               <section class="panel">
                 <h2>Loan payoff</h2>
+                <p class="muted hint">
+                  Diamonds mark payoff months on the total equity line. Equity
+                  remains in the model after payoff and follows each asset's
+                  growth rate.
+                </p>
                 @for (asset of payoffs(); track asset.financedAssetId) {
                   <p>
                     {{ assetName(asset.financedAssetId) }} ·
