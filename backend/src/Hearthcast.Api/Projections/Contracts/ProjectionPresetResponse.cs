@@ -7,10 +7,10 @@ public sealed record ProjectionFinancedAssetResponse(Guid FinancedAssetId, decim
     decimal AnnualLoanInterestPercent, decimal AnnualAssetAppreciationPercent, decimal ExtraMonthlyLoanPaymentInAssetCurrency, string InvestmentCurrencyAfterPayoff);
 public sealed record ProjectionInputsResponse(ProjectionAssumptionsResponse Assumptions,
     IReadOnlyList<ProjectionGroupResponse> Groups, IReadOnlyList<ProjectionFinancedAssetResponse> FinancedAssets);
-public sealed record ProjectionPresetResponse(Guid Id, Guid HouseholdId, string Name, ProjectionInputsResponse Inputs,
+public sealed record ProjectionPresetResponse(Guid Id, Guid HouseholdId, string Name, bool IsDefault, ProjectionInputsResponse Inputs,
     DateTimeOffset CreatedAtUtc, DateTimeOffset UpdatedAtUtc)
 {
-    internal static ProjectionPresetResponse From(ProjectionPreset p) => new(p.Id, p.HouseholdId, p.Name,
+    internal static ProjectionPresetResponse From(ProjectionPreset p) => new(p.Id, p.HouseholdId, p.Name, p.IsDefault,
         new(ProjectionAssumptionsResponse.From(new(p.Name, p.CurrencyCode, p.DurationYears, p.AnnualInflationPercent, p.ShowInflationAdjustedValues,
                 p.Currencies.OrderBy(c => c.CurrencyCode).Select(c => new ProjectionCurrencySettings(c.CurrencyCode, c.MonthlyInvestmentContribution,
                     c.AnnualInvestmentReturnPercent, c.MonthlySavingsContribution, c.AnnualSavingsInterestPercent)).ToArray())),

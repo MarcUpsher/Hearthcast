@@ -17,6 +17,7 @@ public sealed class ProjectionPreset
     public Guid Id { get; private set; }
     public Guid HouseholdId { get; private set; }
     public string Name { get; private set; } = string.Empty;
+    public bool IsDefault { get; private set; }
     public string CurrencyCode { get; private set; } = string.Empty;
     public int DurationYears { get; private set; }
     public decimal AnnualInflationPercent { get; private set; }
@@ -26,6 +27,8 @@ public sealed class ProjectionPreset
     public IReadOnlyCollection<ProjectionPresetCurrency> Currencies => _currencies.AsReadOnly();
     public IReadOnlyCollection<ProjectionPresetGroup> Groups => _groups.AsReadOnly();
     public IReadOnlyCollection<ProjectionPresetFinancedAsset> FinancedAssets => _financedAssets.AsReadOnly();
+
+    internal void SetDefault(bool isDefault) => IsDefault = isDefault;
 
     internal void Update(ProjectionPresetSettings settings, IReadOnlyCollection<ProjectionGroupSelection> groups,
         IReadOnlyCollection<ProjectionFinancedAssetSettings> assets)

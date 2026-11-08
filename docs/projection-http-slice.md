@@ -13,6 +13,10 @@ UI, live database migration or saved projection results.
 
 Base: `/api/households/{householdId}/projection-presets`
 
+Create/update also accept `isDefault` (omitted means false); responses include it.
+Saving true replaces this household's previous default atomically. See
+[preset management](modelling-preset-management-slice.md) for the current behaviour.
+
 - `GET /`: ordered preset list, 200 (empty list allowed for an existing household).
 - `GET /{presetId}`: preset with inputs and UTC timestamps, 200.
 - `POST /`: create, 201 with Location pointing to GET.

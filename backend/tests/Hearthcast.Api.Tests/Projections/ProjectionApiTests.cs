@@ -73,6 +73,31 @@ public sealed class ProjectionApiTests : IAsyncLifetime
     private static JsonObject Save(Data d, string name = "Baseline") => new() { ["name"] = name, ["inputs"] = Inputs(d) };
 
     [Fact]
+    public async Task DefaultRoundTripsAndSavingAnotherReplacesIt()
+    {
+        var d = await Setup();
+        var firstBody = Save(d, "First");
+        firstBody["isDefault"] = true;
+        using var first = await _client.PostAsJsonAsync(Presets(d.Home), firstBody);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var firstPreset = (await first.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!;
+        Assert.True(firstPreset.IsDefault);
+        var secondBody = Save(d, "Second");
+        secondBody["isDefault"] = true;
+        using var second = await _client.PostAsJsonAsync(Presets(d.Home), secondBody);
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var secondPreset = (await second.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!;
+        var rows = (await _client.GetFromJsonAsync<ProjectionPresetResponse[]>(Presets(d.Home)))!;
+        Assert.Equal(secondPreset.Id, Assert.Single(rows, p => p.IsDefault).Id);
+        Assert.False((await _client.GetFromJsonAsync<ProjectionPresetResponse>(first.Headers.Location))!.IsDefault);
+        secondBody["isDefault"] = false;
+        using var cleared = await _client.PutAsJsonAsync(second.Headers.Location, secondBody);
+        Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
+        Assert.False((await cleared.Content.ReadFromJsonAsync<ProjectionPresetResponse>())!.IsDefault);
+        Assert.DoesNotContain((await _client.GetFromJsonAsync<ProjectionPresetResponse[]>(Presets(d.Home)))!, p => p.IsDefault);
+    }
+
+    [Fact]
     public async Task PresetCrudReturnsLocationNormalisedValuesAndWholeReplacements()
     {
         var d = await Setup();

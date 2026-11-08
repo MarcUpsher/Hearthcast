@@ -47,6 +47,12 @@
   line-height: 1.5;
   margin: 0 0 12px;
 }
+.preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 12px;
+}
 .results {
   min-width: 0;
 }

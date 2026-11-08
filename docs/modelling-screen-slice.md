@@ -1,5 +1,8 @@
 # Interactive modelling screen
 
+> Preset saving/loading is now available; see
+> [Modelling preset management](modelling-preset-management-slice.md).
+
 > Updated model: see [Native currency projection pots](native-currency-projection-slice.md)
 > for the current schema, request shape and per-currency calculation. The original
 > single-currency slice notes below describe the preceding implementation.

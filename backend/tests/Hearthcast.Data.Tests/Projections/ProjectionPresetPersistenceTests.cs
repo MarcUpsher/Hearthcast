@@ -30,6 +30,64 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DefaultCanBeReassignedClearedAndDeletedWithoutAffectingOtherHouseholds()
+    {
+        var home = (await new HouseholdService(_database).CreateAsync("Example", "Alex")).Id;
+        var other = (await new HouseholdService(_database).CreateAsync("Other", "Sam")).Id;
+        var first = await Service.CreateAsync(home, Settings("First"), [], [], isDefault: true);
+        var otherDefault = await Service.CreateAsync(other, Settings(), [], [], isDefault: true);
+        var second = await Service.CreateAsync(home, Settings("Second"), [], []);
+        Assert.True((await Service.GetAsync(home, first.Id)).IsDefault);
+        Assert.False(second.IsDefault);
+
+        await Service.UpdateAsync(home, second.Id, Settings("Second"), [], [], isDefault: true);
+        Assert.Equal(second.Id, Assert.Single(await Service.ListAsync(home), p => p.IsDefault).Id);
+        Assert.True((await Service.GetAsync(other, otherDefault.Id)).IsDefault);
+        var third = await Service.CreateAsync(home, Settings("Third"), [], [], isDefault: true);
+        Assert.Equal(third.Id, Assert.Single(await Service.ListAsync(home), p => p.IsDefault).Id);
+        await Service.UpdateAsync(home, third.Id, Settings("Third"), [], [], isDefault: false);
+        Assert.DoesNotContain(await Service.ListAsync(home), p => p.IsDefault);
+
+        await Service.UpdateAsync(home, first.Id, Settings("First"), [], [], isDefault: true);
+        await Service.DeleteAsync(home, first.Id);
+        Assert.DoesNotContain(await Service.ListAsync(home), p => p.IsDefault);
+        Assert.True((await Service.GetAsync(other, otherDefault.Id)).IsDefault);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConcurrentDefaultSavesAllSucceedAndLeaveExactlyOneDefault(bool updateExisting)
+    {
+        var home = (await new HouseholdService(_database).CreateAsync("Example", "Alex")).Id;
+        var candidates = new List<ProjectionPreset>();
+        if (updateExisting)
+            for (var i = 0; i < 3; i++)
+                candidates.Add(await Service.CreateAsync(home, Settings($"Preset {i}"), [], []));
+        var results = await Task.WhenAll(Enumerable.Range(0, 3).Select(i => updateExisting
+            ? Service.UpdateAsync(home, candidates[i].Id, Settings($"Preset {i}"), [], [], isDefault: true)
+            : Service.CreateAsync(home, Settings($"Preset {i}"), [], [], isDefault: true)));
+        Assert.All(results, p => Assert.True(p.IsDefault));
+        var saved = await Service.ListAsync(home);
+        Assert.Equal(3, saved.Count);
+        Assert.Single(saved, p => p.IsDefault);
+    }
+
+    [Fact]
+    public async Task DatabaseRejectsASecondDefaultInTheSameHousehold()
+    {
+        var home = (await new HouseholdService(_database).CreateAsync("Example", "Alex")).Id;
+        await Service.CreateAsync(home, Settings("First"), [], [], isDefault: true);
+        var second = await Service.CreateAsync(home, Settings("Second"), [], []);
+        await using var context = _database.CreateDbContext();
+        var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "ProjectionPresets" SET "IsDefault" = true WHERE "Id" = {second.Id}
+            """));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, error.SqlState);
+        Assert.Equal("IX_ProjectionPresets_HouseholdId_Default", error.ConstraintName);
+    }
+
+    [Fact]
     public async Task RoundTripKeepsIndependentLoansAndExactAssumptionsWithoutASnapshot()
     {
         var data = await Setup();
@@ -126,6 +184,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
         var saved = await Service.CreateAsync(d.Household, Settings(), [new(d.Group, ProjectionBucket.Investment)],
             [new(d.Asset, 1000, 9, 2, 0, "GBP")]);
         var before = await Service.GetAsync(d.Household, saved.Id);
+        var previousDefault = await Service.CreateAsync(d.Household, Settings("Other"), [], [], isDefault: true);
         await using var context = _database.CreateDbContext();
         await context.Database.ExecuteSqlRawAsync("""
             CREATE FUNCTION "FailPresetChildWrite"() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -148,7 +207,7 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
             """);
         var failure = await Assert.ThrowsAsync<PostgresException>(() => Service.UpdateAsync(d.Household, saved.Id,
             Settings("Changed"), [new(d.Group, ProjectionBucket.Savings)],
-            [new(d.Asset, 2000, 8, 3, 0, "GBP"), new(d.SecondAsset, 500, 5, 1, 0, "GBP")]));
+            [new(d.Asset, 2000, 8, 3, 0, "GBP"), new(d.SecondAsset, 500, 5, 1, 0, "GBP")], isDefault: true));
         Assert.Equal("Synthetic preset child failure after writes", failure.MessageText);
         var loaded = await Service.GetAsync(d.Household, saved.Id);
         Assert.Equal("Baseline", loaded.Name);
@@ -159,6 +218,8 @@ public sealed class ProjectionPresetPersistenceTests : IAsyncLifetime
         Assert.Equal(1000, loan.MonthlyLoanPaymentInAssetCurrency);
         Assert.Equal(9, loan.AnnualLoanInterestPercent);
         Assert.Equal(2, loan.AnnualAssetAppreciationPercent);
+        Assert.False(loaded.IsDefault);
+        Assert.Equal(previousDefault.Id, Assert.Single(await Service.ListAsync(d.Household), p => p.IsDefault).Id);
     }
 
     [Fact]

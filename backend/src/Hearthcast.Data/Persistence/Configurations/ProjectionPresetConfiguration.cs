@@ -22,6 +22,8 @@ public sealed class ProjectionPresetConfiguration : IEntityTypeConfiguration<Pro
         builder.Property(p => p.Id).ValueGeneratedNever();
         builder.HasAlternateKey(p => new { p.HouseholdId, p.Id });
         builder.HasIndex(p => new { p.HouseholdId, p.Name }).IsUnique();
+        builder.HasIndex(p => p.HouseholdId).IsUnique().HasFilter("\"IsDefault\" = true")
+            .HasDatabaseName("IX_ProjectionPresets_HouseholdId_Default");
         builder.Property(p => p.Name).IsRequired();
         builder.Property(p => p.CurrencyCode).IsRequired();
         builder.Property(p => p.AnnualInflationPercent).HasColumnType("numeric");

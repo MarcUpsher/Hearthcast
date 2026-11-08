@@ -264,6 +264,9 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -275,6 +278,11 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProjectionPresets_HouseholdId_Default")
+                        .HasFilter("\"IsDefault\" = true");
 
                     b.HasIndex("HouseholdId", "Name")
                         .IsUnique();

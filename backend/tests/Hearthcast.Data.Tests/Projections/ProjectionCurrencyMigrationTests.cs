@@ -12,6 +12,7 @@ namespace Hearthcast.Data.Tests.Projections;
 public sealed class ProjectionCurrencyMigrationTests : IAsyncLifetime
 {
     private const string Previous = "20261107083436_AddProjectionPresets";
+    private const string CurrencyPots = "20261107192346_AddProjectionCurrencyPots";
     private readonly PostgresTestDatabase _database = new();
     public Task InitializeAsync() => _database.InitializeAsync();
     public Task DisposeAsync() => _database.DisposeAsync();
@@ -53,6 +54,7 @@ public sealed class ProjectionCurrencyMigrationTests : IAsyncLifetime
                 """);
         await migrator.MigrateAsync();
         var saved = await new ProjectionPresetService(_database).GetAsync(d.HouseholdId, id);
+        Assert.False(saved.IsDefault); // Existing presets stay opt-in when the default flag is introduced.
         Assert.Equal(selectedNativeGroup ? 2 : 1, saved.Currencies.Count);
         var pot = saved.Currencies.Single(c => c.CurrencyCode == "GBP");
         Assert.Equal("GBP", pot.CurrencyCode);
@@ -91,8 +93,12 @@ public sealed class ProjectionCurrencyMigrationTests : IAsyncLifetime
         var saved = await service.CreateAsync(home.Id, new("Baseline", "GBP", 10, 3, false,
             [new("GBP", 1000, 5, 0, 2), new("ZAR", 500, 8, 100, 4)]), [], []);
         await using var context = _database.CreateDbContext();
-        var failure = await Assert.ThrowsAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync(Previous));
+        var migrator = context.GetService<IMigrator>();
+        // Test this migration in isolation; later migrations may legitimately roll back first.
+        await migrator.MigrateAsync(CurrencyPots);
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync(Previous));
         Assert.Contains("Cannot downgrade", failure.MessageText);
+        await migrator.MigrateAsync(); // Restore the schema expected by today's service before reading it.
         Assert.Equal(2, (await service.GetAsync(home.Id, saved.Id)).Currencies.Count);
     }
     [Fact]
@@ -107,10 +113,13 @@ public sealed class ProjectionCurrencyMigrationTests : IAsyncLifetime
         Assert.Equal(saved.CurrencyCode, Assert.Single(saved.Currencies).CurrencyCode);
         Assert.Equal(saved.CurrencyCode, Assert.Single(saved.FinancedAssets).InvestmentCurrencyAfterPayoff);
         await using var context = _database.CreateDbContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(CurrencyPots);
         var appliedBefore = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
-        var failure = await Assert.ThrowsAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync(Previous));
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync(Previous));
         Assert.Contains("Cannot downgrade", failure.MessageText);
         Assert.Equal(appliedBefore, (await context.Database.GetAppliedMigrationsAsync()).ToArray());
+        await migrator.MigrateAsync();
         var after = await service.GetAsync(d.HouseholdId, saved.Id);
         Assert.Equal("GBP", Assert.Single(after.Currencies).CurrencyCode);
         var loan = Assert.Single(after.FinancedAssets);

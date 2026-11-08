@@ -10,15 +10,15 @@ public sealed class ProjectionPresetService(IDbContextFactory<HearthcastDbContex
 {
     public Task<ProjectionPreset> CreateAsync(Guid householdId, ProjectionPresetSettings settings,
         IReadOnlyCollection<ProjectionGroupSelection> groups, IReadOnlyCollection<ProjectionFinancedAssetSettings> assets,
-        CancellationToken cancellationToken = default) => SaveAsync(householdId, null, settings, groups, assets, cancellationToken);
+        bool isDefault = false, CancellationToken cancellationToken = default) => SaveAsync(householdId, null, settings, groups, assets, isDefault, cancellationToken);
 
     public Task<ProjectionPreset> UpdateAsync(Guid householdId, Guid presetId, ProjectionPresetSettings settings,
         IReadOnlyCollection<ProjectionGroupSelection> groups, IReadOnlyCollection<ProjectionFinancedAssetSettings> assets,
-        CancellationToken cancellationToken = default) => SaveAsync(householdId, presetId, settings, groups, assets, cancellationToken);
+        bool isDefault = false, CancellationToken cancellationToken = default) => SaveAsync(householdId, presetId, settings, groups, assets, isDefault, cancellationToken);
 
     private async Task<ProjectionPreset> SaveAsync(Guid householdId, Guid? presetId, ProjectionPresetSettings settings,
         IReadOnlyCollection<ProjectionGroupSelection> groups, IReadOnlyCollection<ProjectionFinancedAssetSettings> assets,
-        CancellationToken cancellationToken)
+        bool isDefault, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(groups);
@@ -41,9 +41,18 @@ public sealed class ProjectionPresetService(IDbContextFactory<HearthcastDbContex
                     throw new ResourceNotFoundException("A selected financed asset does not belong to this household.");
                 if (await context.ProjectionPresets.AnyAsync(p => p.HouseholdId == householdId && p.Id != preset.Id && p.Name == preset.Name, token))
                     throw new BusinessRuleViolationException("A preset with this name already exists in this household.");
+                if (isDefault)
+                {
+                    // Clear the previous default before EF writes the new one. Both writes commit together.
+                    await context.ProjectionPresets
+                        .Where(p => p.HouseholdId == householdId && p.Id != preset.Id && p.IsDefault)
+                        .ExecuteUpdateAsync(update => update.SetProperty(p => p.IsDefault, false)
+                            .SetProperty(p => p.UpdatedAtUtc, DateTimeOffset.UtcNow), token);
+                }
+                preset.SetDefault(isDefault);
                 if (!presetId.HasValue) context.ProjectionPresets.Add(preset);
                 return preset;
-            }, cancellationToken);
+            }, cancellationToken, retryUniqueConstraint: "IX_ProjectionPresets_HouseholdId_Default");
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_ProjectionPresets_HouseholdId_Name" })

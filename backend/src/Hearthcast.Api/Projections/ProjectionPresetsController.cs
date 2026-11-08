@@ -20,7 +20,7 @@ public sealed class ProjectionPresetsController(ProjectionPresetService presets)
     public async Task<ActionResult<ProjectionPresetResponse>> Create(Guid householdId, SaveProjectionPresetRequest request, CancellationToken cancellationToken)
     {
         var input = request.Inputs!;
-        var result = await presets.CreateAsync(householdId, input.Assumptions!.ToSettings(request.Name!), input.ToGroups(), input.ToAssets(), cancellationToken);
+        var result = await presets.CreateAsync(householdId, input.Assumptions!.ToSettings(request.Name!), input.ToGroups(), input.ToAssets(), request.IsDefault, cancellationToken);
         return CreatedAtAction(nameof(Get), new { householdId, presetId = result.Id }, ProjectionPresetResponse.From(result));
     }
 
@@ -29,7 +29,7 @@ public sealed class ProjectionPresetsController(ProjectionPresetService presets)
     {
         var input = request.Inputs!;
         return ProjectionPresetResponse.From(await presets.UpdateAsync(householdId, presetId,
-            input.Assumptions!.ToSettings(request.Name!), input.ToGroups(), input.ToAssets(), cancellationToken));
+            input.Assumptions!.ToSettings(request.Name!), input.ToGroups(), input.ToAssets(), request.IsDefault, cancellationToken));
     }
 
     [HttpDelete("{presetId:guid}")]

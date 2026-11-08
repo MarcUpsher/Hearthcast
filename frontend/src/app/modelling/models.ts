@@ -29,6 +29,18 @@ export interface LoanSettings {
   annualLoanInterestPercent: number | null;
   annualAssetAppreciationPercent: number | null;
 }
+export interface ProjectionInputs {
+  assumptions: Assumptions;
+  groups: { groupId: string; bucket: "Investment" | "Savings" }[];
+  financedAssets: LoanSettings[];
+}
+export interface ProjectionPreset {
+  id: string;
+  householdId: string;
+  name: string;
+  isDefault: boolean;
+  inputs: ProjectionInputs;
+}
 export interface Balances {
   investments: number;
   savings: number;

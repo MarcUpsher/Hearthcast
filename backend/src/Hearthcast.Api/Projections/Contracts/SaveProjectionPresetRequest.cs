@@ -8,5 +8,6 @@ namespace Hearthcast.Api.Projections.Contracts;
 public sealed record SaveProjectionPresetRequest
 {
     [Required] public string? Name { get; init; }
+    public bool IsDefault { get; init; }
     [Required] public ProjectionInputsRequest? Inputs { get; init; }
 }

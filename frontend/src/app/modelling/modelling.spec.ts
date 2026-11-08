@@ -1,10 +1,15 @@
-import { signal } from "@angular/core";
-import { TestBed } from "@angular/core/testing";
-import { provideRouter } from "@angular/router";
+import { Component, signal } from "@angular/core";
+import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { provideRouter, Router } from "@angular/router";
+import { RouterTestingHarness } from "@angular/router/testing";
 import { describe, expect, it, vi } from "vitest";
 import { Api, Workspace } from "../core/api";
 import { Modelling } from "./modelling";
-import { ModellingSnapshot, ProjectionRun } from "./models";
+import { ModellingSnapshot, ProjectionRun, ProjectionPreset } from "./models";
+import { routes } from "../app.routes";
+
+@Component({ template: "History destination" })
+class NavigationDestination {}
 
 const snapshot = (id = "latest"): ModellingSnapshot => ({
   id,
@@ -86,36 +91,393 @@ const deferred = <T>() => {
   });
   return { resolve, promise };
 };
-async function setup(initialSnapshot = snapshot()) {
+const preset = (id = "baseline", isDefault = false): ProjectionPreset => ({
+  id,
+  name: id,
+  householdId: "home",
+  isDefault,
+  inputs: {
+    assumptions: {
+      currencyCode: "GBP",
+      durationYears: 20,
+      annualInflationPercent: 4,
+      showInflationAdjustedValues: true,
+      currencies: [
+        {
+          currencyCode: "GBP",
+          monthlyInvestmentContribution: 500,
+          annualInvestmentReturnPercent: 7,
+          monthlySavingsContribution: 100,
+          annualSavingsInterestPercent: 3,
+        },
+      ],
+    },
+    groups: [{ groupId: "group", bucket: "Investment" }],
+    financedAssets: [
+      {
+        financedAssetId: "asset",
+        monthlyLoanPaymentInAssetCurrency: 2000,
+        extraMonthlyLoanPaymentInAssetCurrency: 200,
+        annualLoanInterestPercent: 9,
+        annualAssetAppreciationPercent: 2,
+        investmentCurrencyAfterPayoff: "GBP",
+      },
+    ],
+  },
+});
+async function setup(
+  initialSnapshot = snapshot(),
+  savedPresets: ProjectionPreset[] | Error = [],
+  routed = false,
+) {
   const current = signal({ id: "home", name: "Household" });
-  const get = vi.fn(async (path: string): Promise<unknown> =>
-    path.endsWith("/snapshots")
+  const get = vi.fn(async (path: string): Promise<unknown> => {
+    if (path.endsWith("/projection-presets")) {
+      if (savedPresets instanceof Error) throw savedPresets;
+      return structuredClone(savedPresets);
+    }
+    return path.endsWith("/snapshots")
       ? [
           { id: "latest", snapshotDate: "2026-01-01" },
           { id: "older", snapshotDate: "2020-01-01" },
         ]
       : path.endsWith("/latest")
         ? initialSnapshot
-        : snapshot(path.split("/").at(-1)),
-  );
-  const send = vi.fn(async (): Promise<ProjectionRun> => report());
+        : snapshot(path.split("/").at(-1));
+  });
+  const send = vi.fn(async (): Promise<unknown> => report());
   TestBed.configureTestingModule({
     providers: [
-      provideRouter([]),
+      provideRouter(
+        routed
+          ? [
+              ...routes.filter((route) => route.path === "modelling"),
+              { path: "history", component: NavigationDestination },
+            ]
+          : [],
+      ),
       { provide: Api, useValue: { get, send } },
       { provide: Workspace, useValue: { current } },
     ],
   });
-  const fixture = TestBed.createComponent(Modelling);
+  let fixture: ComponentFixture<unknown>;
+  let page: Modelling;
+  if (routed) {
+    const harness = await RouterTestingHarness.create();
+    page = await harness.navigateByUrl("/modelling", Modelling);
+    fixture = harness.fixture;
+  } else {
+    const componentFixture = TestBed.createComponent(Modelling);
+    fixture = componentFixture;
+    page = componentFixture.componentInstance;
+  }
   fixture.detectChanges();
   await fixture.whenStable();
   await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
   await fixture.whenStable();
-  return { fixture, page: fixture.componentInstance, get, send, current };
+  return { fixture, page, get, send, current };
 }
 
 describe("Modelling", () => {
+  it("keeps snapshots usable if presets fail to load and retries without replacing the draft", async () => {
+    const { page, get } = await setup(
+      snapshot(),
+      new Error("Preset service unavailable"),
+    );
+    expect(page.snapshotId).toBe("latest");
+    expect(page.snapshot()).not.toBeNull();
+    expect(page.presetError()).toContain("unavailable");
+    page.presetName = "Working draft";
+    get.mockResolvedValueOnce([preset("later", true)]);
+    await page.reloadPresets();
+    expect(page.presetError()).toBe("");
+    expect(page.presetsLoaded()).toBe(true);
+    expect(page.presetName).toBe("Working draft");
+    expect(page.presetId).toBe("");
+  });
+  it("does not replace saved defaults with an older preset-list response", async () => {
+    const { page, get, send } = await setup(snapshot(), [
+      preset("first", true),
+    ]);
+    const response = deferred<ProjectionPreset[]>();
+    get.mockImplementationOnce(() => response.promise);
+    const reload = page.reloadPresets();
+    page.presetName = "New scenario";
+    const saved = { ...preset("new", true), name: "New scenario" };
+    send.mockResolvedValueOnce(saved);
+    await page.savePreset(true);
+    response.resolve([preset("first", true)]);
+    await reload;
+    expect(
+      page
+        .presets()
+        .filter((p) => p.isDefault)
+        .map((p) => p.id),
+    ).toEqual(["new"]);
+  });
+  it("loads the default preset against the latest snapshot without mutating the saved copy", async () => {
+    const saved = preset("usual", true);
+    const { page } = await setup(snapshot(), [saved, preset("other")]);
+    expect(page.presetId).toBe("usual");
+    expect(page.snapshotId).toBe("latest");
+    expect(page.assumptions.durationYears).toBe(20);
+    expect(page.adjusted()).toBe(true);
+    expect(page.investmentGroups()).toEqual(["group"]);
+    expect(page.loans["asset"].extraMonthlyLoanPaymentInAssetCurrency).toBe(
+      200,
+    );
+    expect(page.presetDirty()).toBe(false);
+    page.assumptions.currencies[0].monthlyInvestmentContribution = 999;
+    expect(page.presetDirty()).toBe(true);
+    expect(
+      page.presets()[0].inputs.assumptions.currencies[0]
+        .monthlyInvestmentContribution,
+    ).toBe(500);
+    expect(
+      saved.inputs.assumptions.currencies[0].monthlyInvestmentContribution,
+    ).toBe(500);
+  });
+  it("only loads a preset automatically when it is marked default", async () => {
+    const { page } = await setup(snapshot(), [preset()]);
+    expect(page.presetId).toBe("");
+    expect(page.investmentGroups()).toEqual([]);
+    expect(page.presetDirty()).toBe(false);
+  });
+  it("retains the selected snapshot while loading another preset and can cancel discarding edits", async () => {
+    const { page, send } = await setup(snapshot(), [
+      preset("first", true),
+      preset("second"),
+    ]);
+    await page.selectSnapshot("older");
+    page.assumptions.durationYears = 15;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    page.loadPreset("second");
+    expect(page.presetId).toBe("first");
+    expect(page.assumptions.durationYears).toBe(15);
+    confirm.mockReturnValue(true);
+    page.loadPreset("second");
+    expect(page.snapshotId).toBe("older");
+    expect(page.presetId).toBe("second");
+    expect(page.assumptions.durationYears).toBe(20);
+    expect(page.presetDirty()).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+  it("saves a new default explicitly and clears the previous default in the selector", async () => {
+    const { page, send } = await setup(snapshot(), [preset("first", true)]);
+    page.presetName = " New scenario ";
+    page.presetDefault = true;
+    const saved = { ...preset("new", true), name: "New scenario" };
+    send.mockResolvedValueOnce(saved);
+    await page.savePreset(true);
+    expect(send).toHaveBeenCalledWith(
+      "POST",
+      "households/home/projection-presets",
+      {
+        name: "New scenario",
+        isDefault: true,
+        inputs: saved.inputs,
+      },
+    );
+    expect(
+      page
+        .presets()
+        .filter((p) => p.isDefault)
+        .map((p) => p.id),
+    ).toEqual(["new"]);
+    expect(page.presetId).toBe("new");
+    expect(page.presetName).toBe("New scenario");
+    expect(page.presetDirty()).toBe(false);
+    expect(page.snapshotId).toBe("latest");
+  });
+  it("updates a preset including default and inflation-display changes without re-running the graph", async () => {
+    const { page, send } = await setup(snapshot(), [preset("first", true)]);
+    page.presetDefault = false;
+    page.adjusted.set(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(page.presetDirty()).toBe(true);
+    send.mockResolvedValueOnce(preset("first", false));
+    await page.savePreset();
+    const args = send.mock.calls[0] as unknown as [
+      string,
+      string,
+      {
+        isDefault: boolean;
+        inputs: { assumptions: { showInflationAdjustedValues: boolean } };
+      },
+    ];
+    expect(args[0]).toBe("PUT");
+    expect(args[1]).toBe("households/home/projection-presets/first");
+    expect(args[2].isDefault).toBe(false);
+    expect(args[2].inputs.assumptions.showInflationAdjustedValues).toBe(false);
+    expect(page.presets().some((p) => p.isDefault)).toBe(false);
+  });
+  it("preserves the draft and existing defaults when saving fails", async () => {
+    const { page, send } = await setup(snapshot(), [preset("first", true)]);
+    page.presetName = "Duplicate";
+    page.presetDefault = false;
+    send.mockRejectedValueOnce(new Error("Name already exists"));
+    await page.savePreset(true);
+    expect(page.presetError()).toContain("Name already exists");
+    expect(page.presetId).toBe("first");
+    expect(page.presetName).toBe("Duplicate");
+    expect(page.presetDirty()).toBe(true);
+    expect(page.presets()[0].isDefault).toBe(true);
+    expect(page.savingPreset()).toBe(false);
+  });
+  it("deletes a preset without changing current assumptions or the snapshot", async () => {
+    const { page, send } = await setup(snapshot(), [preset("first", true)]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await page.deletePreset();
+    expect(send).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    send.mockResolvedValueOnce(null);
+    await page.deletePreset();
+    expect(send).toHaveBeenCalledWith(
+      "DELETE",
+      "households/home/projection-presets/first",
+      null,
+    );
+    expect(page.presets()).toEqual([]);
+    expect(page.presetId).toBe("");
+    expect(page.presetDefault).toBe(false);
+    expect(page.assumptions.durationYears).toBe(20);
+    expect(page.investmentGroups()).toEqual(["group"]);
+    expect(page.snapshotId).toBe("latest");
+    expect(page.presetDirty()).toBe(true);
+    confirm.mockRestore();
+  });
+  it.each(["second", ""])(
+    "protects the retained deleted draft when switching to %s",
+    async (target) => {
+      const { fixture, page, send } = await setup(snapshot(), [
+        preset("first", true),
+        preset("second"),
+      ]);
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+      try {
+        send.mockResolvedValueOnce(null);
+        await page.deletePreset();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain("Unsaved changes");
+        page.assumptions.durationYears = 35;
+        page.assumptions.currencies[0].monthlyInvestmentContribution = 999;
+        confirm.mockReturnValue(false);
+        page.loadPreset(target);
+        expect(page.presetId).toBe("");
+        expect(page.assumptions.durationYears).toBe(35);
+        expect(
+          page.assumptions.currencies[0].monthlyInvestmentContribution,
+        ).toBe(999);
+        expect(page.presetDirty()).toBe(true);
+        confirm.mockReturnValue(true);
+        page.loadPreset(target);
+        expect(page.presetId).toBe(target);
+        expect(page.presetDirty()).toBe(false);
+      } finally {
+        confirm.mockRestore();
+      }
+    },
+  );
+  it("clears the retained unsaved state after saving the deleted preset's draft again", async () => {
+    const { page, send } = await setup(snapshot(), [preset("first", true)]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      send.mockResolvedValueOnce(null);
+      await page.deletePreset();
+      send.mockRejectedValueOnce(new Error("Save failed"));
+      await page.savePreset();
+      expect(page.presetDirty()).toBe(true);
+      send.mockResolvedValueOnce(preset("restored"));
+      await page.savePreset();
+      expect(page.presetDirty()).toBe(false);
+      confirm.mockClear();
+      expect(page.canLeave()).toBe(true);
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+  it("guards actual route navigation and keeps the edited preset if navigation is cancelled", async () => {
+    const { page } = await setup(snapshot(), [preset("first", true)], true);
+    const router = TestBed.inject(Router);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      page.assumptions.durationYears = 35;
+      expect(await router.navigateByUrl("/history")).toBe(false);
+      expect(router.url).toBe("/modelling");
+      expect(page.assumptions.durationYears).toBe(35);
+      expect(confirm).toHaveBeenCalledWith("Discard unsaved preset changes?");
+      confirm.mockReturnValue(true);
+      expect(await router.navigateByUrl("/history")).toBe(true);
+      expect(router.url).toBe("/history");
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+  it("allows a clean preset to leave the route without confirmation", async () => {
+    await setup(snapshot(), [preset("first", true)], true);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      expect(await TestBed.inject(Router).navigateByUrl("/history")).toBe(true);
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+  it("only warns on unload for unsaved drafts or in-flight preset writes", async () => {
+    const { page } = await setup(snapshot(), [preset("first", true)]);
+    const unload = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(unload()).toBe(false);
+    page.presetDefault = false;
+    expect(unload()).toBe(true);
+    page.presetDefault = true;
+    expect(unload()).toBe(false);
+    page.savingPreset.set(true);
+    expect(unload()).toBe(true);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      expect(page.canLeave()).toBe(false);
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+  it("retains dirty assumptions while changing snapshots without a discard prompt", async () => {
+    const { page } = await setup(snapshot(), [preset("first", true)]);
+    page.assumptions.durationYears = 35;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      await page.selectSnapshot("older");
+      expect(confirm).not.toHaveBeenCalled();
+      expect(page.snapshotId).toBe("older");
+      expect(page.assumptions.durationYears).toBe(35);
+      expect(page.presetDirty()).toBe(true);
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+  it("ignores a save response after changing households", async () => {
+    const { fixture, page, send, current } = await setup();
+    page.presetName = "Old household";
+    const response = deferred<ProjectionPreset>();
+    send.mockImplementationOnce(() => response.promise);
+    const saving = page.savePreset();
+    expect(page.savingPreset()).toBe(true);
+    current.set({ id: "new-home", name: "Other" });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    response.resolve(preset("old-default", true));
+    await saving;
+    expect(page.presets()).toEqual([]);
+    expect(page.presetId).toBe("");
+    expect(page.savingPreset()).toBe(false);
+  });
   it("defaults to the latest snapshot and asks for explicit group selections", async () => {
     const { fixture, page, send } = await setup();
     expect(page.snapshotId).toBe("latest");

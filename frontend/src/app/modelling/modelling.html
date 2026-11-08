@@ -22,11 +22,98 @@
   @if (inventory().length) {
     <div class="modelling-layout">
       <aside class="panel controls" aria-label="Projection assumptions">
+        <h2>Presets</h2>
+        <mat-form-field>
+          <mat-label>Saved preset</mat-label>
+          <mat-select
+            #presetPicker
+            [value]="presetId"
+            [disabled]="savingPreset() || loading() || !presetsLoaded()"
+            (selectionChange)="
+              loadPreset($event.value); presetPicker.value = presetId
+            "
+          >
+            <mat-option value="">New preset</mat-option>
+            @for (preset of presets(); track preset.id) {
+              <mat-option [value]="preset.id"
+                >{{ preset.name
+                }}{{ preset.isDefault ? " · Default" : "" }}</mat-option
+              >
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>Preset name</mat-label>
+          <input
+            matInput
+            [(ngModel)]="presetName"
+            [disabled]="savingPreset() || loading()"
+          />
+        </mat-form-field>
+        <mat-checkbox
+          [(ngModel)]="presetDefault"
+          [disabled]="savingPreset() || loading()"
+          >Default</mat-checkbox
+        >
+        <p class="muted hint">
+          Load these assumptions with the latest snapshot when this page opens.
+          Saving a new default replaces the previous one.
+        </p>
+        <div class="preset-actions">
+          <button
+            mat-flat-button
+            [disabled]="!canSavePreset() || (!!presetId && !presetDirty())"
+            (click)="savePreset()"
+          >
+            {{ presetId ? "Save changes" : "Save preset" }}
+          </button>
+          @if (presetId) {
+            <button
+              mat-button
+              [disabled]="!canSavePreset()"
+              (click)="savePreset(true)"
+            >
+              Save as new
+            </button>
+            <button
+              mat-button
+              [disabled]="savingPreset()"
+              (click)="deletePreset()"
+            >
+              Delete
+            </button>
+            @if (presetDirty()) {
+              <button
+                mat-button
+                [disabled]="savingPreset()"
+                (click)="loadPreset(presetId)"
+              >
+                Revert changes
+              </button>
+            }
+          }
+        </div>
+        @if (savingPreset()) {
+          <p class="hint" role="status">Saving…</p>
+        } @else if (presetDirty()) {
+          <p class="hint update-status" role="status">Unsaved changes</p>
+        } @else if (presetStatus()) {
+          <p class="hint" role="status">{{ presetStatus() }}</p>
+        }
+        @if (presetError()) {
+          <p class="error hint" role="alert">{{ presetError() }}</p>
+          @if (!presetsLoaded()) {
+            <button mat-button (click)="reloadPresets()">
+              Retry loading presets
+            </button>
+          }
+        }
         <h2>Starting point</h2>
         <mat-form-field
           ><mat-label>Starting snapshot</mat-label
           ><mat-select
             [ngModel]="snapshotId"
+            [disabled]="savingPreset()"
             (ngModelChange)="selectSnapshot($event)"
           >
             @for (row of inventory(); track row.id) {
@@ -37,14 +124,14 @@
         @if (loading()) {
           <p role="status" class="muted">Loading snapshot…</p>
         }
-        <fieldset [disabled]="loading() || !snapshot()">
+        <fieldset [disabled]="loading() || savingPreset() || !snapshot()">
           <div class="two-fields">
             <mat-form-field
               ><mat-label>Viewing currency</mat-label
               ><mat-select
                 [(ngModel)]="assumptions.currencyCode"
                 (ngModelChange)="viewCurrencyChanged()"
-                [disabled]="loading() || !snapshot()"
+                [disabled]="loading() || savingPreset() || !snapshot()"
               >
                 <mat-select-trigger>{{
                   assumptions.currencyCode
@@ -89,7 +176,7 @@
               multiple
               [ngModel]="investmentGroups()"
               (ngModelChange)="setGroups('Investment', $event)"
-              [disabled]="loading() || !snapshot()"
+              [disabled]="loading() || savingPreset() || !snapshot()"
             >
               @for (category of groups(); track category.category) {
                 <mat-optgroup [label]="category.category">
@@ -115,7 +202,7 @@
               multiple
               [ngModel]="savingsGroups()"
               (ngModelChange)="setGroups('Savings', $event)"
-              [disabled]="loading() || !snapshot()"
+              [disabled]="loading() || savingPreset() || !snapshot()"
             >
               @for (category of groups(); track category.category) {
                 <mat-optgroup [label]="category.category">
@@ -143,6 +230,7 @@
             ><mat-label>Add a currency pot</mat-label
             ><mat-select
               [value]="null"
+              [disabled]="loading() || savingPreset() || !snapshot()"
               #currencyPicker
               (selectionChange)="
                 addCurrency($event.value); currencyPicker.value = null
@@ -232,7 +320,7 @@
               multiple
               [ngModel]="selectedAssets()"
               (ngModelChange)="setAssets($event)"
-              [disabled]="loading() || !snapshot()"
+              [disabled]="loading() || savingPreset() || !snapshot()"
             >
               @for (asset of assets(); track asset.id) {
                 <mat-option [value]="asset.id"
@@ -293,6 +381,7 @@
               <mat-form-field
                 ><mat-label>Invest after payoff in</mat-label
                 ><mat-select
+                  [disabled]="savingPreset()"
                   [(ngModel)]="loans[asset.id].investmentCurrencyAfterPayoff"
                   (ngModelChange)="changed()"
                 >
@@ -366,6 +455,7 @@
             </p>
           </div>
           <mat-slide-toggle
+            [disabled]="savingPreset()"
             [ngModel]="adjusted()"
             (ngModelChange)="adjusted.set($event); hovered.set(null)"
             >Adjust for inflation</mat-slide-toggle
