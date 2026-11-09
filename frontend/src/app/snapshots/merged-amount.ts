@@ -1,5 +1,5 @@
 import { Component, input } from "@angular/core";
-import { MergedAmount } from "../core/api";
+import { MergedAmount } from "../summaries/models";
 import { money } from "../core/money";
 
 @Component({

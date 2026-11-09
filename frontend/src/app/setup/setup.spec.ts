@@ -1,6 +1,9 @@
 import { TestBed } from "@angular/core/testing";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { Api, Workspace, SnapshotActivity, Item, Asset } from "../core/api";
+import { Api } from "../core/api";
+import { Workspace } from "../core/workspace";
+import { SnapshotActivity } from "../snapshots/models";
+import { Item, Asset } from "./models";
 import { Setup } from "./setup";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatSortHeaderHarness } from "@angular/material/sort/testing";

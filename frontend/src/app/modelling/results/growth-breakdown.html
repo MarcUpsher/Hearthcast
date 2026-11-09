@@ -1,0 +1,58 @@
+@let report = result();
+@if (growth(); as breakdown) {
+  <section class="panel growth-breakdown" aria-labelledby="growth-heading">
+    <h2 id="growth-heading">Where the growth comes from</h2>
+    <p class="muted hint">
+      {{ breakdown.startDate }} → {{ breakdown.endDate }} ·
+      {{ report.currencyCode }} ·
+      {{ adjusted() ? "Starting-date purchasing power" : "Nominal amounts" }}
+    </p>
+    <div class="scroll">
+      <table>
+        <caption class="sr-only">
+          Changes from starting to final modelled net worth
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Component</th>
+            <th scope="col" class="growth-value">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="growth-total">
+            <th scope="row">Starting modelled net worth</th>
+            <td class="growth-value">
+              {{ money(breakdown.starting, report.currencyCode) }}
+            </td>
+          </tr>
+          @for (row of breakdown.rows; track row.key) {
+            <tr [attr.data-component]="row.key">
+              <th scope="row">{{ row.label }}</th>
+              <td class="growth-value">
+                {{ signedMoney(row.value, report.currencyCode) }}
+              </td>
+            </tr>
+          }
+          <tr class="growth-total growth-final">
+            <th scope="row">Final modelled net worth</th>
+            <td class="growth-value">
+              {{ money(breakdown.final, report.currencyCode) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted hint growth-notes">
+      Reinvested loan payments show cash added; their growth is included in
+      investment returns. Loan balance reduction can be negative when debt
+      grows.
+    </p>
+    @if (adjusted()) {
+      <p class="muted hint">
+        Changes are valued in starting-date money when they occur. The inflation
+        effect shows the purchasing-power change on wealth already held.
+      </p>
+    }
+    <p class="muted hint">Totals are calculated before rounding.</p>
+  </section>
+}

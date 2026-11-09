@@ -5,7 +5,7 @@ import {
   HttpTestingController,
 } from "@angular/common/http/testing";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { Workspace } from "./api";
+import { Workspace } from "./workspace";
 describe("Household discovery", () => {
   let w: Workspace;
   let http: HttpTestingController;

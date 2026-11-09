@@ -10,6 +10,11 @@ occupies that port, or pass another port to `npm start`.
 
 `npm run build` compiles the production app; `npm test` runs frontend tests.
 
+- History: date-range and interval controls, currency views, household/category and
+  person investment lines with hover readings.
+- Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
+  reusable/default presets, real/nominal display, growth breakdown and expense targets.
+  See the [current modelling guide](../docs/modelling.md).
 - Snapshots: available year/month/date selectors; household contribution,
   individual ownership and all-recorded views; category/group totals and
   searchable recorded entries with carry/confirmation information.
@@ -113,3 +118,8 @@ and expandable holding in every currency represented in the saved snapshot.
 Conversions and allocations are calculated by the backend using saved rates.
 Missing values or rates are marked incomplete. The original native-currency blocks
 and full recorded entries remain below it. See `../docs/merged-summary-slice.md`.
+
+Frontend contracts live with each feature; transport/errors and Workspace have
+separate core files. Shared chart interpolation lives in `shared/charts`. Modelling's
+parent coordinates drafts/requests; chart and result components only present reports.
+See the [project map](../docs/project-layout.md) and [docs index](../docs/index.md).

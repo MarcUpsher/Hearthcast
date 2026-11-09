@@ -6,7 +6,9 @@ import { MatSelectHarness } from "@angular/material/select/testing";
 import { MatButtonHarness } from "@angular/material/button/testing";
 import { MatDialog, MatDialogState } from "@angular/material/dialog";
 import { MatDialogHarness } from "@angular/material/dialog/testing";
-import { Api, Household, Item, Asset, Workspace } from "../core/api";
+import { Api } from "../core/api";
+import { Household, Item, Asset } from "./models";
+import { Workspace } from "../core/workspace";
 import { Setup } from "./setup";
 
 describe("Setup edit sidebars", () => {

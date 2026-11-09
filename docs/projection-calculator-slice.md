@@ -1,9 +1,9 @@
 # Monthly projection calculator
 
-> Updated model: see [Native currency projection pots](native-currency-projection-slice.md)
-> for the current schema, request shape and per-currency calculation. The original
-> single-currency slice notes below describe the preceding implementation.
-
+> Historical implementation record. Start with the [current modelling guide](modelling.md)
+> and [native currency contracts](native-currency-projection-slice.md). The original
+> single-currency or initial-screen details below include superseded behaviour;
+> retain them for design history, not as current payload examples.
 
 `ProjectionCalculator.Calculate(assumptions, startingPosition)` is a pure function.
 It takes unsaved or saved assumptions plus prepared, known starting balances. It

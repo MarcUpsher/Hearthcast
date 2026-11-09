@@ -1,161 +1,88 @@
+import {
+  report,
+  payoffReport,
+  expenseReport,
+} from "../../testing/projection-fixtures";
+import { By } from "@angular/platform-browser";
+import {
+  savedItem,
+  savedAsset,
+  snapshotFixture,
+} from "../../testing/snapshot-fixtures";
+import { ProjectionChart } from "./chart/projection-chart";
+import { GrowthBreakdown } from "./results/growth-breakdown";
+import { expenseMilestone, payoffEvents } from "./chart/modelling-chart";
+import { Snapshot } from "../snapshots/models";
 import { Component, signal } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { provideRouter, Router } from "@angular/router";
 import { RouterTestingHarness } from "@angular/router/testing";
 import { describe, expect, it, vi } from "vitest";
-import { Api, Workspace } from "../core/api";
+import { Api } from "../core/api";
+import { Workspace } from "../core/workspace";
 import { Modelling } from "./modelling";
-import { ModellingSnapshot, ProjectionRun, ProjectionPreset } from "./models";
+import { ProjectionRun, ProjectionPreset } from "./models";
 import { routes } from "../app.routes";
 
 @Component({ template: "History destination" })
 class NavigationDestination {}
 
-const snapshot = (id = "latest"): ModellingSnapshot => ({
-  id,
-  revision: "r1",
-  snapshotDate: id === "latest" ? "2026-01-01" : "2020-01-01",
-  datePrecision: 1,
-  people: [],
-  itemSnapshots: [
-    {
-      trackedItemId: "item",
-      itemName: "Fund",
-      groupId: "group",
-      groupName: "Pension",
-      categoryId: "category",
-      categoryName: "Investments",
-      financialType: 1,
-      currencyCode: "GBP",
-      amount: 100,
-      valueOrigin: 1,
-      lastConfirmedDate: null,
-      holderSnapshotPersonId: "person",
-      includeInHousehold: true,
-    },
-  ],
-  financedAssetSnapshots: [
-    {
-      financedAssetId: "asset",
-      assetName: "Home",
-      groupId: "property",
-      groupName: "Homes",
-      categoryId: "assets",
-      categoryName: "Property",
-      currencyCode: "ZAR",
-      owners: [],
-      currentValuation: 1000,
-      outstandingLoanBalance: 500,
-      availableToWithdraw: null,
-      hasWithdrawalFacility: false,
-      includeInHousehold: true,
-    },
-  ],
-});
-const report = (value = 100): ProjectionRun => {
-  const inflation = (month: number) => Math.pow(1.03, month / 12);
-  const nominalGrowth = {
-    startingNetPosition: value + 510,
-    investmentReturns: 12,
-    savingsInterest: 0,
-    financedAssetValueChange: 0,
-    investmentContributions: 0,
-    savingsContributions: 0,
-    loanBalanceReduction: 12,
-    reinvestedLoanPayments: 0,
-    inflationEffect: 0,
-    finalNetPosition: value + 534,
-  };
-  const realChange = Array.from(
-    { length: 12 },
-    (_, i) => 1 / inflation(i + 1),
-  ).reduce((sum, n) => sum + n, 0);
-  return {
-    snapshotId: "latest",
-    snapshotRevision: "r1",
-    currencyCode: "GBP",
-    canCalculate: true,
-    growthBreakdown: {
-      nominal: nominalGrowth,
-      inflationAdjusted: {
-        ...nominalGrowth,
-        investmentReturns: realChange,
-        loanBalanceReduction: realChange,
-        inflationEffect:
-          (value + 534) / inflation(12) - (value + 510) - realChange * 2,
-        finalNetPosition: (value + 534) / inflation(12),
-      },
-    },
-    months: Array.from({ length: 13 }, (_, i) => ({
-      month: i,
-      date: `${2026 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01`,
-      nominal: {
-        investments: value + i,
-        savings: 10,
-        financedAssetValue: 1000,
-        loanBalance: 500 - i,
-        equity: 500 + i,
-        netPosition: value + 510 + i * 2,
-      },
-      inflationAdjusted: {
-        investments: (value + i) / inflation(i),
-        savings: 10 / inflation(i),
-        financedAssetValue: 1000 / inflation(i),
-        loanBalance: (500 - i) / inflation(i),
-        equity: (500 + i) / inflation(i),
-        netPosition: (value + 510 + i * 2) / inflation(i),
-      },
-      redirectedToInvestments: 0,
-      financedAssets: [],
-    })),
-    issues: [],
-    warnings: [],
-    coverage: [],
-  };
-};
-const payoffReport = (events: { id: string; month: number | null }[]) => {
-  const result = report();
-  for (const row of result.months!)
-    row.financedAssets = events.map((event) => ({
-      financedAssetId: event.id,
-      currencyCode: "ZAR",
-      payoffDate:
-        event.month !== null && row.month >= event.month
-          ? result.months![event.month].date
-          : null,
-    }));
-  return result;
-};
-const expenseReport = (
-  capital = 106,
-  includeSavings = false,
-): ProjectionRun => {
-  const result = report();
-  for (const row of result.months!) {
-    const inflation = Math.pow(1.03, row.month / 12);
-    const eligible =
-      row.nominal.investments + (includeSavings ? row.nominal.savings : 0);
-    row.expenseTarget = {
-      nominalRequiredCapital: capital * inflation,
-      inflationAdjustedRequiredCapital: capital,
-      nominalEligibleBalance: eligible,
-      inflationAdjustedEligibleBalance: eligible / inflation,
-      isCovered:
-        Math.round(eligible * 100) >= Math.round(capital * inflation * 100),
-    };
-  }
-  const first = result.months!.find((m) => m.expenseTarget!.isCovered);
-  result.expenseTarget = {
-    expenseCurrencyCode: "GBP",
-    annualExpenses: capital * 0.04,
-    annualWithdrawalRatePercent: 4,
-    includeSavings,
-    requiredCapitalInExpenseCurrency: capital,
-    firstReachedDate: first?.date ?? null,
-    alreadyReachedAtStart: first?.month === 0,
-  };
-  return result;
-};
+function chartOf(fixture: ComponentFixture<unknown>): ProjectionChart | null {
+  fixture.detectChanges();
+  return (
+    fixture.debugElement.query(By.directive(ProjectionChart))
+      ?.componentInstance ?? null
+  );
+}
+function growthOf(fixture: ComponentFixture<unknown>): GrowthBreakdown | null {
+  fixture.detectChanges();
+  return (
+    fixture.debugElement.query(By.directive(GrowthBreakdown))
+      ?.componentInstance ?? null
+  );
+}
+const snapshot = (id = "latest"): Snapshot =>
+  snapshotFixture({
+    id,
+    revision: "r1",
+    snapshotDate: id === "latest" ? "2026-01-01" : "2020-01-01",
+    datePrecision: 1,
+    people: [],
+    itemSnapshots: [
+      savedItem({
+        trackedItemId: "item",
+        itemName: "Fund",
+        groupId: "group",
+        groupName: "Pension",
+        categoryId: "category",
+        categoryName: "Investments",
+        financialType: 1,
+        currencyCode: "GBP",
+        amount: 100,
+        valueOrigin: 2,
+        lastConfirmedDate: null,
+        holderSnapshotPersonId: "person",
+        includeInHousehold: true,
+      }),
+    ],
+    financedAssetSnapshots: [
+      savedAsset({
+        financedAssetId: "asset",
+        assetName: "Home",
+        groupId: "property",
+        groupName: "Homes",
+        categoryId: "assets",
+        categoryName: "Property",
+        currencyCode: "ZAR",
+        owners: [],
+        currentValuation: 1000,
+        outstandingLoanBalance: 500,
+        availableToWithdraw: null,
+        hasWithdrawalFacility: false,
+        includeInHousehold: true,
+      }),
+    ],
+  });
 const pause = () => new Promise((resolve) => setTimeout(resolve, 340));
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -309,7 +236,7 @@ describe("Modelling", () => {
     page.changed();
     await pause();
     expect(send).toHaveBeenCalledTimes(1);
-    expect(page.expenseMilestone()).not.toBeNull();
+    expect(expenseMilestone(page.result())).not.toBeNull();
     page.setExpenseTarget(false);
     expect(page.assumptions.expenseTarget).toBeNull();
     expect(page.result()).toBeNull();
@@ -339,7 +266,7 @@ describe("Modelling", () => {
     const r = expenseReport();
     page.result.set(r);
     fixture.detectChanges();
-    const milestone = page.expenseMilestone()!;
+    const milestone = expenseMilestone(page.result())!;
     const marker = fixture.nativeElement.querySelector(".expense-marker");
     expect(milestone.index).toBeGreaterThan(0);
     expect(marker.getAttribute("aria-label")).toContain(
@@ -349,13 +276,19 @@ describe("Modelling", () => {
       fixture.nativeElement.querySelector(".expense-summary").textContent,
     ).toContain("First reached on");
     marker.dispatchEvent(new Event("focus"));
-    expect(page.reading()!.expenseTarget!.isCovered).toBe(true);
-    const before = page.chart()!.expenseTarget!;
+    expect(
+      (chartOf(fixture)?.reading() ?? null)!.expenseTarget!.isCovered,
+    ).toBe(true);
+    const before = (chartOf(fixture)?.chart() ?? null)!.expenseTarget!;
     page.adjusted.set(true);
     fixture.detectChanges();
-    expect(page.chart()!.expenseTarget!.marker!.x).toBe(before.marker!.x);
-    expect(page.chart()!.expenseTarget!.path).not.toBe(before.path);
-    expect(page.expenseMilestone()!.firstReachedDate).toBe(
+    expect((chartOf(fixture)?.chart() ?? null)!.expenseTarget!.marker!.x).toBe(
+      before.marker!.x,
+    );
+    expect((chartOf(fixture)?.chart() ?? null)!.expenseTarget!.path).not.toBe(
+      before.path,
+    );
+    expect(expenseMilestone(page.result())!.firstReachedDate).toBe(
       r.expenseTarget!.firstReachedDate,
     );
     expect(
@@ -370,11 +303,15 @@ describe("Modelling", () => {
     expect(
       fixture.nativeElement.querySelector(".expense-summary").textContent,
     ).toContain("Already reached at the starting snapshot");
-    expect(page.chart()!.expenseTarget!.marker!.index).toBe(0);
+    expect(
+      (chartOf(fixture)?.chart() ?? null)!.expenseTarget!.marker!.index,
+    ).toBe(0);
     expect(
       fixture.nativeElement.querySelectorAll(".projection-line"),
     ).toHaveLength(5);
-    expect(page.expenseMilestone()!.basis).toBe("Investments + savings");
+    expect(expenseMilestone(page.result())!.basis).toBe(
+      "Investments + savings",
+    );
     page.result.set(expenseReport(200));
     fixture.detectChanges();
     expect(
@@ -402,7 +339,7 @@ describe("Modelling", () => {
     });
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector(".expense-summary")).toBeNull();
-    expect(page.expenseMilestone()).toBeNull();
+    expect(expenseMilestone(page.result())).toBeNull();
   });
   it("keeps snapshots usable if presets fail to load and retries without replacing the draft", async () => {
     const { page, get } = await setup(
@@ -776,16 +713,22 @@ describe("Modelling", () => {
     const { page, fixture, send } = await setup();
     page.result.set(report());
     fixture.detectChanges();
-    const nominal = page.chart()!.lines[0].path;
+    const nominal = (chartOf(fixture)?.chart() ?? null)!.lines[0].path;
     page.adjusted.set(true);
     fixture.detectChanges();
-    expect(page.chart()!.lines[0].path).not.toBe(nominal);
+    expect((chartOf(fixture)?.chart() ?? null)!.lines[0].path).not.toBe(
+      nominal,
+    );
     expect(send).not.toHaveBeenCalled();
     expect(
       fixture.nativeElement.querySelectorAll(".projection-line"),
     ).toHaveLength(4);
-    expect(page.chart()!.lines.every((l) => l.path.includes("C"))).toBe(true);
-    page.hovered.set(0);
+    expect(
+      (chartOf(fixture)?.chart() ?? null)!.lines.every((l) =>
+        l.path.includes("C"),
+      ),
+    ).toBe(true);
+    chartOf(fixture)!.hovered.set(0);
     fixture.detectChanges();
     expect(
       fixture.nativeElement.querySelector('[role="tooltip"]').textContent,
@@ -823,11 +766,13 @@ describe("Modelling", () => {
   it("switches the breakdown to starting-date money locally while preserving the starting value", async () => {
     const { page, fixture, send } = await setup();
     page.result.set(report());
-    const starting = page.growth()!.starting;
+    const starting = (growthOf(fixture)?.growth() ?? null)!.starting;
     page.adjusted.set(true);
     fixture.detectChanges();
-    expect(page.growth()!.starting).toBe(starting);
-    expect(page.growth()!.final).toBeCloseTo(634 / 1.03);
+    expect((growthOf(fixture)?.growth() ?? null)!.starting).toBe(starting);
+    expect((growthOf(fixture)?.growth() ?? null)!.final).toBeCloseTo(
+      634 / 1.03,
+    );
     const table = fixture.nativeElement.querySelector(".growth-breakdown");
     expect(table.querySelectorAll("tbody tr")).toHaveLength(10);
     expect(
@@ -913,7 +858,7 @@ describe("Modelling", () => {
       growthBreakdown: null,
     });
     fixture.detectChanges();
-    expect(page.growth()).toBeNull();
+    expect(growthOf(fixture)?.growth() ?? null).toBeNull();
     expect(fixture.nativeElement.querySelector(".growth-breakdown")).toBeNull();
     page.result.set(report());
     fixture.detectChanges();
@@ -936,7 +881,7 @@ describe("Modelling", () => {
       ]),
     );
     fixture.detectChanges();
-    expect(page.payoffEvents()).toEqual([
+    expect(payoffEvents(page.result())).toEqual([
       { index: 3, date: "2026-04-01", assetIds: ["asset", "second"] },
       { index: 12, date: "2027-01-01", assetIds: ["last"] },
     ]);
@@ -972,37 +917,37 @@ describe("Modelling", () => {
       new MouseEvent("mousemove", { bubbles: true, clientX: 920 }),
     );
     fixture.detectChanges();
-    expect(page.hovered()).toBe(3); // The parent chart must not select a different month.
+    expect(chartOf(fixture)!.hovered()).toBe(3); // The parent chart must not select a different month.
     expect(
       fixture.nativeElement.querySelector('[role="tooltip"]').textContent,
     ).toContain("Home, Car · Loan paid off · 2026-04-01");
     expect(marker.getAttribute("aria-label")).toContain("Home, Car");
-    page.hovered.set(null);
+    chartOf(fixture)!.hovered.set(null);
     marker.dispatchEvent(new Event("focus"));
-    expect(page.reading()?.date).toBe("2026-04-01");
-    page.hovered.set(null);
+    expect((chartOf(fixture)?.reading() ?? null)?.date).toBe("2026-04-01");
+    chartOf(fixture)!.hovered.set(null);
     const enter = new KeyboardEvent("keydown", {
       key: "Enter",
       bubbles: true,
       cancelable: true,
     });
     marker.dispatchEvent(enter);
-    expect(page.hovered()).toBe(3);
+    expect(chartOf(fixture)!.hovered()).toBe(3);
     expect(enter.defaultPrevented).toBe(true);
   });
   it("repositions payoff markers for inflation-adjusted equity without changing dates", async () => {
     const { page, fixture, send } = await setup();
     page.result.set(payoffReport([{ id: "asset", month: 6 }]));
-    const nominal = page.chart()!.payoffs[0];
+    const nominal = (chartOf(fixture)?.chart() ?? null)!.payoffs[0];
     page.adjusted.set(true);
     fixture.detectChanges();
-    const adjusted = page.chart()!.payoffs[0];
+    const adjusted = (chartOf(fixture)?.chart() ?? null)!.payoffs[0];
     expect(adjusted.x).toBe(nominal.x);
     expect(adjusted.date).toBe(nominal.date);
     expect(adjusted.y).not.toBe(nominal.y);
     expect(send).not.toHaveBeenCalled();
-    page.hovered.set(6);
-    expect(page.reading()?.values.equity).toBeCloseTo(
+    chartOf(fixture)!.hovered.set(6);
+    expect((chartOf(fixture)?.reading() ?? null)?.values.equity).toBeCloseTo(
       506 / Math.pow(1.03, 0.5),
     );
   });
@@ -1010,7 +955,7 @@ describe("Modelling", () => {
     const { page, fixture } = await setup();
     page.result.set(payoffReport([{ id: "asset", month: 0 }]));
     fixture.detectChanges();
-    expect(page.chart()!.payoffs[0].x).toBe(88);
+    expect((chartOf(fixture)?.chart() ?? null)!.payoffs[0].x).toBe(88);
     const marker = fixture.nativeElement.querySelector(".payoff-marker");
     expect(marker.getAttribute("aria-label")).toContain(
       "Already paid off at start",
@@ -1021,8 +966,8 @@ describe("Modelling", () => {
       fixture.nativeElement.querySelectorAll(".payoff-marker"),
     ).toHaveLength(0);
     page.result.set({ ...report(), canCalculate: false, months: null });
-    expect(page.payoffEvents()).toEqual([]);
-    expect(page.chart()).toBeNull();
+    expect(payoffEvents(page.result())).toEqual([]);
+    expect(chartOf(fixture)?.chart() ?? null).toBeNull();
   });
   it("retains missing selections and the chosen currency when moving into history", async () => {
     const { page, get } = await setup();
@@ -1087,12 +1032,12 @@ describe("Modelling", () => {
     page.setGroups("Investment", ["group"]);
     await pause();
     fixture.detectChanges();
-    expect(page.chart()).toBeNull();
+    expect(chartOf(fixture)?.chart() ?? null).toBeNull();
     expect(fixture.nativeElement.textContent).toContain("No saved conversion");
   });
   it("ignores a slow snapshot load after another snapshot is selected", async () => {
     const { page, get } = await setup();
-    const older = deferred<ModellingSnapshot>();
+    const older = deferred<Snapshot>();
     get.mockImplementation((path: string) =>
       path.endsWith("older")
         ? older.promise
@@ -1198,7 +1143,7 @@ describe("Modelling", () => {
     expect(send).not.toHaveBeenCalled();
   });
   it("resets a hover made on the old chart while a shorter projection is pending", async () => {
-    const { page, send } = await setup();
+    const { page, send, fixture } = await setup();
     const response = deferred<ProjectionRun>();
     send.mockImplementation(() => response.promise);
     page.setGroups("Investment", ["group"]);
@@ -1212,19 +1157,19 @@ describe("Modelling", () => {
     page.assumptions.durationYears = 1;
     page.changed();
     await pause();
-    page.hover({
+    chartOf(fixture)!.hover({
       clientX: 920,
       currentTarget: {
         getBoundingClientRect: () => ({ left: 0, width: 1000 }),
       },
     } as unknown as MouseEvent);
-    expect(page.hovered()).toBe(120);
+    expect(chartOf(fixture)!.hovered()).toBe(120);
     response.resolve(report());
     await Promise.resolve();
     expect(page.result()?.months).toHaveLength(13);
-    expect(page.hovered()).toBeNull();
-    expect(page.chart()?.hoverX).toBeNull();
-    expect(page.reading()).toBeNull();
+    expect(chartOf(fixture)!.hovered()).toBeNull();
+    expect((chartOf(fixture)?.chart() ?? null)?.hoverX).toBeNull();
+    expect(chartOf(fixture)?.reading() ?? null).toBeNull();
   });
   it("keeps GBP and ZAR contributions and the loan destination unchanged when switching viewing currency", async () => {
     const { page, send } = await setup();

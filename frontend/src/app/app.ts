@@ -1,16 +1,14 @@
-import { Component, inject } from "@angular/core";
+import { Component, inject, viewChild } from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
-import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
-import { MatSelectModule } from "@angular/material/select";
-import { Workspace } from "./core/api";
+import { MatSelect, MatSelectModule } from "@angular/material/select";
+import { Workspace } from "./core/workspace";
 @Component({
   selector: "app-root",
   imports: [
     RouterLink,
     RouterLinkActive,
     RouterOutlet,
-    FormsModule,
     MatButtonModule,
     MatSelectModule,
   ],
@@ -31,10 +29,11 @@ import { Workspace } from "./core/api";
       </nav>
       @if (w.households().length) {
         <mat-select
+          #householdPicker
           aria-label="Household"
           class="household-picker"
-          [ngModel]="w.current()?.id"
-          (ngModelChange)="w.select($event)"
+          [value]="w.current()?.id"
+          (selectionChange)="selectHousehold($event.value, householdPicker)"
         >
           @for (h of w.households(); track h.id) {
             <mat-option [value]="h.id">{{ h.name }}</mat-option>
@@ -54,7 +53,24 @@ import { Workspace } from "./core/api";
 })
 export class App {
   w = inject(Workspace);
+  private outlet = viewChild(RouterOutlet);
   constructor() {
     void this.w.load();
+  }
+  selectHousehold(id: string, picker: MatSelect) {
+    const currentId = this.w.current()?.id;
+    if (id === currentId) return;
+    const outlet = this.outlet();
+    const page = outlet?.isActivated
+      ? (outlet.component as { canLeave?: () => boolean })
+      : null;
+    if (
+      !this.w.households().some((household) => household.id === id) ||
+      (typeof page?.canLeave === "function" && !page.canLeave())
+    ) {
+      picker.value = currentId;
+      return;
+    }
+    this.w.select(id);
   }
 }

@@ -1,12 +1,21 @@
-import { SavedAsset, SavedItem, Snapshot } from "../core/api";
+export type ProjectionIssueKind =
+  | "MissingGroup"
+  | "NoHouseholdItems"
+  | "DebtGroupSelected"
+  | "MissingFinancedAsset"
+  | "ExcludedFinancedAsset"
+  | "MissingValue"
+  | "MissingExchangeRate"
+  | "CarriedValue"
+  | "MissingCurrencySettings";
+export type ProjectionDisposition =
+  | "Investment"
+  | "Savings"
+  | "FinancedAsset"
+  | "NotSelected"
+  | "ExcludedFromHousehold"
+  | "InvalidSelection";
 
-export interface ModellingSnapshot extends Omit<
-  Snapshot,
-  "itemSnapshots" | "financedAssetSnapshots"
-> {
-  itemSnapshots: (SavedItem & { financialType: number })[];
-  financedAssetSnapshots: (SavedAsset & { includeInHousehold: boolean })[];
-}
 export interface Assumptions {
   currencyCode: string;
   durationYears: number | null;
@@ -97,14 +106,14 @@ export interface ProjectionRun {
   } | null;
   months: ProjectionMonth[] | null;
   issues: {
-    kind: string;
-    severity: string;
+    kind: ProjectionIssueKind;
+    severity: "Warning" | "Error";
     sourceId: string | null;
     message: string;
   }[];
   warnings: {
     financedAssetId: string;
-    kind: string;
+    kind: "PaymentDoesNotReduceLoanBalance";
     firstOccurrence: string;
   }[];
   coverage: {
@@ -112,7 +121,7 @@ export interface ProjectionRun {
     name: string;
     groupName: string;
     currencyCode: string;
-    disposition: string;
+    disposition: ProjectionDisposition;
     value: number | null;
     loanBalance: number | null;
   }[];

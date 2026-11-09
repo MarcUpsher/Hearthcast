@@ -25,19 +25,19 @@ import {
   MatDialogModule,
   MatDialogRef,
 } from "@angular/material/dialog";
+import { Api } from "../core/api";
 import {
-  Api,
   Household,
-  Workspace,
   Category,
   Group,
   Item,
   Asset,
   Person,
   Share,
-  SnapshotActivity,
-  message,
-} from "../core/api";
+} from "./models";
+import { Workspace } from "../core/workspace";
+import { SnapshotActivity } from "../snapshots/models";
+import { message } from "../core/api-errors";
 type SetupKind =
   "household" | "person" | "category" | "group" | "item" | "asset";
 type SetupRow = Partial<Household & Person & Category & Group & Item & Asset>;

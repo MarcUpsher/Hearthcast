@@ -1,4 +1,5 @@
 using Hearthcast.Data.Classification;
+using Hearthcast.Data.ExchangeRates;
 using Hearthcast.Data.Snapshots;
 using Hearthcast.Data.Summaries.Models;
 using Hearthcast.Data.Summaries.Models.Merged;
@@ -13,6 +14,7 @@ internal static class MergedSnapshotSummaryCalculator
         var individual = IndividualHoldingsSummaryCalculator.Calculate(SnapshotReportProjector.Project(snapshot));
         var all = SnapshotSummaryCalculator.Calculate(snapshot);
         var currencies = requestedCurrencies ?? snapshot.Currencies;
+        var exchangeRates = new SavedExchangeRateConverter(snapshot.ExchangeRateBaseCurrency, snapshot.ExchangeRates);
         var people = snapshot.People.ToDictionary(p => p.Id, p => p.DisplayName);
         string Holder(ItemSnapshotSummary item) => "Held by " + people[item.HolderSnapshotPersonId];
         string Share(int basisPoints, string label) => basisPoints == 10000 ? "" : $" · {basisPoints / 100m}% {label}";
@@ -89,14 +91,10 @@ internal static class MergedSnapshotSummaryCalculator
             return new(Sum(categories.Select(c => c.Amounts)), categories);
         }
 
-        decimal? BaseRate(string currency) => currency == snapshot.ExchangeRateBaseCurrency ? 1m
-            : snapshot.ExchangeRates.SingleOrDefault(r => r.BaseCurrency == snapshot.ExchangeRateBaseCurrency
-                && r.QuoteCurrency == currency)?.Rate;
         MergedAmount Convert(Row row, string target)
         {
-            decimal? factor = row.Currency == target ? 1m
-                : BaseRate(row.Currency) is { } sourceRate && BaseRate(target) is { } targetRate ? targetRate / sourceRate : null;
-            return new(target, row.Amount.HasValue && factor.HasValue ? row.Amount.Value * factor.Value : null,
+            var factor = exchangeRates.ResolveRate(row.Currency, target);
+            return new(target, row.Amount.HasValue && factor.HasValue ? SavedExchangeRateConverter.Convert(row.Amount.Value, factor.Value) : null,
                 row.Amount.HasValue ? 0 : 1, factor.HasValue ? 0 : 1, row.IsCarried ? 1 : 0);
         }
         IReadOnlyList<MergedAmount> Sum(IEnumerable<IReadOnlyList<MergedAmount>> source)

@@ -1,0 +1,13 @@
+@use "../result-panel";
+.expense-summary {
+  h2 {
+    margin-top: 0;
+  }
+  p {
+    margin: 8px 0;
+  }
+  .expense-status {
+    color: #c4a5ff;
+    font-weight: 600;
+  }
+}

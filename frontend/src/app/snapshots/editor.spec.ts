@@ -1,7 +1,8 @@
 import { TestBed } from "@angular/core/testing";
 import { ActivatedRoute, Router, convertToParamMap } from "@angular/router";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Api, Workspace } from "../core/api";
+import { Api } from "../core/api";
+import { Workspace } from "../core/workspace";
 import { SnapshotEditor } from "./editor";
 
 describe("Snapshot entry requests", () => {

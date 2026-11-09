@@ -1,14 +1,10 @@
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import {
-  Api,
-  Workspace,
-  Report,
-  ReportGroup,
-  Snapshot,
-  MergedView,
-} from "../core/api";
+import { Api } from "../core/api";
+import { Workspace } from "../core/workspace";
+import { Report, ReportGroup, MergedView } from "../summaries/models";
+import { Snapshot } from "./models";
 import { SnapshotBrowser } from "./browser";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatSelectHarness } from "@angular/material/select/testing";
@@ -75,6 +71,7 @@ describe("Snapshot rendering", () => {
     browser.saved.set({
       id: "s",
       people: [],
+      exchangeRates: [],
       itemSnapshots: [],
       financedAssetSnapshots: [],
     } as unknown as Snapshot);
@@ -155,6 +152,7 @@ describe("Snapshot rendering", () => {
         snapshotDate: "2023-01-01",
         datePrecision: 2,
         people: [],
+        exchangeRates: [],
         itemSnapshots: [],
         financedAssetSnapshots: [],
       } as unknown as Snapshot;
@@ -246,6 +244,7 @@ describe("Snapshot rendering", () => {
       revision: "revision",
       exchangeRateStatus: "Pending",
       people: [],
+      exchangeRates: [],
       itemSnapshots: [],
       financedAssetSnapshots: [],
     } as unknown as Snapshot);
@@ -313,6 +312,7 @@ describe("Snapshot rendering", () => {
     c.saved.set({
       id: "snapshot",
       people: [],
+      exchangeRates: [],
       itemSnapshots: [
         {
           trackedItemId: "sample",
@@ -378,6 +378,7 @@ describe("Snapshot rendering", () => {
         { id: "a", personId: "first", displayName: "Alex historical" },
         { id: "b", personId: "second", displayName: "Morgan" },
       ],
+      exchangeRates: [],
       itemSnapshots: [
         {
           trackedItemId: "z",
@@ -478,6 +479,7 @@ describe("Snapshot rendering", () => {
     const c = fixture.componentInstance;
     c.saved.set({
       people: [{ id: "holder", personId: "a", displayName: "Alex" }],
+      exchangeRates: [],
       itemSnapshots: [],
       financedAssetSnapshots: [],
     } as unknown as Snapshot);
@@ -485,14 +487,14 @@ describe("Snapshot rendering", () => {
       itemSnapshotId: "i",
       itemName: "Pension",
       holderSnapshotPersonId: "holder",
-      balance: { amount: 100, valueOrigin: 3 },
+      balance: { amount: 100, valueOrigin: 3 as const },
     };
     const asset = {
       financedAssetSnapshotId: "a",
       assetName: "Home",
       currentEquity: 200,
-      currentValuation: { valueOrigin: 2 },
-      outstandingLoanBalance: { valueOrigin: 2 },
+      currentValuation: { valueOrigin: 2 as const },
+      outstandingLoanBalance: { valueOrigin: 2 as const },
     };
     const group = {
       groupId: "group",
@@ -602,6 +604,7 @@ describe("Snapshot rendering", () => {
     c.saved.set({
       id: "s",
       people: [{ id: "holder", personId: "a", displayName: "Alex" }],
+      exchangeRates: [],
       itemSnapshots: [],
       financedAssetSnapshots: [],
     } as unknown as Snapshot);

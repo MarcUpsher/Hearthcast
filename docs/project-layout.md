@@ -1,298 +1,63 @@
-# Project layout and naming
+# Project responsibilities and dependencies
 
-Hearthcast separates backend source, backend tests and the Angular frontend. Within
-the data project, related feature code stays together and EF infrastructure lives
-under Persistence. This is the repository's convention; .NET does not require a
-single universal folder layout.
+Hearthcast is a feature-oriented modular monolith with a separately served Angular
+frontend. Backend source, backend tests, tools and frontend stay clearly separated.
+PostgreSQL is the sole database provider; EF migrations retain their generated
+names and timestamps.
 
-```text
-hearthcast/
-  .config/
-    dotnet-tools.json
-  Hearthcast.slnx
-  global.json
-  Dockerfile
-  .dockerignore
-  compose.yaml
-  .env.example
-  backend/
-    src/
-      Hearthcast.Api/
-        Program.cs
-        Health/
-          DatabaseHealthCheck.cs
-        Errors/
-          ApiExceptionHandler.cs
-        Households/
-          HouseholdsController.cs
-          Contracts/
-            CreateHouseholdRequest.cs
-            RenameHouseholdRequest.cs
-            CreatePersonRequest.cs
-            UpdatePersonRequest.cs
-            HouseholdResponse.cs
-            PersonResponse.cs
-        Classification/
-          CategoriesController.cs
-          GroupsController.cs
-          Contracts/
-            CreateCategoryRequest.cs
-            CreateGroupRequest.cs
-            RenameCategoryRequest.cs
-            RenameGroupRequest.cs
-            CategoryResponse.cs
-            GroupResponse.cs
-            FinancialTypeJsonConverter.cs
-        TrackedItems/
-          TrackedItemsController.cs
-          Contracts/
-            CreateTrackedItemRequest.cs
-            SetHouseholdAllocationRequest.cs
-            SetRetirementRequest.cs
-            AllocationShareRequest.cs
-            AllocationRequestValidation.cs
-            TrackedItemResponse.cs
-        FinancedAssets/
-          FinancedAssetsController.cs
-          Contracts/
-            CreateFinancedAssetRequest.cs
-            FinancedAssetShareRequest.cs
-            FinancedAssetResponse.cs
-            FinancedAssetShareResponse.cs
-        Properties/
-          launchSettings.json
-        Hearthcast.Api.csproj
-        appsettings.json
-        appsettings.Development.json
-      Hearthcast.Data/
-        Classification/
-          Category.cs
-          ItemGroup.cs
-          FinancialType.cs
-          ClassificationService.cs
-        Households/
-          Household.cs
-          Person.cs
-          HouseholdService.cs
-        TrackedItems/
-          TrackedItem.cs
-          TrackedItemHouseholdAllocation.cs
-          TrackedItemAllocationShare.cs
-          TrackedItemService.cs
-        FinancedAssets/
-          FinancedAsset.cs
-          FinancedAssetOwner.cs
-          FinancedAssetLoanHolder.cs
-          FinancedAssetHouseholdAllocation.cs
-          FinancedAssetShare.cs
-          FinancedAssetService.cs
-        Snapshots/
-          FinancedAssetSnapshot.cs
-          FinancedAssetSnapshotOwner.cs
-          FinancedAssetSnapshotLoanHolder.cs
-          FinancedAssetSnapshotHouseholdAllocation.cs
-          FinancedAssetBalanceKind.cs
-          FinancedAssetSnapshotValue.cs
-          Snapshot.cs
-          SnapshotPerson.cs
-          ItemSnapshot.cs
-          ItemSnapshotHouseholdAllocation.cs
-          ItemSnapshotValue.cs
-          DatePrecision.cs
-          SnapshotValueOrigin.cs
-          SnapshotService.cs
-          SnapshotPeriod.cs
-          SnapshotConflictException.cs
-        Validation/
-          BusinessRuleViolationException.cs
-          InvalidValueException.cs
-          ResourceNotFoundException.cs
-          AllocationShareRules.cs
-          RequiredAlphabeticCode.cs
-          RequiredText.cs
-        Summaries/
-          SnapshotSummaryService.cs
-          SnapshotSummaryCalculator.cs
-          SnapshotSummaryAggregation.cs
-          SnapshotReportData.cs
-          SnapshotReportGroup.cs
-          SnapshotReportProjector.cs
-          IndividualHoldingsSummaryService.cs
-          IndividualHoldingsSummaryCalculator.cs
-          SnapshotShareAllocator.cs
-          HouseholdSummaryService.cs
-          HouseholdSummaryCalculator.cs
-          Models/
-            Household/
-              SnapshotHouseholdSummary.cs
-              HouseholdPersonSummary.cs
-              HouseholdCurrencySummary.cs
-              HouseholdCategorySummary.cs
-              HouseholdGroupSummary.cs
-              HouseholdItemContribution.cs
-              HouseholdFinancedAssetContribution.cs
-            IndividualHoldings/
-              SnapshotIndividualHoldingsSummary.cs
-              PersonHoldingsSummary.cs
-              PersonHoldingsCurrencySummary.cs
-              PersonHoldingsCategorySummary.cs
-              PersonHoldingsGroupSummary.cs
-              OwnedFinancedAssetSummary.cs
-            SnapshotSummary.cs
-            SnapshotPersonSummary.cs
-            SnapshotPersonShare.cs
-            SnapshotBalanceSummary.cs
-            SnapshotAmountSubtotal.cs
-            SnapshotSummaryTotals.cs
-            SnapshotCurrencySummary.cs
-            SnapshotCategorySummary.cs
-            SnapshotGroupSummary.cs
-            ItemSnapshotSummary.cs
-            FinancedAssetSnapshotSummary.cs
-        Persistence/
-          HearthcastDbContext.cs
-          SerializableTransaction.cs
-          Configurations/
-            FinancedAssetSnapshotConfiguration.cs
-            FinancedAssetSnapshotOwnerConfiguration.cs
-            FinancedAssetSnapshotLoanHolderConfiguration.cs
-            FinancedAssetSnapshotHouseholdAllocationConfiguration.cs
-            FinancedAssetConfiguration.cs
-            FinancedAssetOwnerConfiguration.cs
-            FinancedAssetLoanHolderConfiguration.cs
-            FinancedAssetHouseholdAllocationConfiguration.cs
-            CategoryConfiguration.cs
-            HouseholdConfiguration.cs
-            ItemGroupConfiguration.cs
-            PersonConfiguration.cs
-            TrackedItemConfiguration.cs
-            TrackedItemHouseholdAllocationConfiguration.cs
-            SnapshotConfiguration.cs
-            SnapshotPersonConfiguration.cs
-            ItemSnapshotConfiguration.cs
-            ItemSnapshotHouseholdAllocationConfiguration.cs
-          DesignTime/
-            HearthcastDbContextFactory.cs
-          Migrations/
-            <timestamp>_CreateInitialPostgresSchema.cs
-            <timestamp>_CreateInitialPostgresSchema.Designer.cs
-            <timestamp>_AddSnapshotCarryForwardAndCorrections.cs
-            <timestamp>_AddSnapshotCarryForwardAndCorrections.Designer.cs
-            <timestamp>_AddFinancedAssetSetup.cs
-            <timestamp>_AddFinancedAssetSetup.Designer.cs
-            <timestamp>_AddFinancedAssetSnapshots.cs
-            <timestamp>_AddFinancedAssetSnapshots.Designer.cs
-            HearthcastDbContextModelSnapshot.cs
-        Hearthcast.Data.csproj
-    tests/
-      Hearthcast.Api.Tests/
-        FinancedAssets/
-          FinancedAssetApiTests.cs
-        Classification/
-          ClassificationApiTests.cs
-        TrackedItems/
-          TrackedItemApiTests.cs
-        Households/
-          HouseholdApiTests.cs
-        Infrastructure/
-          ApiTestFactory.cs
-          ApiErrorTestController.cs
-          PostgresTestDatabase.cs               # Linked from Data.Tests, not duplicated
-        Hearthcast.Api.Tests.csproj
-      Hearthcast.Data.Tests/
-        Classification/
-          ClassificationPersistenceTests.cs
-        Households/
-          HouseholdPersistenceTests.cs
-        TrackedItems/
-          TrackedItemPersistenceTests.cs
-          TrackedItemAllocationTests.cs
-          TrackedItemTestSetup.cs
-        Snapshots/
-          FinancedAssetSnapshotTests.cs
-          FinancedAssetSnapshotIntegrityTests.cs
-          SnapshotPersistenceTests.cs
-          SnapshotIntegrityTests.cs
-          PostgresTransactionTests.cs
-          HouseholdHistoryTestData.cs
-          HouseholdHistoryTests.cs
-          SnapshotCarryForwardTests.cs
-          SnapshotCarryIntegrityTests.cs
-          SnapshotCorrectionTests.cs
-          SnapshotConcurrencyTests.cs
-        FinancedAssets/
-          FinancedAssetTestSetup.cs
-          FinancedAssetPersistenceTests.cs
-          FinancedAssetIntegrityTests.cs
-        Summaries/
-          SnapshotSummaryTests.cs
-          IndividualHoldingsSummaryTests.cs
-          HouseholdSummaryTests.cs
-        Infrastructure/
-          PostgresTestDatabase.cs
-          InterceptingContextFactory.cs
-          ConcurrentSaveBarrier.cs
-        Hearthcast.Data.Tests.csproj
-  docs/
-    schema-proposal.md
-    relational-schema-plan.md
-    household-person-slice.md
-    classification-slice.md
-    tracked-items-slice.md
-    ordinary-snapshots-slice.md
-    snapshot-lifecycle-slice.md
-    snapshot-summary-slice.md
-    individual-holdings-summary-slice.md
-    household-summary-slice.md
-    household-api-slice.md
-    classification-api-slice.md
-    tracked-item-api-slice.md
-    tracked-item-lifecycle-api-slice.md
-    financed-asset-api-slice.md
-    household-history-tests.md
-    project-layout.md
-    containers-and-postgres.md
-```
+## Backend
 
-The frontend lives under `frontend/`; see its README for pages and commands. Build output and
-temporary financial files are excluded by the root `.gitignore`.
+| Location | Responsibility |
+| --- | --- |
+| `backend/src/Hearthcast.Api/` | REST controllers, request/response contracts, validation/error mapping and health checks. |
+| `backend/src/Hearthcast.Data/Households`, `Classification`, `TrackedItems`, `FinancedAssets` | Setup entities, invariants and application operations. |
+| `Hearthcast.Data/Snapshots` | Copied historical context, capture, carry-forward, corrections and revision checks. |
+| `Hearthcast.Data/Summaries` | Full/individual/household/merged reports and historical series, calculated from saved snapshots. |
+| `Hearthcast.Data/Projections` | Preset persistence, snapshot preparation and pure monthly simulation. |
+| `Hearthcast.Data/ExchangeRates` | Capture/provider workflows and shared checked conversion using saved quotes. |
+| `Hearthcast.Data/Persistence` | DbContext, EF configurations, transaction support, design-time tooling and migrations. |
+| `backend/tools/Hearthcast.HistoryImport` | One-off prepared historical import; not a frontend workflow. |
+| `backend/tests/` | API and data tests; persistence tests use disposable PostgreSQL databases. |
 
-## Conventions
+Controllers call feature services. Services enforce household scope, load/write EF
+entities and delegate reporting/projection arithmetic to calculators. Reporting
+reads saved snapshot context rather than reinterpreting history using current setup.
+Projection preparation selects/validates a snapshot, then hands native balances and
+saved FX factors to a pure calculator. Reports and projection requests never fetch
+new exchange rates or save their calculated output.
 
-- Projects and assemblies use `Hearthcast.<Responsibility>`; test projects append
-  `.Tests` to the project being tested.
-- Put each main C# type in a file with the same name, using PascalCase.
-- Feature folders use descriptive names, such as `Households` and `Classification`. Household
-  and Person belong together because membership is controlled by the household.
-  Add later feature folders when those features are implemented.
-- Namespaces follow project and folder names: `Hearthcast.Data.Households`,
-  `Hearthcast.Data.Persistence.Configurations`, and so on.
-- Entities use singular names. Services describe the feature they operate on.
-  EF mappings use `<Entity>Configuration`; tests use `<Subject>Tests`.
-- Shared argument-validation functions live under Validation. RequiredText.Trim
-  validates and trims required text, preserving the caller's argument name.
-  RequiredAlphabeticCode handles required uppercase letter codes. AllocationShareRules
-  defines the basis-point range and the shared 100% value used by validation,
-  default allocations and the database check. Household eligibility and allocation
-  totals stay in their domain features.
-  Entity methods such as Rename retain responsibility for changing entity state.
-- Tests mirror the feature folders. Database integration tests identify their
-  purpose explicitly, as in `HouseholdPersistenceTests`.
-- Keep the DbContext, EF mappings, migration tooling and migrations under
-  Persistence. Migrations retain EF-generated timestamps and descriptive names.
-- Keep the existing three projects. Add another project only when it serves a
-  clear dependency or deployment boundary.
+The data assembly contains domain, application and persistence code, organised by
+feature. There is no generic repository or additional layer between every service
+and EF. Shared helpers contain specific reusable rules, not household policy.
 
-The namespace convention follows Microsoft's [namespace naming guidance](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/names-of-namespaces).
-The `.config/dotnet-tools.json` manifest is a supported [local-tool manifest location](https://learn.microsoft.com/en-us/dotnet/core/tools/local-tools-how-to-use).
+## Frontend
 
-## Commands
+| Location | Responsibility |
+| --- | --- |
+| `frontend/src/app/core/api.ts`, `api-errors.ts` | HTTP transport and shared error formatting. |
+| `frontend/src/app/core/workspace.ts` | Household discovery/current selection. The app shell checks the active page's leave policy before a user switches household. |
+| `setup/models.ts`, `snapshots/models.ts`, `summaries/models.ts`, `history/models.ts`, `modelling/models.ts` | Feature-owned wire contracts. Snapshot consumers share one complete response shape. |
+| `setup/`, `snapshots/`, `history/` | Setup/editing, snapshot entry/browsing and historical graphs. |
+| `modelling/modelling.ts` | One owner for assumptions, preset drafts, saves, selection and request/lifecycle coordination. |
+| `modelling/chart/` | Pure chart geometry and a presentational chart with local pointer/keyboard state. |
+| `modelling/results/` | Presentational expense-target and growth-breakdown panels. No API calls or draft copies. |
+| `shared/charts/`, `shared/finance-types.ts` | Shared interpolation and endpoint code types. |
+| `frontend/src/testing/` | Generic typed frontend fixtures, excluded from production compilation. |
 
-The container workflow and optional host-build commands are documented in
-[containers and PostgreSQL](containers-and-postgres.md). Run them from the
-repository root. Keep new migrations under Persistence/Migrations.
+The browser uses `/api` on the same origin. Nginx serves the built frontend and
+proxies to the API. Only the API accesses PostgreSQL. Compose exposes host ports
+on loopback; a separate one-shot migration service runs before the API.
 
-The API exposes liveness/readiness and household/people setup endpoints. Other
-finance endpoints remain subsequent slices. A separate migration process applies
-schema changes; the ordinary API does not migrate or seed data. API tests use
-WebApplicationFactory with an isolated PostgreSQL database.
+## Conventions and checks
+
+- Keep C# types in PascalCase files with matching namespaces/feature folders.
+- Keep EF mappings and migrations under Persistence; do not rewrite applied migrations.
+- Frontend components keep their template/styles nearby; pure chart helpers have no
+  Angular, HTTP or workspace dependencies.
+- Wire types preserve backend JSON codes. UI editor state may be nullable while a
+  validated request is complete; do not change the backend representation to simplify a type.
+- Tests follow feature boundaries. Shared generic fixtures avoid real financial data.
+- Keep credentials, backups, imports and REVIEW.md ignored. Build output stays out of Git.
+
+See [running and backend tests](containers-and-postgres.md),
+[frontend commands](../frontend/README.md) and the [documentation index](index.md).

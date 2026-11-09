@@ -32,6 +32,10 @@ a partially calculable total contains its known subtotal and is flagged incomple
 Empty scopes total zero. Recorded zero and unknown remain distinct. Completeness
 only describes the recorded scope, not whether a historic snapshot covered every
 real-world account. Out-of-range decimal results return a validation error.
+Saved-rate resolution and checked conversion are shared with projection preparation.
+A nonzero cross-rate or balance that rounds to zero at decimal precision also
+returns a validation error, including in historical summary series. Such numeric
+failures are distinct from missing quotes, which continue to produce partial totals.
 
 The frontend displays the combined summary above the native-currency blocks.
 Categories start open and groups start collapsed. Items show native balances,

@@ -2,7 +2,9 @@ import { signal } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { provideRouter } from "@angular/router";
 import { describe, expect, it, vi } from "vitest";
-import { Api, HistoryAmount, HistorySeries, Workspace } from "../core/api";
+import { Api } from "../core/api";
+import { HistoryAmount, HistorySeries } from "./models";
+import { Workspace } from "../core/workspace";
 import { History } from "./history";
 
 const amount = (value: number | null, missingRateCount = 0): HistoryAmount => ({

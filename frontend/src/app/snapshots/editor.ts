@@ -13,17 +13,11 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatSelectModule } from "@angular/material/select";
 import { MatInputModule } from "@angular/material/input";
-import {
-  Api,
-  Workspace,
-  Inventory,
-  Item,
-  Asset,
-  Snapshot,
-  Category,
-  Group,
-  message,
-} from "../core/api";
+import { Api } from "../core/api";
+import { Workspace } from "../core/workspace";
+import { Inventory, Snapshot } from "./models";
+import { Item, Asset, Category, Group } from "../setup/models";
+import { message } from "../core/api-errors";
 type CaptureMode = "next" | "new" | "correct";
 interface Entry {
   added?: boolean;

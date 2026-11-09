@@ -1,9 +1,9 @@
 # Snapshot-to-projection preparation
 
-> Updated model: see [Native currency projection pots](native-currency-projection-slice.md)
-> for the current schema, request shape and per-currency calculation. The original
-> single-currency slice notes below describe the preceding implementation.
-
+> Historical implementation record. Start with the [current modelling guide](modelling.md)
+> and [native currency contracts](native-currency-projection-slice.md). The original
+> single-currency or initial-screen details below include superseded behaviour;
+> retain them for design history, not as current payload examples.
 
 `ProjectionPreparationService` prepares a selected household snapshot with either
 unsaved assumptions/selections (`PrepareAsync`) or a saved preset
@@ -57,6 +57,8 @@ calls occur, and snapshot rates/revisions are never modified.
 Overflow and unrepresentable nonzero converted balances/rates produce validation
 errors rather than losing balances. Preparation checks converted financed valuations
 and debts too, while retaining their native values in calculator inputs. The
+saved-rate resolver and checked amount conversion are shared with merged summaries
+and historical reports; each consumer keeps its own missing-quote policy. The
 calculator independently guards their future converted balances and redirected
 payment cash flows. Invalid assumption/selection shapes use the
 same validation as presets. Snapshot/preset lookups enforce household scope and

@@ -1,0 +1,31 @@
+@if (expenseMilestone(); as target) {
+  <section class="panel expense-summary" aria-labelledby="expense-heading">
+    <h2 id="expense-heading">Expense target</h2>
+    <p>
+      {{ money(target.annualExpenses, target.expenseCurrencyCode) }}/year ·
+      {{ target.annualWithdrawalRatePercent }}% withdrawal rate
+    </p>
+    <p class="muted hint">
+      Required
+      {{
+        money(
+          target.requiredCapitalInExpenseCurrency,
+          target.expenseCurrencyCode
+        )
+      }}
+      in starting-date money · {{ target.basis }}
+    </p>
+    <p class="expense-status">
+      @if (target.alreadyReachedAtStart) {
+        Already reached at the starting snapshot.
+      } @else if (target.firstReachedDate) {
+        First reached on {{ target.firstReachedDate }}.
+      } @else {
+        Not reached within this projection.
+      }
+    </p>
+    @if (target.firstReachedDate && !target.finalCovered) {
+      <p class="muted hint">Below target at the end of this projection.</p>
+    }
+  </section>
+}

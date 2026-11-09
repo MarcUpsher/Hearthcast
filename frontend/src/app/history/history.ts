@@ -1,4 +1,4 @@
-import { smoothPath } from "./smooth-path";
+import { smoothPath } from "../shared/charts/smooth-path";
 import {
   Component,
   computed,
@@ -15,15 +15,11 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
-import {
-  Api,
-  HistoryAmount,
-  HistoryPoint,
-  HistorySeries,
-  Inventory,
-  Workspace,
-  message,
-} from "../core/api";
+import { Api } from "../core/api";
+import { HistoryAmount, HistoryPoint, HistorySeries } from "./models";
+import { Inventory } from "../snapshots/models";
+import { Workspace } from "../core/workspace";
+import { message } from "../core/api-errors";
 import { money } from "../core/money";
 
 type ChartLine = {

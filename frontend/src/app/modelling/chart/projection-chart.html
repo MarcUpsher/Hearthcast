@@ -1,0 +1,166 @@
+@let report = result();
+@if (chart(); as plot) {
+  <section class="panel projection-chart" aria-label="Projection graph">
+    <div class="legend">
+      @for (line of plot.lines; track line.key) {
+        <span [style.color]="line.color">{{ line.label }}</span>
+      }
+      @if (plot.payoffs.length) {
+        <span class="payoff-key">Loan paid off</span>
+      }
+      @if (plot.expenseTarget) {
+        <span class="expense-target-key">Expense target</span>
+      }
+    </div>
+    <p class="muted hint">
+      {{ report.currencyCode }} ·
+      {{
+        adjusted()
+          ? "Inflation-adjusted to the starting date"
+          : "Nominal values"
+      }}
+      · Hover to inspect a month
+      @if (expenseMilestone(); as target) {
+        · Target applies to {{ target.basis.toLowerCase() }}
+      }
+    </p>
+    <div class="chart-scroll">
+      <svg
+        viewBox="0 0 1000 420"
+        tabindex="0"
+        role="group"
+        aria-label="Projected investments, savings, equity and total. Use left and right arrow keys to inspect months. Focus milestone markers for details."
+        (mousemove)="hover($event)"
+        (mouseleave)="hovered.set(null)"
+        (blur)="hovered.set(null)"
+        (keydown.arrowright)="moveReading(1, $event)"
+        (keydown.arrowleft)="moveReading(-1, $event)"
+      >
+        @for (tick of plot.ticks; track tick.y) {
+          <line
+            class="grid"
+            x1="88"
+            x2="920"
+            [attr.y1]="tick.y"
+            [attr.y2]="tick.y"
+          />
+          <text class="axis" x="78" [attr.y]="tick.y + 4" text-anchor="end">
+            {{ tick.label }}
+          </text>
+        }
+        @for (date of plot.dates; track date.x) {
+          <text class="axis" [attr.x]="date.x" y="395" text-anchor="middle">
+            {{ date.label }}
+          </text>
+        }
+        @for (line of plot.lines; track line.key) {
+          <path
+            class="projection-line"
+            [attr.d]="line.path"
+            [attr.stroke]="line.color"
+            [attr.stroke-width]="line.key === 'netPosition' ? 3.5 : 2.5"
+          />
+        }
+        @if (plot.expenseTarget; as target) {
+          <path class="expense-target-line" [attr.d]="target.path" />
+          @if (target.marker; as marker) {
+            <g
+              class="expense-marker"
+              [attr.transform]="'translate(' + marker.x + ' ' + marker.y + ')'"
+              tabindex="0"
+              role="button"
+              [attr.aria-label]="
+                expenseMilestone()!.alreadyReachedAtStart
+                  ? 'Expense target already reached at start'
+                  : 'Expense target first reached on ' +
+                    expenseMilestone()!.firstReachedDate
+              "
+              (focus)="hovered.set(marker.index)"
+              (mousemove)="inspectMonth(marker.index, $event)"
+              (click)="inspectMonth(marker.index, $event)"
+              (keydown.enter)="inspectMonth(marker.index, $event)"
+              (keydown.space)="inspectMonth(marker.index, $event)"
+            >
+              <circle class="milestone-hit-area" r="12" />
+              <path d="M -6 -6 L 6 -6 L 6 6 L -6 6 Z" />
+            </g>
+          }
+        }
+        @for (event of plot.payoffs; track event.index) {
+          <g
+            class="payoff-marker"
+            [attr.transform]="'translate(' + event.x + ' ' + event.y + ')'"
+            tabindex="0"
+            role="button"
+            [attr.aria-label]="payoffLabel(event)"
+            (focus)="hovered.set(event.index)"
+            (mousemove)="inspectMonth(event.index, $event)"
+            (click)="inspectMonth(event.index, $event)"
+            (keydown.enter)="inspectMonth(event.index, $event)"
+            (keydown.space)="inspectMonth(event.index, $event)"
+          >
+            <circle class="payoff-hit-area" r="12" />
+            <path d="M 0 -6 L 6 0 L 0 6 L -6 0 Z" />
+          </g>
+        }
+        @if (plot.hoverX !== null) {
+          <line
+            class="crosshair"
+            [attr.x1]="plot.hoverX"
+            [attr.x2]="plot.hoverX"
+            y1="25"
+            y2="355"
+          />
+        }
+      </svg>
+    </div>
+    @if (reading(); as read) {
+      <div class="reading" role="tooltip">
+        <strong>{{ read.date }}</strong>
+        @for (line of lines; track line.key) {
+          <div>
+            <span [style.color]="line.color">{{ line.label }}</span
+            ><b>{{ money(read.values[line.key], report.currencyCode) }}</b>
+          </div>
+        }
+        @if (read.payoff; as event) {
+          <p class="payoff-reading">{{ payoffLabel(event) }}</p>
+        }
+        @if (read.expenseTarget; as target) {
+          <section class="expense-reading">
+            <div>
+              <span>Eligible portfolio</span
+              ><b>{{ money(target.eligible, report.currencyCode) }}</b>
+            </div>
+            <div>
+              <span>Expense target</span
+              ><b>{{ money(target.required, report.currencyCode) }}</b>
+            </div>
+            <p>
+              {{
+                target.isCovered
+                  ? "Expense target covered"
+                  : "Below expense target"
+              }}
+            </p>
+          </section>
+        }
+      </div>
+    }
+  </section>
+  @if (reading(); as read) {
+    <p class="sr-only" aria-live="polite">
+      {{ read.date }}: Modelled total
+      {{ money(read.values.netPosition, report.currencyCode) }}
+      @if (read.payoff; as event) {
+        · {{ payoffLabel(event) }}
+      }
+      @if (read.expenseTarget; as target) {
+        ·
+        {{
+          target.isCovered ? "Expense target covered" : "Below expense target"
+        }}
+      }
+    </p>
+  }
+}

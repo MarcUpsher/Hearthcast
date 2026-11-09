@@ -32,6 +32,54 @@ public sealed class SnapshotApiTests : IAsyncLifetime
         await _database.DisposeAsync();
     }
     [Fact]
+    public async Task SnapshotJsonPreservesTheSharedFrontendContractAndEndpointSpecificNumericCodes()
+    {
+        var home = await new HouseholdService(_database).CreateAsync("Example", "Alex");
+        var person = home.People.Single().Id;
+        var classification = new ClassificationService(_database);
+        var category = await classification.CreateCategoryAsync(home.Id, "Assets", FinancialType.Asset);
+        var group = await classification.CreateGroupAsync(home.Id, category.Id, "Holdings");
+        var item = await new TrackedItemService(_database).CreateAsync(home.Id, group.Id, person, "Fund", "GBP", "GB", true);
+        var asset = await new FinancedAssetService(_database).CreateAsync(home.Id, group.Id, "Financed asset", "GBP", "GB",
+            null, null, 100m, false, [new(person, 10000)], [person], true, [new(person, 10000)]);
+        var saved = await new SnapshotService(_database).CreateAsync(home.Id, new(2023, 1, 1),
+            [new(item.Id, 12.5m)], DatePrecision.Month,
+            [new(asset.Id, FinancedAssetBalanceKind.CurrentValuation, 200m),
+                new(asset.Id, FinancedAssetBalanceKind.OutstandingLoanBalance, 100m)]);
+        var json = await _client.GetFromJsonAsync<JsonElement>($"/api/households/{home.Id}/snapshots/{saved.Id}");
+        foreach (var key in new[] { "id", "householdId", "householdName", "snapshotDate", "datePrecision",
+            "createdAtUtc", "updatedAtUtc", "revision", "people", "itemSnapshots", "financedAssetSnapshots",
+            "exchangeRateLookupDate", "exchangeRateBaseCurrency", "exchangeRateStatus", "exchangeRates" })
+            Assert.True(json.TryGetProperty(key, out _), $"Missing snapshot field {key}.");
+        Assert.Equal(2, json.GetProperty("datePrecision").GetInt32());
+        Assert.Equal(JsonValueKind.Array, json.GetProperty("exchangeRates").ValueKind);
+        var holder = json.GetProperty("people")[0];
+        Assert.Equal(person, holder.GetProperty("personId").GetGuid());
+        Assert.True(holder.GetProperty("participatesInHouseholdFinances").GetBoolean());
+        var holding = json.GetProperty("itemSnapshots")[0];
+        Assert.Equal(holder.GetProperty("id").GetGuid(), holding.GetProperty("holderSnapshotPersonId").GetGuid());
+        Assert.Equal(1, holding.GetProperty("financialType").GetInt32());
+        Assert.True(holding.GetProperty("includeInHousehold").GetBoolean());
+        Assert.Equal(2, holding.GetProperty("valueOrigin").GetInt32());
+        Assert.Equal(2, holding.GetProperty("lastConfirmedPrecision").GetInt32());
+        Assert.Equal(12.5m, holding.GetProperty("amount").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, holding.GetProperty("carriedFromItemSnapshotId").ValueKind);
+        Assert.Equal(JsonValueKind.Array, holding.GetProperty("householdAllocations").ValueKind);
+        Assert.Equal(JsonValueKind.Null, holding.GetProperty("institutionName").ValueKind);
+        var financed = json.GetProperty("financedAssetSnapshots")[0];
+        Assert.Equal(1, financed.GetProperty("financialType").GetInt32());
+        Assert.True(financed.GetProperty("includeInHousehold").GetBoolean());
+        Assert.False(financed.GetProperty("hasWithdrawalFacility").GetBoolean());
+        Assert.Equal(2, financed.GetProperty("currentValuationValueOrigin").GetInt32());
+        Assert.Equal(2, financed.GetProperty("outstandingLoanBalanceValueOrigin").GetInt32());
+        Assert.Equal(1, financed.GetProperty("availableToWithdrawValueOrigin").GetInt32());
+        Assert.Equal(JsonValueKind.Null, financed.GetProperty("availableToWithdraw").ValueKind);
+        Assert.Equal(JsonValueKind.Array, financed.GetProperty("owners").ValueKind);
+        Assert.Equal(JsonValueKind.Array, financed.GetProperty("householdAllocations").ValueKind);
+        Assert.Equal(holder.GetProperty("id").GetGuid(), financed.GetProperty("loanHolderSnapshotPersonIds")[0].GetGuid());
+    }
+
+    [Fact]
     public async Task ActivitySeparatesLatestPresenceFromConfirmationAndHandlesEachFinancedBalance()
     {
         var home=await new HouseholdService(_database).CreateAsync("Home","Alex");

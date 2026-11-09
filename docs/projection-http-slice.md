@@ -1,9 +1,9 @@
 # Projection HTTP API
 
-> Updated model: see [Native currency projection pots](native-currency-projection-slice.md)
-> for the current schema, request shape and per-currency calculation. The original
-> single-currency slice notes below describe the preceding implementation.
-
+> Historical implementation record. Start with the [current modelling guide](modelling.md)
+> and [native currency contracts](native-currency-projection-slice.md). The original
+> single-currency or initial-screen details below include superseded behaviour;
+> retain them for design history, not as current payload examples.
 
 All routes are household scoped and use the existing stateless controller and
 Problem Details conventions. This slice adds no authentication, schema changes,

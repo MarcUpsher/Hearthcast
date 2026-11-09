@@ -1,0 +1,38 @@
+@use "../result-panel";
+.growth-breakdown {
+  h2 {
+    margin-top: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th,
+  td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+  th {
+    text-align: left;
+    font-weight: 400;
+  }
+  thead th {
+    color: var(--mat-sys-on-surface-variant);
+    font-size: 13px;
+  }
+  .growth-value {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .growth-total th,
+  .growth-total td {
+    font-weight: 600;
+  }
+  .growth-final {
+    background: var(--mat-sys-surface-container);
+  }
+  .growth-notes {
+    margin-top: 16px;
+  }
+}

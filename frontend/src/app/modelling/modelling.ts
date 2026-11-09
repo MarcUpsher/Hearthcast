@@ -1,3 +1,4 @@
+import { Inventory, Snapshot } from "../snapshots/models";
 import {
   Component,
   DestroyRef,
@@ -15,15 +16,15 @@ import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { MatSlideToggleModule } from "@angular/material/slide-toggle";
 import { MatCheckboxModule } from "@angular/material/checkbox";
-import { Api, Inventory, Workspace, message } from "../core/api";
+import { Api } from "../core/api";
+import { Workspace } from "../core/workspace";
+import { message } from "../core/api-errors";
 import { money, currencySymbol, MoneyInput } from "../core/money";
 import { currencyOptions } from "../core/location-options";
-import { smoothPath } from "../history/smooth-path";
 import {
   Assumptions,
   CurrencyPot,
   LoanSettings,
-  ModellingSnapshot,
   ProjectionRun,
   ProjectionInputs,
   ProjectionPreset,
@@ -52,22 +53,6 @@ const newLoan = (financedAssetId: string): LoanSettings => ({
   annualLoanInterestPercent: 0,
   annualAssetAppreciationPercent: 0,
 });
-const series = [
-  { key: "investments", label: "Investments", color: "#42c9ff" },
-  { key: "savings", label: "Savings", color: "#b9e769" },
-  { key: "equity", label: "Financed equity", color: "#ffc35a" },
-  { key: "netPosition", label: "Modelled total", color: "#ec8cda" },
-] as const;
-const growthComponents = [
-  { key: "investmentReturns", label: "Investment returns" },
-  { key: "savingsInterest", label: "Savings interest" },
-  { key: "financedAssetValueChange", label: "Financed asset value change" },
-  { key: "investmentContributions", label: "Investment contributions" },
-  { key: "savingsContributions", label: "Savings contributions" },
-  { key: "loanBalanceReduction", label: "Loan balance reduction" },
-  { key: "reinvestedLoanPayments", label: "Reinvested loan payments" },
-  { key: "inflationEffect", label: "Inflation effect" },
-] as const;
 type GroupOption = {
   id: string;
   name: string;
@@ -82,14 +67,15 @@ type AssetOption = {
   debt: number | null;
   missing?: boolean;
 };
-type PayoffEvent = {
-  index: number;
-  date: string;
-  assetIds: string[];
-};
+import { ProjectionChart } from "./chart/projection-chart";
+import { GrowthBreakdown } from "./results/growth-breakdown";
+import { ExpenseTarget } from "./results/expense-target";
 
 @Component({
   imports: [
+    ProjectionChart,
+    GrowthBreakdown,
+    ExpenseTarget,
     FormsModule,
     MoneyInput,
     RouterLink,
@@ -107,7 +93,7 @@ export class Modelling {
   private api = inject(Api);
   w = inject(Workspace);
   inventory = signal<Inventory[]>([]);
-  snapshot = signal<ModellingSnapshot | null>(null);
+  snapshot = signal<Snapshot | null>(null);
   result = signal<ProjectionRun | null>(null);
   loading = signal(false);
   pending = signal(false);
@@ -117,7 +103,6 @@ export class Modelling {
   investmentGroups = signal<string[]>([]);
   savingsGroups = signal<string[]>([]);
   selectedAssets = signal<string[]>([]);
-  hovered = signal<number | null>(null);
   presets = signal<ProjectionPreset[]>([]);
   savingPreset = signal(false);
   presetError = signal("");
@@ -142,7 +127,6 @@ export class Modelling {
   money = money;
   symbol = currencySymbol;
   currencyChoices = currencyOptions;
-  lines = series;
 
   currencies = computed(() => {
     const s = this.snapshot();
@@ -226,172 +210,15 @@ export class Modelling {
       ? { starting: rows[0][key], final: rows.at(-1)![key] }
       : null;
   });
-  growth = computed(() => {
-    const report = this.result();
-    if (
-      !report?.canCalculate ||
-      !report.months?.length ||
-      !report.growthBreakdown
-    )
-      return null;
-    const real = this.adjusted();
-    const breakdown = real
-      ? report.growthBreakdown.inflationAdjusted
-      : report.growthBreakdown.nominal;
-    return {
-      starting: breakdown.startingNetPosition,
-      final: breakdown.finalNetPosition,
-      startDate: report.months[0].date,
-      endDate: report.months.at(-1)!.date,
-      rows: growthComponents
-        .filter((row) => real || row.key !== "inflationEffect")
-        .map((row) => ({ ...row, value: breakdown[row.key] })),
-    };
-  });
   omitted = computed(
     () =>
       this.result()?.coverage.filter((c) =>
         ["NotSelected", "ExcludedFromHousehold"].includes(c.disposition),
       ) ?? [],
   );
-  payoffEvents = computed(() => {
-    const months = this.result()?.months;
-    if (!months?.length) return [];
-    const events = new Map<number, PayoffEvent>();
-    for (const asset of months.at(-1)!.financedAssets) {
-      if (!asset.payoffDate) continue;
-      const index = months.findIndex((m) => m.date === asset.payoffDate);
-      if (index < 0) continue;
-      const event = events.get(index) ?? {
-        index,
-        date: months[index].date,
-        assetIds: [],
-      };
-      event.assetIds.push(asset.financedAssetId);
-      events.set(index, event);
-    }
-    return [...events.values()].sort((a, b) => a.index - b.index);
-  });
-  expenseMilestone = computed(() => {
-    const report = this.result();
-    const target = report?.expenseTarget;
-    const months = report?.months;
-    if (
-      !report?.canCalculate ||
-      !target ||
-      !months?.length ||
-      months.some((m) => !m.expenseTarget)
-    )
-      return null;
-    return {
-      ...target,
-      index: months.findIndex((m) => m.date === target.firstReachedDate),
-      finalCovered: months.at(-1)!.expenseTarget!.isCovered,
-      basis: target.includeSavings ? "Investments + savings" : "Investments",
-    };
-  });
-  chart = computed(() => {
-    const months = this.result()?.months;
-    if (!months?.length) return null;
-    const key = this.adjusted() ? "inflationAdjusted" : "nominal";
-    const expense = this.expenseMilestone();
-    const required = (i: number) =>
-      this.adjusted()
-        ? months[i].expenseTarget!.inflationAdjustedRequiredCapital
-        : months[i].expenseTarget!.nominalRequiredCapital;
-    const eligible = (i: number) =>
-      this.adjusted()
-        ? months[i].expenseTarget!.inflationAdjustedEligibleBalance
-        : months[i].expenseTarget!.nominalEligibleBalance;
-    const values = months.flatMap((m, i) => [
-      ...series.map((s) => m[key][s.key]),
-      ...(expense ? [required(i), eligible(i)] : []),
-    ]);
-    const min = Math.min(0, ...values),
-      maxObserved = Math.max(0, ...values);
-    const max =
-      maxObserved === min ? min + 1 : maxObserved + (maxObserved - min) * 0.1;
-    const x = (i: number) => 88 + (i / Math.max(1, months.length - 1)) * 832;
-    const y = (value: number) => 25 + ((max - value) / (max - min)) * 330;
-    return {
-      lines: [
-        ...series.map((s) => ({
-          ...s,
-          path: smoothPath(
-            months.map((m, i) => ({ x: x(i), y: y(m[key][s.key]) })),
-          ),
-        })),
-        ...(expense?.includeSavings
-          ? [
-              {
-                key: "eligiblePortfolio",
-                label: "Investments + savings",
-                color: "#57ddc8",
-                path: smoothPath(
-                  months.map((_, i) => ({ x: x(i), y: y(eligible(i)) })),
-                ),
-              },
-            ]
-          : []),
-      ],
-      expenseTarget: expense
-        ? {
-            path: smoothPath(
-              months.map((_, i) => ({ x: x(i), y: y(required(i)) })),
-            ),
-            marker:
-              expense.index >= 0
-                ? {
-                    index: expense.index,
-                    x: x(expense.index),
-                    y: y(eligible(expense.index)),
-                  }
-                : null,
-          }
-        : null,
-      payoffs: this.payoffEvents().map((event) => ({
-        ...event,
-        x: x(event.index),
-        y: y(months[event.index][key].equity),
-      })),
-      ticks: Array.from({ length: 5 }, (_, i) => {
-        const v = min + ((max - min) * i) / 4;
-        return {
-          y: y(v),
-          label: new Intl.NumberFormat("en-GB", {
-            notation: "compact",
-            maximumFractionDigits: 1,
-          }).format(v),
-        };
-      }),
-      dates: Array.from({ length: 6 }, (_, i) => {
-        const index = Math.round((i * (months.length - 1)) / 5);
-        return { x: x(index), label: months[index].date.slice(0, 7) };
-      }),
-      hoverX: this.hovered() === null ? null : x(this.hovered()!),
-    };
-  });
-  reading = computed(() => {
-    const i = this.hovered();
-    const month = i === null ? null : this.result()?.months?.[i];
-    return month
-      ? {
-          date: month.date,
-          values: this.adjusted() ? month.inflationAdjusted : month.nominal,
-          payoff: this.payoffEvents().find((event) => event.index === i),
-          expenseTarget: month.expenseTarget
-            ? {
-                required: this.adjusted()
-                  ? month.expenseTarget.inflationAdjustedRequiredCapital
-                  : month.expenseTarget.nominalRequiredCapital,
-                eligible: this.adjusted()
-                  ? month.expenseTarget.inflationAdjustedEligibleBalance
-                  : month.expenseTarget.nominalEligibleBalance,
-                isCovered: month.expenseTarget.isCovered,
-              }
-            : null,
-        }
-      : null;
+  assetLabels = computed(() => {
+    this.snapshot();
+    return new Map([...this.assetNames].map(([id, asset]) => [id, asset.name]));
   });
   payoffs = computed(() => this.result()?.months?.at(-1)?.financedAssets ?? []);
 
@@ -439,7 +266,6 @@ export class Modelling {
     this.requestVersion++;
     clearTimeout(this.timer);
     this.pending.set(false);
-    this.hovered.set(null);
   }
   async initialize(home: string) {
     const version = ++this.loadVersion;
@@ -727,7 +553,7 @@ export class Modelling {
     this.error.set("");
     this.validation.set("");
     try {
-      const snapshot = await this.api.get<ModellingSnapshot>(
+      const snapshot = await this.api.get<Snapshot>(
         `households/${home}/snapshots/${id}`,
       );
       if (version !== this.loadVersion || this.destroyed) return;
@@ -929,7 +755,6 @@ export class Modelling {
           { inputs },
         );
         if (version === this.requestVersion && !this.destroyed) {
-          this.hovered.set(null);
           this.result.set(result);
         }
       } catch (e) {
@@ -942,45 +767,6 @@ export class Modelling {
           this.pending.set(false);
       }
     }, 300);
-  }
-  hover(event: MouseEvent) {
-    const months = this.result()?.months;
-    if (!months?.length) return;
-    const bounds = (
-      event.currentTarget as SVGSVGElement
-    ).getBoundingClientRect();
-    if (!bounds.width) return;
-    const x = ((event.clientX - bounds.left) / bounds.width) * 1000;
-    this.hovered.set(
-      Math.max(
-        0,
-        Math.min(
-          months.length - 1,
-          Math.round(((x - 88) / 832) * (months.length - 1)),
-        ),
-      ),
-    );
-  }
-  moveReading(delta: number, event: Event) {
-    event.preventDefault();
-    const length = this.result()?.months?.length ?? 0;
-    if (length)
-      this.hovered.set(
-        Math.max(0, Math.min(length - 1, (this.hovered() ?? 0) + delta)),
-      );
-  }
-  inspectMonth(index: number, event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
-    this.hovered.set(index);
-  }
-  payoffLabel(event: PayoffEvent) {
-    const names = event.assetIds.map((id) => this.assetName(id)).join(", ");
-    return `${names} · ${event.index === 0 ? "Already paid off at start" : "Loan paid off"} · ${event.date}`;
-  }
-  signedMoney(value: number, currency: string) {
-    if (Math.abs(value) < 0.005) return money(0, currency);
-    return (value > 0 ? "+" : "") + money(value, currency);
   }
   assetName(id: string) {
     return this.assetNames.get(id)?.name ?? id;

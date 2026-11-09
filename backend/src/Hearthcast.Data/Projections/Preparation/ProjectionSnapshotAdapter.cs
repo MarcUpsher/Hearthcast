@@ -1,7 +1,7 @@
 using Hearthcast.Data.Classification;
+using Hearthcast.Data.ExchangeRates;
 using Hearthcast.Data.Projections.Calculation;
 using Hearthcast.Data.Snapshots;
-using Hearthcast.Data.Validation;
 
 namespace Hearthcast.Data.Projections.Preparation;
 
@@ -18,6 +18,7 @@ internal static class ProjectionSnapshotAdapter
         var balances = assumptions.Currencies.ToDictionary(c => c.CurrencyCode, _ => (Investments: 0m, Savings: 0m));
         var missingCurrencies = new HashSet<string>();
         var invalidGroups = new HashSet<Guid>();
+        var exchangeRates = new SavedExchangeRateConverter(snapshot.ExchangeRateBaseCurrency, snapshot.ExchangeRates);
         foreach (var selection in selections.OrderBy(g => g.GroupId))
         {
             var items = snapshot.ItemSnapshots.Where(i => i.GroupId == selection.GroupId).ToArray();
@@ -51,7 +52,7 @@ internal static class ProjectionSnapshotAdapter
             var rate = Rate(item.CurrencyCode);
             if (item.Amount is { } amount && rate is { } factor)
             {
-                _ = Convert(amount, factor);
+                _ = SavedExchangeRateConverter.Convert(amount, factor);
                 if (configured) balances[item.CurrencyCode] = bucket == ProjectionBucket.Investment
                     ? (native.Investments + amount, native.Savings) : (native.Investments, native.Savings + amount);
             }
@@ -81,8 +82,8 @@ internal static class ProjectionSnapshotAdapter
             if (asset.CurrentValuation is { } value && asset.OutstandingLoanBalance is { } debt && rate is { } factor)
             {
                 // Retain native inputs, but reject conversions that would lose a balance.
-                _ = Convert(value, factor);
-                _ = Convert(debt, factor);
+                _ = SavedExchangeRateConverter.Convert(value, factor);
+                _ = SavedExchangeRateConverter.Convert(debt, factor);
                 preparedAssets.Add(new(asset.CurrencyCode, factor, value, debt, settings!));
             }
         }
@@ -100,8 +101,8 @@ internal static class ProjectionSnapshotAdapter
             var rate = Rate(pot.CurrencyCode, used);
             if (rate is { } factor)
             {
-                _ = Convert(native.Investments, factor);
-                _ = Convert(native.Savings, factor);
+                _ = SavedExchangeRateConverter.Convert(native.Investments, factor);
+                _ = SavedExchangeRateConverter.Convert(native.Savings, factor);
             }
             currencyPositions.Add(new(pot.CurrencyCode, native.Investments, native.Savings, rate));
         }
@@ -114,27 +115,13 @@ internal static class ProjectionSnapshotAdapter
             issues.Add(new(kind, ProjectionIssueSeverity.Error, id, message));
         void Carried(Guid id, string name) => issues.Add(new(ProjectionPreparationIssueKind.CarriedValue,
             ProjectionIssueSeverity.Warning, id, $"{name} uses carried-forward values."));
-        decimal? BaseRate(string currency) => currency == snapshot.ExchangeRateBaseCurrency ? 1m
-            : snapshot.ExchangeRates.SingleOrDefault(r => r.BaseCurrency == snapshot.ExchangeRateBaseCurrency && r.QuoteCurrency == currency)?.Rate;
         decimal? Rate(string currency, bool required = true)
         {
-            if (currency == assumptions.CurrencyCode) return 1;
-            if (BaseRate(currency) is { } source && BaseRate(assumptions.CurrencyCode) is { } target)
-            {
-                var factor = target / source;
-                if (factor <= 0) throw new InvalidValueException("The saved exchange rate exceeds supported numeric precision.");
-                return factor;
-            }
+            var rate = exchangeRates.ResolveRate(currency, assumptions.CurrencyCode);
+            if (rate.HasValue) return rate;
             if (required && missingCurrencies.Add(currency)) Error(ProjectionPreparationIssueKind.MissingExchangeRate, null,
                 $"No saved conversion from {currency} to {assumptions.CurrencyCode} is available in this snapshot.");
             return null;
         }
-    }
-
-    private static decimal Convert(decimal amount, decimal factor)
-    {
-        var converted = amount * factor;
-        if (amount != 0 && converted == 0) throw new InvalidValueException("The converted starting balance exceeds supported numeric precision.");
-        return converted;
     }
 }
