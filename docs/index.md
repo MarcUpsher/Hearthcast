@@ -25,6 +25,11 @@ original single-currency projection and initial screen notes are superseded.
 | Modelling, presets and result interpretation | [Current modelling guide](modelling.md) |
 | Current projection input shape and native currency pots | [Native currency projections](native-currency-projection-slice.md) |
 | Expense milestones | [Expense targets](projection-expense-target-slice.md) |
+| Spending setup domain and persistence | [Spending setup slice](spending-setup-slice.md) |
+| Spending setup service operations and concurrency | [Spending setup services](spending-setup-service-slice.md) |
+| Spending setup HTTP contracts and endpoints | [Spending setup API](spending-setup-api-slice.md) |
+| Spending-record domain and persistence | [Spending records](spending-records-slice.md) |
+| Spending-record services, retries and price provenance (API pending) | [Record services](spending-record-service-slice.md) |
 | Growth attribution | [Growth breakdown](projection-growth-breakdown-slice.md) |
 | Setup-to-reporting HTTP example | [Workflow verification](http-workflow-verification.md) |
 
@@ -35,6 +40,14 @@ Backend controllers and their `Contracts/` folders define the actual HTTP surfac
 there are no stored summary/projection documents to migrate when reporting changes.
 
 ## Design and implementation history
+
+[Spending and budget schema plan](spending-and-budget-schema-plan.md) describes
+purchase/payment tracking and dated replacement budget plans. Implemented layers
+include [setup domain/persistence](spending-setup-slice.md),
+[setup services](spending-setup-service-slice.md), [setup API](spending-setup-api-slice.md),
+[record domain/persistence](spending-records-slice.md) and
+[record services](spending-record-service-slice.md). Record HTTP endpoints and the
+remaining workflows are planned.
 
 The [initial schema proposal](schema-proposal.md) and [relational plan](relational-schema-plan.md)
 explain the original model. Household, classification, tracked-item, financed-asset,

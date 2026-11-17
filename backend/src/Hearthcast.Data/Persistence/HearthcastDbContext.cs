@@ -4,6 +4,7 @@ using Hearthcast.Data.FinancedAssets;
 using Hearthcast.Data.Households;
 using Hearthcast.Data.TrackedItems;
 using Hearthcast.Data.Snapshots;
+using Hearthcast.Data.Spending;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hearthcast.Data.Persistence;
@@ -14,6 +15,12 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<Person> People => Set<Person>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<ItemGroup> ItemGroups => Set<ItemGroup>();
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
+    public DbSet<Merchant> Merchants => Set<Merchant>();
+    public DbSet<SpendingItem> SpendingItems => Set<SpendingItem>();
+    public DbSet<SpendingItemMerchantPrice> SpendingItemMerchantPrices => Set<SpendingItemMerchantPrice>();
+    public DbSet<SpendingRecord> SpendingRecords => Set<SpendingRecord>();
+    public DbSet<SpendingLine> SpendingLines => Set<SpendingLine>();
     public DbSet<TrackedItem> TrackedItems => Set<TrackedItem>();
     public DbSet<TrackedItemHouseholdAllocation> TrackedItemHouseholdAllocations => Set<TrackedItemHouseholdAllocation>();
 

@@ -10,6 +10,7 @@ using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Snapshots;
 using Hearthcast.Data.Summaries;
 using Hearthcast.Data.TrackedItems;
+using Hearthcast.Data.Spending;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +28,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
+builder.Services.AddScoped<SpendingSetupService>();
 builder.Services.AddScoped<ProjectionPresetService>();
 builder.Services.AddScoped<ProjectionPreparationService>();
 builder.Services.AddScoped<TrackedItemService>();
