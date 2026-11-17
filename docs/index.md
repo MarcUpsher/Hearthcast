@@ -32,6 +32,7 @@ original single-currency projection and initial screen notes are superseded.
 | Spending-record services, retries and price provenance | [Record services](spending-record-service-slice.md) |
 | Spending-record HTTP capture and bounded history | [Record API](spending-record-api-slice.md) |
 | Budget domain, provenance and persistence | [Budget domain slice](budget-domain-slice.md) |
+| Budget setup service operations | [Budget setup services](budget-setup-service-slice.md) |
 | Growth attribution | [Growth breakdown](projection-growth-breakdown-slice.md) |
 | Setup-to-reporting HTTP example | [Workflow verification](http-workflow-verification.md) |
 
@@ -50,8 +51,9 @@ include [setup domain/persistence](spending-setup-slice.md),
 [record domain/persistence](spending-records-slice.md) and
 [record services](spending-record-service-slice.md) and
 [record API/bounded history](spending-record-api-slice.md) and
-[budget domain/persistence](budget-domain-slice.md). Budget services, API and UI
-remain planned.
+[budget domain/persistence](budget-domain-slice.md) and
+[budget setup services](budget-setup-service-slice.md). Budget snapshot services,
+API and UI remain planned.
 
 The [initial schema proposal](schema-proposal.md) and [relational plan](relational-schema-plan.md)
 explain the original model. Household, classification, tracked-item, financed-asset,

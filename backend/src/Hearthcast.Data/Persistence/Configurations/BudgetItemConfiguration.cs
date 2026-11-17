@@ -7,6 +7,8 @@ namespace Hearthcast.Data.Persistence.Configurations;
 
 public sealed class BudgetItemConfiguration : IEntityTypeConfiguration<BudgetItem>
 {
+    internal const string CodeIndexName = "IX_BudgetItems_HouseholdId_Code";
+
     public void Configure(EntityTypeBuilder<BudgetItem> builder)
     {
         builder.ToTable("BudgetItems", table =>
@@ -21,7 +23,7 @@ public sealed class BudgetItemConfiguration : IEntityTypeConfiguration<BudgetIte
         builder.HasKey(i => i.Id);
         builder.Property(i => i.Id).ValueGeneratedNever();
         builder.HasAlternateKey(i => new { i.HouseholdId, i.Id });
-        builder.HasIndex(i => new { i.HouseholdId, i.Code }).IsUnique();
+        builder.HasIndex(i => new { i.HouseholdId, i.Code }).IsUnique().HasDatabaseName(CodeIndexName);
         builder.Property(i => i.Code).HasMaxLength(SpendingSetupRules.MaximumCodeLength).IsRequired();
         builder.Property(i => i.Name).IsRequired();
         builder.Property(i => i.CurrencyCode).HasMaxLength(3).IsRequired();

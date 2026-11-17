@@ -208,7 +208,8 @@ public sealed class FinancedAssetIntegrityTests : IAsyncLifetime
         var participation = Record.ExceptionAsync(() => new HouseholdService(factory)
             .SetPersonParticipationAsync(data.HouseholdId, data.SecondPersonId, false));
         var outcomes = await Task.WhenAll(allocation, participation);
-        Assert.Equal(2, barrier.Arrivals);
+        // Both operations must overlap; a serialization retry may reach SaveChanges again.
+        Assert.True(barrier.Arrivals >= 2);
         Assert.Single(outcomes, error => error is null);
         if (outcomes[0] is not null)
         {

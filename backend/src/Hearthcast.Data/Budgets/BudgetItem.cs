@@ -51,7 +51,7 @@ public sealed class BudgetItem
 
     public void SetTerms(string currencyCode, BudgetFrequency frequency, int intervalCount)
     {
-        var currency = SpendingCurrencyPolicy.Normalize(currencyCode);
+        var currency = BudgetRules.Currency(currencyCode, CurrencyCode);
         BudgetRules.Recurrence(frequency, intervalCount);
         CurrencyCode = currency;
         Frequency = frequency;

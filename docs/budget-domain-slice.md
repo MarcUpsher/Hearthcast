@@ -2,8 +2,9 @@
 
 17 November 2026. Implements the budget entities, EF mappings and PostgreSQL
 migration from the [spending/budget plan](spending-and-budget-schema-plan.md).
-Budget setup/capture services, API and UI remain subsequent work. Existing
-spending endpoints are unchanged.
+[Budget setup services](budget-setup-service-slice.md) are now implemented.
+Snapshot capture services, API and UI remain subsequent work. Existing spending
+endpoints are unchanged.
 
 ## Domain boundary
 
@@ -146,5 +147,5 @@ retention versus unsupported new selections. All 101 budget-filtered tests pass
 passes all 1,315 backend tests (877 data/domain, 438 API), with no failures or
 skipped tests. These changes require no additional migration.
 
-Next: budget setup and snapshot services, including canonical create retries,
+Next: budget snapshot services, including canonical create retries,
 transactional carry/correction/detachment, as-of reads and current outgoing amounts.

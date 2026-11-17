@@ -16,7 +16,7 @@ names and timestamps.
 | `Hearthcast.Data/Projections` | Preset persistence, snapshot preparation and pure monthly simulation. |
 | `Hearthcast.Data/ExchangeRates` | Capture/provider workflows and shared checked conversion using saved quotes. |
 | `Hearthcast.Data/Spending` | Expense categories, merchants, catalogue items, remembered prices and setup services; spending-record/line aggregates, currency precision policy, transactional capture and bounded history services. Setup and record HTTP contracts/controllers live under `Hearthcast.Api/Spending`. |
-| `Hearthcast.Data/Budgets` | Reusable outgoing defaults, dated full-plan aggregates, copied entry context, confirmation/carry provenance and revision-checked domain mutations. Budget services and HTTP endpoints are deferred. |
+| `Hearthcast.Data/Budgets` | Reusable outgoing defaults and scoped setup services; dated full-plan aggregates, copied entry context, confirmation/carry provenance and revision-checked domain mutations. Snapshot services and HTTP endpoints are deferred. |
 | `Hearthcast.Data/Persistence` | DbContext, EF configurations, transaction support, design-time tooling and migrations. |
 | `backend/tools/Hearthcast.HistoryImport` | One-off prepared historical import; not a frontend workflow. |
 | `backend/tests/` | API and data tests; persistence tests use disposable PostgreSQL databases. |
