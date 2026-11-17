@@ -33,6 +33,7 @@ original single-currency projection and initial screen notes are superseded.
 | Spending-record HTTP capture and bounded history | [Record API](spending-record-api-slice.md) |
 | Budget domain, provenance and persistence | [Budget domain slice](budget-domain-slice.md) |
 | Budget setup service operations | [Budget setup services](budget-setup-service-slice.md) |
+| Budget setup HTTP contracts and endpoints | [Budget setup API](budget-setup-api-slice.md) |
 | Budget capture, retries, corrections and as-of reads | [Budget snapshot services](budget-snapshot-service-slice.md) |
 | Growth attribution | [Growth breakdown](projection-growth-breakdown-slice.md) |
 | Setup-to-reporting HTTP example | [Workflow verification](http-workflow-verification.md) |
@@ -54,8 +55,8 @@ include [setup domain/persistence](spending-setup-slice.md),
 [record API/bounded history](spending-record-api-slice.md) and
 [budget domain/persistence](budget-domain-slice.md) and
 [budget setup services](budget-setup-service-slice.md) and
-[budget snapshot services](budget-snapshot-service-slice.md). Budget API and UI
-remain planned.
+[budget snapshot services](budget-snapshot-service-slice.md) and
+[budget setup API](budget-setup-api-slice.md). Budget snapshot API and UI remain planned.
 
 The [initial schema proposal](schema-proposal.md) and [relational plan](relational-schema-plan.md)
 explain the original model. Household, classification, tracked-item, financed-asset,

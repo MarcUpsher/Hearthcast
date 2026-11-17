@@ -63,7 +63,7 @@ next service slice and are unaffected.
 Future HTTP replacement contracts must require merchantId and notes fields while
 allowing null to clear them; omitted fields must not silently clear defaults.
 The API documentation must retain the setup last-writer-wins convention. These
-are requirements for the future API slice, not additional endpoints in this slice.
+are implemented by the subsequent [setup API slice](budget-setup-api-slice.md).
 
 ## Verification
 
@@ -95,4 +95,5 @@ was not rerun for this constant/documentation change.
 No dependencies, schema changes, API registrations or migrations are added.
 The subsequent [snapshot service slice](budget-snapshot-service-slice.md) implements
 canonical create retries, effective-date reads, explicit carry/confirmation and
-transactional correction/source-link detachment. Budget HTTP endpoints remain next.
+transactional correction/source-link detachment. [Setup HTTP endpoints](budget-setup-api-slice.md)
+are also implemented; snapshot HTTP endpoints remain next.

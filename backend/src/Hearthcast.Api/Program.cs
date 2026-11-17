@@ -1,3 +1,4 @@
+using Hearthcast.Data.Budgets;
 using Hearthcast.Data.Projections;
 using Hearthcast.Data.Projections.Preparation;
 using Hearthcast.Api.Health;
@@ -30,6 +31,7 @@ builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<SpendingSetupService>();
 builder.Services.AddScoped<SpendingRecordService>();
+builder.Services.AddScoped<BudgetSetupService>();
 builder.Services.AddScoped<ProjectionPresetService>();
 builder.Services.AddScoped<ProjectionPreparationService>();
 builder.Services.AddScoped<TrackedItemService>();

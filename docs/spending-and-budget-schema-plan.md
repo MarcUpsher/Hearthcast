@@ -10,8 +10,9 @@ conventions. [Setup services](spending-setup-service-slice.md) and the
 [Record HTTP endpoints and bounded history](spending-record-api-slice.md) are
 implemented. [Budget domain/persistence](budget-domain-slice.md) and
 [budget setup services](budget-setup-service-slice.md) and
-[budget snapshot services](budget-snapshot-service-slice.md) are implemented;
-budget API and UI remain planned.
+[budget snapshot services](budget-snapshot-service-slice.md) and
+[budget setup API](budget-setup-api-slice.md) are implemented;
+budget snapshot API and UI remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.
@@ -514,8 +515,8 @@ workflows are established. The broad feature sequence is:
    void exclusion, and clearing informational price sources on line removal.
 3. BudgetItem setup and dated BudgetSnapshot capture/carry-forward/correction;
    domain aggregates, EF mappings, migration and persistence tests are implemented.
-   Setup and transactional snapshot services are implemented; HTTP endpoints
-   remain next.
+   Setup and transactional snapshot services and setup HTTP endpoints are
+   implemented; snapshot HTTP endpoints remain next.
    Verify effective-date selection, backdated retired items, source-metadata
    copying versus explicit refresh, deliberate omissions versus null/zero,
    additive category totals, stale edits and independent saved copies. Check

@@ -4,7 +4,9 @@
 migration from the [spending/budget plan](spending-and-budget-schema-plan.md).
 [Budget setup services](budget-setup-service-slice.md) are now implemented.
 [Snapshot services](budget-snapshot-service-slice.md) are also implemented.
-Budget API and UI remain subsequent work. Existing spending endpoints are unchanged.
+[Budget setup HTTP endpoints](budget-setup-api-slice.md) are also implemented;
+snapshot HTTP endpoints and UI remain subsequent work. Existing spending endpoints
+are unchanged.
 
 ## Domain boundary
 
@@ -150,4 +152,5 @@ skipped tests. These changes require no additional migration.
 
 The subsequent [snapshot services](budget-snapshot-service-slice.md) implement
 canonical create retries, transactional carry/correction/detachment, as-of reads
-and current outgoing amounts. Budget HTTP endpoints remain next.
+and current outgoing amounts. [Setup HTTP endpoints](budget-setup-api-slice.md) are
+also implemented; snapshot HTTP endpoints remain next.

@@ -3,7 +3,8 @@
 17 November 2026. BudgetSnapshotService implements complete dated-plan capture,
 carry-forward, corrections and reads over the [budget domain](budget-domain-slice.md).
 [Setup services](budget-setup-service-slice.md) continue to own reusable defaults.
-Budget HTTP contracts/endpoints and UI remain subsequent work.
+[Budget setup HTTP endpoints](budget-setup-api-slice.md) are implemented. Snapshot
+HTTP contracts/endpoints and UI remain subsequent work.
 
 ## Inputs and capture
 
@@ -166,5 +167,5 @@ above remains the initial slice checkpoint.
 No additional tables, dependencies, migration or HTTP registration are needed.
 The effective-date index's existing name is explicitly shared with conflict
 handling. No application database migration/deployment is performed by tests.
-Next: budget setup and snapshot API contracts/endpoints; reporting allocation and
-UI remain later work.
+The subsequent [setup API slice](budget-setup-api-slice.md) exposes reusable defaults.
+Next: budget snapshot API contracts/endpoints; reporting allocation and UI remain later work.
