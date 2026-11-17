@@ -8,7 +8,8 @@ conventions. [Setup services](spending-setup-service-slice.md) and the
 [Spending-record domain/persistence](spending-records-slice.md) is implemented;
 [record services](spending-record-service-slice.md) are also implemented.
 [Record HTTP endpoints and bounded history](spending-record-api-slice.md) are
-implemented. UI and budgets remain planned.
+implemented. [Budget domain/persistence](budget-domain-slice.md) is implemented;
+budget services, API and UI remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.
@@ -18,8 +19,8 @@ Both quick category-and-amount capture and optional itemised capture are agreed;
 broad spending trends are the primary goal, with product detail available when useful.
 Revised against the [review handoff](spending-and-budget-schema-review.md), including
 its follow-up review and the decisions clarified with the user there. The rules
-below resolve its review recommendations as planning defaults; they are not
-implemented behaviour.
+below resolve its review recommendations as agreed design rules. The linked slice
+notes above identify the implemented boundaries; remaining workflows are planned.
 
 ## Purpose and boundaries
 
@@ -305,6 +306,10 @@ records is not part of v1; setup retirement is a separate concern.
 - Later setup edits or corrections to a source snapshot never rewrite saved
   descendant amounts or reporting metadata. Informational source links may be
   detached as described below. Correcting a budget requires its expected Revision.
+- A metadata-only entry correction preserves its saved amount, confirmation date,
+  ValueOrigin and carry link without rereading a source or confirming the value.
+  This applies to linked and detached carried entries alike. Changing item identity,
+  currency or recurrence requires explicit value correction instead.
 - Retain old budget snapshots and their create identities/hashes; v1 offers no
   physical snapshot deletion. A new effective-dated replacement is the normal way
   to change the budget. Revision-checked correction remains available for errors
@@ -392,6 +397,10 @@ outside the first version.
   validates against an explicit supported currency/minor-unit policy shared by
   API and UI. Do not guess two decimal places for an unsupported code; return a
   validation error. No country/currency is hard-coded as the household default.
+  Budget carry from a resolved saved entry and corrections retaining an existing
+  item's saved currency preserve that code even if it leaves the capture list;
+  its three-letter shape remains validated. New currency selections still require
+  current support, and preserving a code never implies converting its amount.
   Actual NetAmount/ReceiptTotal must be in that currency's minor-unit precision.
   Prefill quantity × unit price rounded to that precision with midpoint rounding
   away from zero. Explicit receipt totals/discounted line amounts remain
@@ -502,7 +511,9 @@ workflows are established. The broad feature sequence is:
    concurrent create retries, unreconciled saves, parent revision conflicts,
    void exclusion, and clearing informational price sources on line removal.
 3. BudgetItem setup and dated BudgetSnapshot capture/carry-forward/correction;
-   verify effective-date selection, backdated retired items, source-metadata
+   domain aggregates, EF mappings, migration and persistence tests are implemented.
+   Transactional services and HTTP endpoints remain next.
+   Verify effective-date selection, backdated retired items, source-metadata
    copying versus explicit refresh, deliberate omissions versus null/zero,
    additive category totals, stale edits and independent saved copies. Check
    confirmation on explicit amount entry/change, detached carry provenance,

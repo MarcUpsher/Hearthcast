@@ -142,5 +142,6 @@ All 317 spending-filtered tests pass (213 data/domain, 104 HTTP).
 Full backend verification after the follow-up passes all 1,216 tests (778
 data/domain, 438 HTTP API), with no failures or skipped tests.
 
-Next: budget domain and persistence using the agreed dated replacement plans.
-UI remains deferred until backend workflows are established.
+The subsequent [budget domain/persistence slice](budget-domain-slice.md) is implemented.
+Next: budget services using the agreed dated replacement plans. UI remains deferred
+until backend workflows are established.

@@ -22,6 +22,235 @@ namespace Hearthcast.Data.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BudgetItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BudgetSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CarriedFromBudgetEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<Guid>("ExpenseCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExpenseCategoryName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("IntervalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ItemCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("LastConfirmedDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MerchantName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("PlannedAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("ValueOrigin")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BudgetSnapshotId", "BudgetItemId")
+                        .IsUnique();
+
+                    b.HasIndex("HouseholdId", "BudgetItemId");
+
+                    b.HasIndex("HouseholdId", "BudgetSnapshotId");
+
+                    b.HasIndex("HouseholdId", "CarriedFromBudgetEntryId");
+
+                    b.HasIndex("HouseholdId", "ExpenseCategoryId");
+
+                    b.HasIndex("HouseholdId", "MerchantId");
+
+                    b.ToTable("BudgetEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BudgetEntries_Amount", "\"PlannedAmount\" IS NULL OR (\"PlannedAmount\" >= 0 AND \"PlannedAmount\" < 1000000000000 AND \"PlannedAmount\" = round(\"PlannedAmount\", 6))");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_ConfirmationDate", "\"LastConfirmedDate\" IS NULL OR (\"LastConfirmedDate\" > DATE '0001-01-01' AND \"LastConfirmedDate\" < DATE '9999-12-31')");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_ExpenseCategoryName", "length(\"ExpenseCategoryName\") > 0 AND \"ExpenseCategoryName\" = btrim(\"ExpenseCategoryName\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Id", "\"Id\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_ItemCode", "\"ItemCode\" ~ '^[A-Z0-9][A-Z0-9._-]*$'");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_ItemName", "length(\"ItemName\") > 0 AND \"ItemName\" = btrim(\"ItemName\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Merchant", "(\"MerchantId\" IS NULL AND \"MerchantName\" IS NULL) OR (\"MerchantId\" IS NOT NULL AND \"MerchantName\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_MerchantName", "\"MerchantName\" IS NULL OR (length(\"MerchantName\") > 0 AND \"MerchantName\" = btrim(\"MerchantName\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000'))");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Notes", "\"Notes\" IS NULL OR (length(\"Notes\") > 0 AND \"Notes\" = btrim(\"Notes\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000'))");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Provenance", "(\"ValueOrigin\" = 1 AND \"PlannedAmount\" IS NULL AND \"LastConfirmedDate\" IS NULL AND \"CarriedFromBudgetEntryId\" IS NULL)\nOR (\"ValueOrigin\" = 2 AND \"PlannedAmount\" IS NOT NULL AND \"LastConfirmedDate\" IS NOT NULL AND \"CarriedFromBudgetEntryId\" IS NULL)\nOR (\"ValueOrigin\" = 3 AND \"PlannedAmount\" IS NOT NULL AND \"LastConfirmedDate\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Recurrence", "\"Frequency\" IN (1, 2, 3) AND \"IntervalCount\" > 0");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Source", "\"CarriedFromBudgetEntryId\" IS NULL OR \"CarriedFromBudgetEntryId\" <> \"Id\"");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<Guid>("ExpenseCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("IntervalCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsRetired")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("MerchantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("HouseholdId", "ExpenseCategoryId");
+
+                    b.HasIndex("HouseholdId", "MerchantId");
+
+                    b.ToTable("BudgetItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BudgetItems_Code", "\"Code\" ~ '^[A-Z0-9][A-Z0-9._-]*$'");
+
+                            t.HasCheckConstraint("CK_BudgetItems_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_BudgetItems_Id", "\"Id\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_BudgetItems_Name", "length(\"Name\") > 0 AND \"Name\" = btrim(\"Name\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
+
+                            t.HasCheckConstraint("CK_BudgetItems_Notes", "\"Notes\" IS NULL OR (length(\"Notes\") > 0 AND \"Notes\" = btrim(\"Notes\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000'))");
+
+                            t.HasCheckConstraint("CK_BudgetItems_Recurrence", "\"Frequency\" IN (1, 2, 3) AND \"IntervalCount\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CopiedFromBudgetSnapshotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreationRequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "CopiedFromBudgetSnapshotId");
+
+                    b.HasIndex("HouseholdId", "EffectiveFrom")
+                        .IsUnique();
+
+                    b.ToTable("BudgetSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BudgetSnapshots_CreationHash", "\"CreationRequestHash\" ~ '^[0-9a-f]{64}$'");
+
+                            t.HasCheckConstraint("CK_BudgetSnapshots_EffectiveFrom", "\"EffectiveFrom\" > DATE '0001-01-01' AND \"EffectiveFrom\" < DATE '9999-12-31'");
+
+                            t.HasCheckConstraint("CK_BudgetSnapshots_Id", "\"Id\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_BudgetSnapshots_Notes", "\"Notes\" IS NULL OR (length(\"Notes\") > 0 AND \"Notes\" = btrim(\"Notes\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000'))");
+
+                            t.HasCheckConstraint("CK_BudgetSnapshots_Revision", "\"Revision\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_BudgetSnapshots_Source", "\"CopiedFromBudgetSnapshotId\" IS NULL OR \"CopiedFromBudgetSnapshotId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_BudgetSnapshots_Timestamps", "isfinite(\"CreatedAtUtc\") AND isfinite(\"UpdatedAtUtc\") AND \"UpdatedAtUtc\" >= \"CreatedAtUtc\"");
+                        });
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Classification.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1386,6 +1615,73 @@ namespace Hearthcast.Data.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetEntry", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Budgets.BudgetItem", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "BudgetItemId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Budgets.BudgetSnapshot", null)
+                        .WithMany("Entries")
+                        .HasForeignKey("HouseholdId", "BudgetSnapshotId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Budgets.BudgetEntry", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "CarriedFromBudgetEntryId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Hearthcast.Data.Spending.ExpenseCategory", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "ExpenseCategoryId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Spending.Merchant", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "MerchantId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetItem", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Spending.ExpenseCategory", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "ExpenseCategoryId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Spending.Merchant", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "MerchantId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetSnapshot", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Households.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Budgets.BudgetSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "CopiedFromBudgetSnapshotId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Classification.Category", b =>
                 {
                     b.HasOne("Hearthcast.Data.Households.Household", "Household")
@@ -1892,6 +2188,11 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Navigation("Person");
 
                     b.Navigation("TrackedItem");
+                });
+
+            modelBuilder.Entity("Hearthcast.Data.Budgets.BudgetSnapshot", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("Hearthcast.Data.FinancedAssets.FinancedAsset", b =>

@@ -1,3 +1,4 @@
+using Hearthcast.Data.Budgets;
 using Hearthcast.Data.Projections;
 using Hearthcast.Data.Classification;
 using Hearthcast.Data.FinancedAssets;
@@ -21,6 +22,9 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<SpendingItemMerchantPrice> SpendingItemMerchantPrices => Set<SpendingItemMerchantPrice>();
     public DbSet<SpendingRecord> SpendingRecords => Set<SpendingRecord>();
     public DbSet<SpendingLine> SpendingLines => Set<SpendingLine>();
+    public DbSet<BudgetItem> BudgetItems => Set<BudgetItem>();
+    public DbSet<BudgetSnapshot> BudgetSnapshots => Set<BudgetSnapshot>();
+    public DbSet<BudgetEntry> BudgetEntries => Set<BudgetEntry>();
     public DbSet<TrackedItem> TrackedItems => Set<TrackedItem>();
     public DbSet<TrackedItemHouseholdAllocation> TrackedItemHouseholdAllocations => Set<TrackedItemHouseholdAllocation>();
 
