@@ -3,8 +3,9 @@
 17 November 2026. Builds on [record domain/persistence](spending-records-slice.md).
 SpendingRecordService implements scoped capture, history, correction, voiding,
 last-paid lookup and explicit usual-price adoption. No schema, endpoints, UI,
-budget workflow or live deployment is added. Registration and HTTP mapping for
-this service follow with the record API slice.
+budget workflow or live deployment is added. The subsequent
+[record API slice](spending-record-api-slice.md) now supplies registration, HTTP
+mapping and bounded history paging.
 
 ## Commands and reads
 
@@ -19,7 +20,10 @@ explicit amount and an optional expected usual-price revision.
 | --- | --- |
 | CreateAsync | Takes household, client UUID and values; returns SpendingRecordCaptureResult with Record and WasCreated. Optional price choices save in the same transaction. |
 | GetAsync | Returns one full aggregate, including voided history. |
+| GetOriginalPaymentVoidStatesAsync | Resolves distinct original-payment IDs in one scoped projection for API labels, without loading original lines. |
 | ListAsync | Full aggregates, inclusive optional from/to dates; excludes voided records by default, includeVoided=true retains them. |
+| ListPageAsync | Bounded full-receipt pages with context-bound keyset cursors; the API uses this instead of ListAsync. |
+| ListSupportedCurrenciesAsync | Requires a household and returns the supported capture currency policy for discovery. |
 | CorrectHeaderAsync | Revision-checked date, receipt total, reference and notes; preserves copied context. |
 | CorrectLineAsync | Revision-checked amounts, quantities/prices, promotion and notes; preserves copied context and optionally adopts chosen prices. |
 | ReplaceAsync | Revision-checked merchant/header and explicit replacement lines; removes old rows, detaches sources and optionally readopts prices. |
@@ -97,7 +101,7 @@ adopt a newer token. EF concurrency failures map to SpendingRecordConflictExcept
 or SpendingPriceConflictException according to the affected entity. Competing usual-
 price creations also return price conflicts; conflicting client IDs return a generic
 business conflict. Invalid values remain validation errors. HTTP status mapping
-is the next slice's responsibility; there are no public record routes yet.
+is documented in the [record API slice](spending-record-api-slice.md).
 
 ## Last-paid semantics
 
@@ -140,18 +144,10 @@ Changing the expected hash to accommodate a refactor would break this contract.
 Both compatibility cases pass. Only tests/documentation changed in this follow-up;
 the prior full-suite result above was not rerun for it.
 
-Before exposing record history through HTTP, add a bounded page/cursor service
-contract. Keep the deterministic spending-date/creation-time/UUID ordering, apply
-paging to parent records before including their lines, and verify continuation
-through equal-date records without duplicates, omissions or split receipts.
-Do not wire the existing unbounded ListAsync directly to a general history route.
+The [record API slice](spending-record-api-slice.md) implements the review's bounded
+page/cursor contract and parent-before-lines query, equal-date continuation tests,
+record 409 mapping, client UUID preservation, 201/200 replay distinction and nullable
+required amount contracts. The unbounded ListAsync remains an internal inventory
+convenience and is not wired to a general history route.
 
-The record API must also register the service, map SpendingRecordConflictException
-to 409, require the client-generated create UUID, return 201 for WasCreated=true
-and 200 for a matched replay, and preserve nullable required request values so
-explicit zero amounts are distinct from omission. Add HTTP regression tests for
-these semantics rather than assuming the setup API supplies them.
-
-Next: the bounded history service contract and record HTTP contracts/controllers,
-dependency registration, status mappings and integration tests. UI and budgets
-remain deferred.
+Next: budget domain/persistence. UI remains deferred.

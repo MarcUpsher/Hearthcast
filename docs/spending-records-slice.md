@@ -4,7 +4,8 @@
 [schema plan](spending-and-budget-schema-plan.md). This adds SpendingRecord,
 SpendingLine, EF mappings, AddSpendingRecords and optional usual-price source
 links. The subsequent [record services](spending-record-service-slice.md) are now
-implemented. HTTP capture, UI, budgets and receipt ingestion remain deferred.
+implemented, followed by the [record API](spending-record-api-slice.md).
+UI, budgets and receipt ingestion remain deferred.
 The migration is tested in disposable databases, not applied to the running app.
 
 ## Capture and amounts
@@ -107,8 +108,8 @@ transaction. The service layer covers failed-save rollback and concurrent source
 
 Create-request hashes are validated/stored here, not calculated from mutable
 setup metadata. Canonical request hashing, create-ID retries, last-paid queries
-and atomic receipt-plus-usual-price updates are implemented in the service layer. There is no public HTTP
-record capture operation yet. Duplicate receipt references/merchant/date combinations
+and atomic receipt-plus-usual-price updates are implemented in the service layer
+and exposed through the record API. Duplicate receipt references/merchant/date combinations
 are allowed and are not idempotency keys.
 
 ## Verification and next work
@@ -126,5 +127,6 @@ the existing financial-history and migration/model checks. The existing NU1900
 warning remains for unavailable NuGet vulnerability metadata; no dependencies
 were added.
 
-The [record services](spending-record-service-slice.md) are implemented. Record HTTP
-endpoints follow; UI and budgets remain deferred.
+The [record services](spending-record-service-slice.md) and
+[HTTP endpoints](spending-record-api-slice.md) are implemented. Budget domain and
+persistence follow; UI remains deferred.

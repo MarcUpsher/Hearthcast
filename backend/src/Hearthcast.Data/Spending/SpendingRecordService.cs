@@ -8,6 +8,59 @@ namespace Hearthcast.Data.Spending;
 
 public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext> contextFactory)
 {
+    public const int DefaultHistoryPageSize = 25;
+    public const int MaximumHistoryPageSize = 100;
+
+    public async Task<IReadOnlyDictionary<Guid, bool>> GetOriginalPaymentVoidStatesAsync(Guid householdId,
+        IReadOnlyCollection<Guid> originalPaymentIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(originalPaymentIds);
+        var ids = originalPaymentIds.Distinct().ToArray();
+        if (ids.Contains(Guid.Empty)) throw new InvalidValueException("Supply nonempty original payment identifiers.");
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await RequireHouseholdAsync(context, householdId, cancellationToken);
+        if (ids.Length == 0) return new Dictionary<Guid, bool>();
+        var states = await context.SpendingRecords.AsNoTracking().TagWith("Spending original payment void states")
+            .Where(r => r.HouseholdId == householdId && ids.Contains(r.Id) && r.Kind == SpendingRecordKind.Payment)
+            .Select(r => new { r.Id, IsVoided = r.VoidedAtUtc != null })
+            .ToDictionaryAsync(r => r.Id, r => r.IsVoided, cancellationToken);
+        if (states.Count != ids.Length) throw new ResourceNotFoundException("An original payment does not belong to this household.");
+        return states;
+    }
+
+    public async Task<SpendingHistoryPage> ListPageAsync(Guid householdId, DateOnly? from = null, DateOnly? to = null,
+        bool includeVoided = false, int pageSize = DefaultHistoryPageSize, string? cursor = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (from > to || pageSize is < 1 or > MaximumHistoryPageSize)
+            throw new InvalidValueException("Supply an ordered date range and page size from 1 to 100.");
+        var after = cursor is null ? null : SpendingHistoryCursor.Decode(cursor, householdId, from, to, includeVoided, pageSize);
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await RequireHouseholdAsync(context, householdId, cancellationToken);
+        var parents = context.SpendingRecords.AsNoTracking().Where(r => r.HouseholdId == householdId
+            && (includeVoided || r.VoidedAtUtc == null) && (!from.HasValue || r.SpendingDate >= from.Value)
+            && (!to.HasValue || r.SpendingDate <= to.Value));
+        if (after is not null)
+            parents = parents.Where(r => EF.Functions.LessThan(ValueTuple.Create(r.SpendingDate, r.CreatedAtUtc, r.Id),
+                ValueTuple.Create(after.Date, after.CreatedAtUtc, after.Id)));
+        // EF places the parent LIMIT in a subquery before joining lines. One extra parent is bounded lookahead.
+        var found = await parents.OrderByDescending(r => r.SpendingDate).ThenByDescending(r => r.CreatedAtUtc).ThenByDescending(r => r.Id)
+            .Take(pageSize + 1).Include(r => r.Lines.OrderBy(l => l.Position)).AsSingleQuery().ToArrayAsync(cancellationToken);
+        var records = found.Take(pageSize).ToArray();
+        var next = found.Length > pageSize
+            ? new SpendingHistoryCursor(1, householdId, from, to, includeVoided, pageSize,
+                records[^1].SpendingDate, records[^1].CreatedAtUtc, records[^1].Id).Encode() : null;
+        return new(records, next, pageSize);
+    }
+
+    public async Task<IReadOnlyDictionary<string, int>> ListSupportedCurrenciesAsync(Guid householdId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await RequireHouseholdAsync(context, householdId, cancellationToken);
+        return SpendingCurrencyPolicy.SupportedCurrencies;
+    }
+
     public Task<SpendingRecordCaptureResult> CreateAsync(Guid householdId, Guid recordId, SpendingRecordValues values,
         IReadOnlyList<RememberSpendingPrice>? rememberPrices = null, CancellationToken cancellationToken = default)
     {

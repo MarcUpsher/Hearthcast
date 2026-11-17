@@ -116,4 +116,5 @@ vulnerability metadata is unavailable; no package dependencies were added.
 
 Spending-record [domain/persistence](spending-records-slice.md) is implemented.
 [Record services](spending-record-service-slice.md) are also implemented.
-Record HTTP capture follows; UI remains deferred.
+[Record HTTP capture](spending-record-api-slice.md) is also implemented. Budget
+domain/persistence follows; UI remains deferred.

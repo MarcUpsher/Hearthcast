@@ -484,4 +484,22 @@ public sealed class SpendingRecordServiceTests : IAsyncLifetime
         Assert.Single(await Service.ListAsync(d.Home));
         Assert.Equal(price.Revision, (await Setup.GetUsualPriceAsync(d.Home, price.Id)).Revision);
     }
+
+    [Fact]
+    public async Task OriginalPaymentStatusBatchIsScopedAndReportsCurrentVoidStateWithoutChangingRefunds()
+    {
+        var d = await SeedAsync(); var foreign = await SeedAsync();
+        var payment = await CaptureAsync(d); var otherPayment = await CaptureAsync(foreign);
+        var refund = await CaptureAsync(d, d.Values() with { Kind = SpendingRecordKind.Refund, OriginalPaymentId = payment.Id });
+        Assert.False((await Service.GetOriginalPaymentVoidStatesAsync(d.Home, [payment.Id, payment.Id]))[payment.Id]);
+        await Service.VoidAsync(d.Home, payment.Id, payment.Revision);
+        Assert.True((await Service.GetOriginalPaymentVoidStatesAsync(d.Home, [payment.Id]))[payment.Id]);
+        Assert.Equal(refund.Revision, (await Service.GetAsync(d.Home, refund.Id)).Revision);
+        Assert.Empty(await Service.GetOriginalPaymentVoidStatesAsync(d.Home, []));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.GetOriginalPaymentVoidStatesAsync(d.Home, [otherPayment.Id]));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.GetOriginalPaymentVoidStatesAsync(d.Home, [refund.Id]));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.GetOriginalPaymentVoidStatesAsync(d.Home, [Guid.NewGuid()]));
+        await Assert.ThrowsAsync<ResourceNotFoundException>(() => Service.GetOriginalPaymentVoidStatesAsync(Guid.NewGuid(), []));
+        await Assert.ThrowsAsync<InvalidValueException>(() => Service.GetOriginalPaymentVoidStatesAsync(d.Home, [Guid.Empty]));
+    }
 }

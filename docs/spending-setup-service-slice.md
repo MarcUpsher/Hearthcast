@@ -111,5 +111,6 @@ NU1900 for the unavailable vulnerability feed; no dependencies were added.
 
 The [setup API](spending-setup-api-slice.md), including 409 mapping for stale
 usual-price revisions, is implemented, as is [record domain/persistence](spending-records-slice.md).
-[Record services](spending-record-service-slice.md) are also implemented; record HTTP
-capture is next. UI remains deferred.
+[Record services](spending-record-service-slice.md) and
+[HTTP capture](spending-record-api-slice.md) are also implemented. Budget domain/
+persistence is next; UI remains deferred.

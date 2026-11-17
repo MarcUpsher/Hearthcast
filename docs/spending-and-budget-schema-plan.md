@@ -7,7 +7,8 @@ conventions. [Setup services](spending-setup-service-slice.md) and the
 [setup API](spending-setup-api-slice.md) are also implemented.
 [Spending-record domain/persistence](spending-records-slice.md) is implemented;
 [record services](spending-record-service-slice.md) are also implemented.
-Record HTTP endpoints, UI and budgets remain planned.
+[Record HTTP endpoints and bounded history](spending-record-api-slice.md) are
+implemented. UI and budgets remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.
@@ -266,7 +267,7 @@ payment association are fixed for a saved identity. Correcting those requires
 voiding and creating a replacement with a new UUID. Merchant changes need explicit
 replacement lines; date/reference/notes/receipt corrections and line-value corrections
 preserve copied reporting context. Transactional service orchestration is implemented
-in the record service slice; HTTP capture follows.
+in the record service slice and exposed by the record API.
 
 Use a revision-checked void action for accidental duplicates or records entered in
 error. Set VoidedAtUtc, retain the record and lines, and exclude them from totals
@@ -490,12 +491,10 @@ workflows are established. The broad feature sequence is:
    UI comes later.
 2. Manual spending capture, correction and history with receipt reconciliation;
    record domain, mappings, migration and persistence tests are implemented;
-   scoped services are also implemented and HTTP endpoints are next.
-   Before exposing history, add bounded parent-record paging with deterministic
-   cursors and equal-date continuation tests; do not expose the unbounded internal
-   inventory directly. Preserve the fixed version-one create-hash fixture. The API
-   must retain client UUIDs, distinguish 201 creation from 200 replay, map record
-   revision conflicts to 409 and distinguish omitted amounts from explicit zero.
+   scoped services and HTTP endpoints are also implemented. History uses bounded
+   parent-record paging and deterministic cursors with equal-date continuation
+   tests. The fixed version-one hash fixture, client UUIDs, 201/200 replay distinction,
+   record 409 mapping and omitted-versus-zero amount contracts are retained.
    Verify quick capture without catalogue items, category splits, mixed detail,
    atomic replacement of summary lines, fractional quantities, duplicate item
    lines, usual-price lookup exclusions for amount-only lines, price overrides,
@@ -524,6 +523,14 @@ schema. Extracted prices or item matches should be reviewed before saving actual
 
 ## Deferred choices and features
 
+- Future spending UI must use ordinary header/line corrections for minor edits.
+  Explicit replacement refreshes saved setup metadata and regenerates lines, so
+  it must remain a deliberate action. Retain the original create payload and UUID
+  for retries; after an uncertain mutation response, reload the saved record
+  before submitting another mutation with its current revision.
+- Before large-scale reporting, measure representative queries and choose any
+  additional indexes from their access patterns. Existing capture/history indexes
+  do not justify speculative reporting tables or indexes.
 - Choose prorated allowances versus due-date schedules before historical variance
   charts; basic capture and as-of plan summaries do not depend on this choice.
 - Individual budget-item matching and person allocations require demonstrated need.

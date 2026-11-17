@@ -102,5 +102,6 @@ unavailable NuGet vulnerability metadata feed (NU1900).
 The [setup services](spending-setup-service-slice.md) and
 [API](spending-setup-api-slice.md) are implemented, as is
 [record domain/persistence](spending-records-slice.md) and
-[record services](spending-record-service-slice.md). Record HTTP capture is next;
+[record services](spending-record-service-slice.md), followed by
+[record HTTP capture](spending-record-api-slice.md). Budget domain/persistence is next;
 UI remains deferred until backend workflows are established.

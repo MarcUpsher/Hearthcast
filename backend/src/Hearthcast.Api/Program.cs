@@ -29,6 +29,7 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<SpendingSetupService>();
+builder.Services.AddScoped<SpendingRecordService>();
 builder.Services.AddScoped<ProjectionPresetService>();
 builder.Services.AddScoped<ProjectionPreparationService>();
 builder.Services.AddScoped<TrackedItemService>();
