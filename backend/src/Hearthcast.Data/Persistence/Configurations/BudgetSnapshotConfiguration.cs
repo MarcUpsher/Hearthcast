@@ -7,6 +7,8 @@ namespace Hearthcast.Data.Persistence.Configurations;
 
 public sealed class BudgetSnapshotConfiguration : IEntityTypeConfiguration<BudgetSnapshot>
 {
+    internal const string EffectiveDateIndexName = "IX_BudgetSnapshots_HouseholdId_EffectiveFrom";
+
     public void Configure(EntityTypeBuilder<BudgetSnapshot> builder)
     {
         builder.ToTable("BudgetSnapshots", table =>
@@ -22,7 +24,7 @@ public sealed class BudgetSnapshotConfiguration : IEntityTypeConfiguration<Budge
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Id).ValueGeneratedNever();
         builder.HasAlternateKey(s => new { s.HouseholdId, s.Id });
-        builder.HasIndex(s => new { s.HouseholdId, s.EffectiveFrom }).IsUnique();
+        builder.HasIndex(s => new { s.HouseholdId, s.EffectiveFrom }).IsUnique().HasDatabaseName(EffectiveDateIndexName);
         builder.Property(s => s.CreationRequestHash).HasMaxLength(64).IsRequired();
         builder.Property(s => s.Revision).IsConcurrencyToken();
         builder.HasOne<Household>().WithMany().HasForeignKey(s => s.HouseholdId).OnDelete(DeleteBehavior.Restrict);

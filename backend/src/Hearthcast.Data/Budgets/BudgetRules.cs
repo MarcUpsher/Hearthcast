@@ -8,10 +8,16 @@ internal static class BudgetRules
     // Preserving a saved currency does not select it anew from today's capture policy.
     internal static string Currency(string value, string? savedCurrency = null)
     {
+        var code = CurrencyCode(value);
+        return code == savedCurrency ? code : SpendingCurrencyPolicy.Normalize(code);
+    }
+
+    internal static string CurrencyCode(string value)
+    {
         var code = SpendingSetupRules.Text(value).ToUpperInvariant();
         if (code.Length != 3 || code.Any(c => c is < 'A' or > 'Z'))
             throw new InvalidValueException("Use a three-letter currency code.");
-        return code == savedCurrency ? code : SpendingCurrencyPolicy.Normalize(code);
+        return code;
     }
 
     internal static void Recurrence(BudgetFrequency frequency, int intervalCount)

@@ -93,5 +93,6 @@ No additional migration or runtime behaviour change is required; the full suite
 was not rerun for this constant/documentation change.
 
 No dependencies, schema changes, API registrations or migrations are added.
-Next: budget snapshot services for canonical create retries, effective-date reads,
-explicit carry/confirmation and transactional correction/source-link detachment.
+The subsequent [snapshot service slice](budget-snapshot-service-slice.md) implements
+canonical create retries, effective-date reads, explicit carry/confirmation and
+transactional correction/source-link detachment. Budget HTTP endpoints remain next.

@@ -1,7 +1,8 @@
 namespace Hearthcast.Data.Budgets;
 
 internal sealed record BudgetEntryInput(BudgetEntryMetadata Metadata, decimal? PlannedAmount = null,
-    DateOnly? ConfirmedOn = null, BudgetSnapshot? CarrySourceSnapshot = null, Guid? CarrySourceEntryId = null)
+    DateOnly? ConfirmedOn = null, BudgetSnapshot? CarrySourceSnapshot = null, Guid? CarrySourceEntryId = null,
+    BudgetEntry? SavedCurrencyContext = null)
 {
     internal static BudgetEntryInput Carry(BudgetSnapshot source, BudgetEntry entry) =>
         new(BudgetEntryMetadata.FromEntry(entry), CarrySourceSnapshot: source, CarrySourceEntryId: entry.Id);

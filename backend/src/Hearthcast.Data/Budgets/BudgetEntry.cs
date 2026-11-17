@@ -16,8 +16,10 @@ public sealed class BudgetEntry
         BudgetSnapshotId = parent.Id;
         if (input.CarrySourceSnapshot is null && input.CarrySourceEntryId is null)
         {
-            SetMetadata(input.Metadata, existing is not null && existing.BudgetItemId == input.Metadata.BudgetItemId
-                ? existing.CurrencyCode : null);
+            var currencyContext = existing is not null && existing.BudgetItemId == input.Metadata.BudgetItemId
+                ? existing : input.SavedCurrencyContext;
+            SetMetadata(input.Metadata, currencyContext is not null && currencyContext.HouseholdId == HouseholdId
+                && currencyContext.BudgetItemId == input.Metadata.BudgetItemId ? currencyContext.CurrencyCode : null);
             SetAmount(input.PlannedAmount, input.ConfirmedOn);
             return;
         }

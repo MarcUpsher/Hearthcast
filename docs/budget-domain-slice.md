@@ -3,8 +3,8 @@
 17 November 2026. Implements the budget entities, EF mappings and PostgreSQL
 migration from the [spending/budget plan](spending-and-budget-schema-plan.md).
 [Budget setup services](budget-setup-service-slice.md) are now implemented.
-Snapshot capture services, API and UI remain subsequent work. Existing spending
-endpoints are unchanged.
+[Snapshot services](budget-snapshot-service-slice.md) are also implemented.
+Budget API and UI remain subsequent work. Existing spending endpoints are unchanged.
 
 ## Domain boundary
 
@@ -94,7 +94,8 @@ validate any retained outgoing source links against resolved source aggregates.
 Services must load complete aggregates, find incoming links affected by source
 removal/identity/terms/date corrections, detach incompatible links and save all
 affected parent revisions atomically. Those workflows are **not implemented as
-services in this slice**; the persistence tests exercise the transaction primitives
+services in this domain slice**; the subsequent [snapshot services](budget-snapshot-service-slice.md)
+provide that orchestration. The persistence tests exercise the transaction primitives
 and prove rollback on a concurrent descendant edit. Source amount changes alone
 do not require detachment. A date correction may also change the effective
 interval; the future API/UI must make that impact explicit.
@@ -147,5 +148,6 @@ retention versus unsupported new selections. All 101 budget-filtered tests pass
 passes all 1,315 backend tests (877 data/domain, 438 API), with no failures or
 skipped tests. These changes require no additional migration.
 
-Next: budget snapshot services, including canonical create retries,
-transactional carry/correction/detachment, as-of reads and current outgoing amounts.
+The subsequent [snapshot services](budget-snapshot-service-slice.md) implement
+canonical create retries, transactional carry/correction/detachment, as-of reads
+and current outgoing amounts. Budget HTTP endpoints remain next.

@@ -155,7 +155,8 @@ public sealed class HouseholdPersistenceTests : IAsyncLifetime
         var changes = updated.People.Select(person => Record.ExceptionAsync(() =>
             service.SetPersonParticipationAsync(household.Id, person.Id, false))).ToArray();
         var outcomes = await Task.WhenAll(changes);
-        Assert.Equal(2, barrier.Arrivals);
+        // The initial pair must overlap; serialization retries may reach SaveChanges again.
+        Assert.True(barrier.Arrivals >= 2);
         Assert.Single(outcomes, exception => exception is null);
         Assert.IsType<BusinessRuleViolationException>(Assert.Single(outcomes, exception => exception is not null));
 

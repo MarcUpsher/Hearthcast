@@ -9,8 +9,9 @@ conventions. [Setup services](spending-setup-service-slice.md) and the
 [record services](spending-record-service-slice.md) are also implemented.
 [Record HTTP endpoints and bounded history](spending-record-api-slice.md) are
 implemented. [Budget domain/persistence](budget-domain-slice.md) and
-[budget setup services](budget-setup-service-slice.md) are implemented;
-budget snapshot services, API and UI remain planned.
+[budget setup services](budget-setup-service-slice.md) and
+[budget snapshot services](budget-snapshot-service-slice.md) are implemented;
+budget API and UI remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.
@@ -513,8 +514,8 @@ workflows are established. The broad feature sequence is:
    void exclusion, and clearing informational price sources on line removal.
 3. BudgetItem setup and dated BudgetSnapshot capture/carry-forward/correction;
    domain aggregates, EF mappings, migration and persistence tests are implemented.
-   Setup services are implemented; transactional snapshot services and HTTP
-   endpoints remain next.
+   Setup and transactional snapshot services are implemented; HTTP endpoints
+   remain next.
    Verify effective-date selection, backdated retired items, source-metadata
    copying versus explicit refresh, deliberate omissions versus null/zero,
    additive category totals, stale edits and independent saved copies. Check
@@ -536,6 +537,9 @@ schema. Extracted prices or item matches should be reviewed before saving actual
 
 ## Deferred choices and features
 
+- Future current-outgoing HTTP responses must keep current setup defaults separate
+  from saved entry context. Label amounts with the entry's saved currency,
+  recurrence and category, even when today's item defaults differ.
 - Future budget setup HTTP replacement edits must require merchantId and notes
   to be present, while allowing explicit null to clear them. Omission must not
   silently clear defaults. Document setup's existing last-writer-wins behaviour;
