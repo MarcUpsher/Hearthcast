@@ -29,6 +29,7 @@ original single-currency projection and initial screen notes are superseded.
 | Spending setup service operations and concurrency | [Spending setup services](spending-setup-service-slice.md) |
 | Spending setup HTTP contracts and endpoints | [Spending setup API](spending-setup-api-slice.md) |
 | Spending category/merchant setup screen and draft protection | [Spending setup UI](spending-setup-ui-slice.md) |
+| Spending item catalogue and explicit usual-price maintenance | [Items and prices UI](spending-items-ui-slice.md) |
 | Spending-record domain and persistence | [Spending records](spending-records-slice.md) |
 | Spending-record services, retries and price provenance | [Record services](spending-record-service-slice.md) |
 | Spending-record HTTP capture and bounded history | [Record API](spending-record-api-slice.md) |

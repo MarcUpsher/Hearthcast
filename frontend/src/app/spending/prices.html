@@ -1,0 +1,58 @@
+<section class="panel" aria-labelledby="prices-title">
+  <div class="page-heading">
+    <div><h2 id="prices-title">Usual prices · {{ item().name }}</h2><p class="muted">{{ item().code }} · {{ item().unitLabel }}</p></div>
+    <button mat-button [disabled]="saving()" (click)="requestClose()">Close prices</button>
+  </div>
+  <p class="muted">Defaults for future purchases, per merchant and currency. Recording a different actual price will not change these defaults.</p>
+  @if (loading()) { <p role="status">Loading prices…</p> }
+  @if (loadError()) { <p class="error" role="alert">{{ loadError() }}</p> }
+  <button mat-button [disabled]="loading() || saving() || disabled()" (click)="load()">Reload prices</button>
+  @if (!loading() && !loadError() && !rows().length) { <p class="muted">No usual prices yet. Add one below.</p> }
+  @if (rows().length) {
+    <ul class="price-list" aria-label="Usual prices">
+      @for (price of rows(); track price.id) {
+        <li>
+          <div><strong>{{ merchantName(price.merchantId) }} · {{ format(price) }}</strong>
+            <p class="muted">Per {{ price.unitLabel }} · Updated {{ price.updatedAtUtc | date:'medium' }}</p>
+          </div>
+          <button mat-button [disabled]="saving() || disabled() || loading() || !!loadError()" (click)="beginEdit(price)"
+            [attr.aria-label]="'Edit price for ' + merchantName(price.merchantId) + ' in ' + price.currencyCode">Edit price</button>
+        </li>
+      }
+    </ul>
+  }
+  <h3>{{ editing() ? 'Edit usual price' : 'Add usual price' }}</h3>
+  @if (editing(); as saved) {
+    <p>{{ conflict() ? 'Previously loaded price' : 'Current saved price' }}: <strong>{{ format(saved) }}</strong> per {{ saved.unitLabel }} at {{ merchantName(saved.merchantId) }}.</p>
+  }
+  <form #priceForm="ngForm" (ngSubmit)="save(priceForm)" [attr.aria-busy]="saving()" aria-label="Usual price">
+    <div class="price-fields">
+      @if (!editing()) {
+        <mat-form-field><mat-label>Merchant</mat-label>
+          <mat-select name="merchantId" required [disabled]="saving() || disabled()" [ngModel]="draft().merchantId" (ngModelChange)="change('merchantId', $event)">
+            @for (merchant of merchants(); track merchant.id) { <mat-option [value]="merchant.id">{{ merchant.name }}{{ merchant.isRetired ? ' (retired)' : '' }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field><mat-label>Currency code</mat-label>
+          <input matInput name="currencyCode" required maxlength="3" placeholder="GBP" [disabled]="saving() || disabled()"
+            [ngModel]="draft().currencyCode" (ngModelChange)="change('currencyCode', $event)" />
+          <mat-hint>Three letters, for example GBP or EUR</mat-hint>
+        </mat-form-field>
+      }
+      <mat-form-field><mat-label>Usual unit price</mat-label>
+        <input matInput appMoney="text" name="amount" inputmode="decimal" required [disabled]="saving() || disabled()"
+          [ngModel]="draft().amount" (ngModelChange)="change('amount', $event)" />
+        <mat-hint>Zero is valid. Up to 6 decimal places, below 1 billion.</mat-hint>
+      </mat-form-field>
+    </div>
+    @if (!merchants().length) { <p class="notice">Add a merchant in Categories &amp; merchants before setting a price.</p> }
+    @if (duplicate(); as existing) { <p class="notice">This merchant and currency already have a usual price. Use Edit price above.</p> }
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    @if (conflict()) { <button mat-stroked-button type="button" [disabled]="loading() || saving() || disabled()" (click)="reloadCurrent()">Reload saved price</button> }
+    <div class="actions">
+      <button mat-button type="button" [disabled]="saving() || disabled()" (click)="reset(priceForm)">{{ editing() ? 'Cancel price edit' : 'Clear price' }}</button>
+      <button mat-flat-button type="submit" [disabled]="!canSave()">{{ editing() ? 'Save price' : 'Add price' }}</button>
+    </div>
+  </form>
+  <p role="status" aria-live="polite">{{ saving() ? 'Saving price…' : notice() }}</p>
+</section>

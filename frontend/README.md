@@ -17,6 +17,12 @@ occupies that port, or pass another port to `npm start`.
   drafts are protected on navigation and household switching; failed saves retain
   entered names. Purchase capture and spending reports remain subsequent UI work.
   See the [spending setup UI slice](../docs/spending-setup-ui-slice.md).
+  The Spending landing page is now Items: catalogue creation/editing, immutable
+  code/unit identity, category/search/status filters, retirement/restoration and
+  per-item merchant/currency usual-price maintenance. Price conflicts preserve
+  the draft and require an explicit reload before applying an amount with a new
+  revision. Zero and six-decimal usual prices are supported. See
+  [items and prices UI](../docs/spending-items-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

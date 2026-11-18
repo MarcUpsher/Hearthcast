@@ -1,6 +1,7 @@
 import { signal } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { HttpErrorResponse } from "@angular/common/http";
+import { provideRouter } from "@angular/router";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatButtonHarness } from "@angular/material/button/testing";
 import { MatDialogHarness } from "@angular/material/dialog/testing";
@@ -37,6 +38,7 @@ describe("Spending setup", () => {
     });
     send = vi.fn();
     TestBed.configureTestingModule({ providers: [
+      provideRouter([]),
       { provide: Workspace, useValue: { current } },
       { provide: Api, useValue: { get, send } },
     ] });

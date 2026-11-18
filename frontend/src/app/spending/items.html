@@ -1,0 +1,69 @@
+<app-spending-navigation />
+<section class="page-heading"><div><h1>Spending items</h1><p class="muted">Your catalogue and the usual prices you choose to remember.</p></div></section>
+@if (w.current(); as household) {
+  <p class="muted">For {{ household.name }}. Setup changes do not rewrite saved purchases.</p>
+  @if (loading()) { <p role="status">Loading catalogue…</p> }
+  @if (error()) { <p class="error" role="alert">{{ error() }}</p><button mat-stroked-button [disabled]="busy() || loading()" (click)="load()">Retry catalogue</button> }
+  <section class="panel" aria-labelledby="create-item-title"><h2 id="create-item-title">Add item</h2>
+    @if (!loading() && !error() && !categories().length) { <p class="notice">Add a spending category in Categories &amp; merchants first.</p> }
+    <ng-container [ngTemplateOutlet]="itemForm" [ngTemplateOutletContext]="{ edit: false }" />
+  </section>
+  <div class="toolbar">
+    <mat-form-field><mat-label>Search items</mat-label><input matInput type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" /></mat-form-field>
+    <mat-form-field><mat-label>Category filter</mat-label><mat-select [ngModel]="category()" (ngModelChange)="category.set($event)">
+      <mat-option value="">All categories</mat-option>
+      @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
+    </mat-select></mat-form-field>
+    <mat-form-field><mat-label>Status</mat-label><mat-select [ngModel]="status()" (ngModelChange)="status.set($event)">
+      <mat-option value="active">Active</mat-option><mat-option value="retired">Retired</mat-option><mat-option value="all">All</mat-option>
+    </mat-select></mat-form-field>
+  </div>
+  @if (actionError()) { <p class="error" role="alert">{{ actionError() }}</p> }
+  <p class="feedback" role="status" aria-live="polite">{{ busy() ? 'Saving…' : notice() }}</p>
+  @if (!loading() && !error()) {
+    @if (visibleRows().length) {
+      <ul class="items-list" aria-label="Spending items">
+        @for (item of visibleRows(); track item.id) {
+          <li><div class="item-details"><strong>{{ item.name }}</strong> <span class="badge">{{ item.isRetired ? 'Retired' : 'Active' }}</span>
+            <p class="muted">{{ item.code }} · {{ categoryName(item.expenseCategoryId) }} · {{ item.unitLabel }} ({{ item.unitKey }})</p>
+            @if (item.notes) { <p class="item-notes">{{ item.notes }}</p> }
+          </div><div class="actions">
+            <button mat-button [disabled]="!canWrite()" (click)="beginEdit(item)" [attr.aria-label]="'Edit item ' + item.name">Edit</button>
+            <button mat-button [disabled]="!canWrite()" (click)="showPrices(item)" [attr.aria-label]="'Usual prices for ' + item.name">Usual prices</button>
+            <button mat-button [disabled]="!canWrite()" (click)="setRetirement(item)" [attr.aria-label]="(item.isRetired ? 'Restore ' : 'Retire ') + item.name">{{ item.isRetired ? 'Restore' : 'Retire' }}</button>
+          </div></li>
+        }
+      </ul>
+    } @else { <p class="notice">{{ rows().length ? 'No items match your filters.' : 'No catalogue items yet. Add your first item above.' }}</p> }
+  }
+  @if (selectedItem(); as selected) {
+    <app-spending-prices [item]="selected" [merchants]="merchants()" [disabled]="saving() || loading() || !!error()" (close)="selectedItem.set(null)" />
+  }
+} @else { <p class="notice">Select or create a household in Household setup to manage items.</p> }
+
+<ng-template #itemForm let-edit="edit">
+  @let value = draft(edit);
+  <form #form="ngForm" class="item-form" [class.editor-form]="edit" [attr.aria-label]="edit ? 'Edit item' : 'Add item'" [attr.aria-busy]="saving()" (ngSubmit)="submit(edit, form)">
+    <div class="item-fields">
+      <mat-form-field><mat-label>Item code</mat-label><input matInput name="code" required maxlength="64" [readonly]="edit" [disabled]="busy()" [ngModel]="value.code" (ngModelChange)="change(edit, 'code', $event)" />
+        <mat-hint>{{ edit ? 'Fixed for this item' : 'Unique code, e.g. EGGS-6. Letters, digits, dots, hyphens or underscores.' }}</mat-hint></mat-form-field>
+      <mat-form-field><mat-label>Item name</mat-label><input matInput name="name" required [disabled]="busy()" [ngModel]="value.name" (ngModelChange)="change(edit, 'name', $event)" /></mat-form-field>
+      <mat-form-field><mat-label>Default category</mat-label><mat-select name="expenseCategoryId" required [disabled]="busy()" [ngModel]="value.expenseCategoryId" (ngModelChange)="change(edit, 'expenseCategoryId', $event)">
+        @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
+      </mat-select></mat-form-field>
+      <mat-form-field><mat-label>Unit / pack code</mat-label><input matInput name="unitKey" required maxlength="32" [readonly]="edit" [disabled]="busy()" [ngModel]="value.unitKey" (ngModelChange)="change(edit, 'unitKey', $event)" />
+        <mat-hint>{{ edit ? 'Use another item for a different unit or pack size' : 'E.g. each, kg or pack-6. Fixed after creation.' }}</mat-hint></mat-form-field>
+      <mat-form-field><mat-label>Unit label</mat-label><input matInput name="unitLabel" required [disabled]="busy()" [ngModel]="value.unitLabel" (ngModelChange)="change(edit, 'unitLabel', $event)" /><mat-hint>E.g. Six eggs</mat-hint></mat-form-field>
+      <mat-form-field class="span"><mat-label>Notes (optional)</mat-label><textarea matInput name="notes" rows="2" [disabled]="busy()" [ngModel]="value.notes" (ngModelChange)="change(edit, 'notes', $event)"></textarea></mat-form-field>
+      @if (edit ? editError() : createError()) { <p class="error span" role="alert">{{ edit ? editError() : createError() }}</p> }
+    </div>
+    <div class="actions">
+      <button mat-button type="button" [disabled]="busy()" (click)="edit ? cancelEdit() : clearCreate(form)">{{ edit ? 'Cancel' : 'Clear item' }}</button>
+      <button mat-flat-button type="submit" [disabled]="!canWrite() || !valid(edit) || (edit && !editDirty())">{{ edit ? 'Save item' : 'Add item' }}</button>
+    </div>
+  </form>
+</ng-template>
+<ng-template #editPanel>
+  <h2 mat-dialog-title>Edit item · {{ editing()?.name }}</h2>
+  <div class="edit-content"><ng-container [ngTemplateOutlet]="itemForm" [ngTemplateOutletContext]="{ edit: true }" /></div>
+</ng-template>

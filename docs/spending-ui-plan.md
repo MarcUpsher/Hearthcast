@@ -82,18 +82,26 @@ Run the relevant component tests during development, then `npm test` and
 `npm run build` from `frontend/`. Report actual results and any limitations. Do not
 deploy the app or migrate the application database as part of frontend work.
 
+## Item catalogue and usual prices (implemented)
+
+The user chose catalogue maintenance before purchase capture. The
+[item and price UI](spending-items-ui-slice.md) provides searchable item setup,
+metadata edits, retirement/restoration and explicit merchant/currency usual prices
+with revision-aware conflict recovery. Items is the Spending landing page; category
+and merchant setup remains accessible through Spending navigation.
+
 ## Following slices
 
-1. Quick spending capture and bounded history: date, merchant, currency, category
-   and amount, optional category splits, errors/retries and correction/void flows.
+1. Spending capture and bounded history: date, merchant, currency, quick category
+   amounts/splits and optional catalogue-item lines with quantity and actual price.
+   Usual prices prefill entry but are overridable; actual amounts never silently
+   replace remembered prices. Include errors/retries, receipt reconciliation and
+   voiding accidental entries. Detailed corrections and refunds can follow.
    Use the established client-generated capture ID for safe retries. See
    [record API](spending-record-api-slice.md).
 2. Category reporting: month/week/custom date controls translated to explicit
    inclusive backend dates; separate currencies, recorded-spending wording and
    visible reconciliation information. See
    [summary API](spending-category-summary-api-slice.md).
-3. Optional itemised capture and catalogue/remembered-price setup. Keep actual
-   amounts separate from usual-price defaults; a discounted purchase does not
-   silently replace a usual price.
-4. Budget setup and dated plan UI can follow as a separate workflow. Actual-vs-plan
+3. Budget setup and dated plan UI can follow as a separate workflow. Actual-vs-plan
    comparisons still require a later agreed allocation policy.

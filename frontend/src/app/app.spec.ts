@@ -12,6 +12,8 @@ import { Workspace } from "./core/workspace";
 import { Modelling } from "./modelling/modelling";
 import { SnapshotEditor } from "./snapshots/editor";
 import { SpendingSetup } from "./spending/setup";
+import { SpendingItems } from "./spending/items";
+import { spendingEntry, spendingItem } from "../testing/spending";
 import { firstValueFrom, filter } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
 
@@ -24,6 +26,9 @@ async function setup(path: string, history = false) {
   }));
   const get = vi.fn(async (path: string) => {
     if (path === "households") return households;
+    if (path.includes("/spending/items?")) return [spendingItem(path.split("/")[1])];
+    if (path.includes("/spending/categories?")) return [spendingEntry("food", path.split("/")[1])];
+    if (path.includes("/spending/merchants?")) return [spendingEntry("shop", path.split("/")[1])];
     if (path.endsWith("/snapshots"))
       return [{ id: "latest", snapshotDate: "2026-01-01" }];
     if (path.endsWith("/snapshots/latest"))
@@ -55,7 +60,7 @@ async function setup(path: string, history = false) {
   const outlet = fixture.debugElement
     .query(By.directive(RouterOutlet))
     .injector.get(RouterOutlet);
-  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup;
+  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems;
   const workspace = TestBed.inject(Workspace);
   const picker = fixture.debugElement.query(By.css(".household-picker"))
     .componentInstance as MatSelect;
@@ -66,11 +71,12 @@ async function setup(path: string, history = false) {
     await fixture.whenStable();
   };
   const edit = () => {
-    if (page instanceof SpendingSetup) page.changeNewName("categories", "Unsaved category");
+    if (page instanceof SpendingItems) page.change(false, "name", "Unsaved item");
+    else if (page instanceof SpendingSetup) page.changeNewName("categories", "Unsaved category");
     else if (page instanceof Modelling) page.presetName = "Unsaved scenario";
     else page.date = "2000-01-01";
   };
-  const draft = () => page instanceof SpendingSetup ? page.newNames().categories :
+  const draft = () => page instanceof SpendingItems ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
     (page instanceof Modelling ? page.presetName : page.date);
   const writing = () => {
     if (page instanceof Modelling) page.savingPreset.set(true);
@@ -95,7 +101,7 @@ afterEach(() => {
   localStorage.removeItem("household");
 });
 
-describe.each(["/modelling", "/record", "/spending/setup"])(
+describe.each(["/modelling", "/record", "/spending/setup", "/spending/items"])(
   "Household switching from %s",
   (path) => {
     it("allows a clean page to switch without confirmation", async () => {
@@ -178,7 +184,7 @@ describe.each(["/modelling", "/record", "/spending/setup"])(
 
 it("guards leaving spending setup through the router and exposes its navigation link", async () => {
   const { fixture, edit, draft } = await setup("/spending/setup");
-  expect(fixture.nativeElement.querySelector('a[href="/spending/setup"]').textContent).toContain("Spending");
+  expect(fixture.nativeElement.querySelector('header a[href="/spending"]').textContent).toContain("Spending");
   edit();
   const before = draft();
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -190,24 +196,33 @@ it("guards leaving spending setup through the router and exposes its navigation 
   expect(await router.navigateByUrl("/snapshots")).toBe(true);
 });
 
-it.each([false, true])("keeps the spending sidebar and typed name on rejected browser Back (saving=%s)", async saving => {
+it.each([
+  ["/spending/setup", false], ["/spending/setup", true], ["/spending/items", false], ["/spending/items", true],
+] as const)("keeps the %s sidebar and typed name on rejected browser Back (saving=%s)", async (path, saving) => {
   const { fixture, send } = await setup("/setup", true);
   const router = TestBed.inject(Router);
   router.initialNavigation();
-  await router.navigateByUrl("/spending/setup");
+  await router.navigateByUrl(path);
   fixture.detectChanges();
   await fixture.whenStable();
-  const page = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingSetup;
-  const entry = { id: "food", householdId: "first", name: "Food", isRetired: false };
-  page.beginEdit("categories", entry);
-  page.editName.set("Groceries draft");
+  const page = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingSetup | SpendingItems;
+  const entry = path === "/spending/items" ? spendingItem() : { id: "food", householdId: "first", name: "Food", isRetired: false };
+  if (page instanceof SpendingItems) {
+    await vi.waitFor(() => expect(page.loading()).toBe(false));
+    page.beginEdit(spendingItem());
+    page.change(true, "name", "Groceries draft");
+  } else {
+    page.beginEdit("categories", entry);
+    page.editName.set("Groceries draft");
+  }
+  const draft = () => page instanceof SpendingItems ? page.editDraft().name : page.editName();
   fixture.detectChanges();
   await fixture.whenStable();
   let finish!: (result: unknown) => void;
   let writing: Promise<void> | undefined;
   if (saving) {
     send.mockReturnValue(new Promise(resolve => { finish = resolve; }));
-    writing = page.saveEdit();
+    writing = page instanceof SpendingItems ? page.submit(true) : page.saveEdit();
   }
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
   const navigation = firstValueFrom(router.events.pipe(filter(event =>
@@ -219,11 +234,12 @@ it.each([false, true])("keeps the spending sidebar and typed name on rejected br
   await fixture.whenStable();
 
   expect(outcome).toBeInstanceOf(NavigationCancel);
-  expect(router.url).toBe("/spending/setup");
-  expect(page.editName()).toBe("Groceries draft");
-  expect(page.editing()?.entry.id).toBe(entry.id);
+  expect(router.url).toBe(path);
+  expect(draft()).toBe("Groceries draft");
+  expect(page instanceof SpendingItems ? page.editing()?.id : page.editing()?.entry.id).toBe(entry.id);
   expect(TestBed.inject(MatDialog).openDialogs).toHaveLength(1);
-  expect(document.querySelector<HTMLInputElement>('input[name="editName"]')?.value).toBe("Groceries draft");
+  const selector = page instanceof SpendingItems ? 'form[aria-label="Edit item"] input[name="name"]' : 'input[name="editName"]';
+  expect(document.querySelector<HTMLInputElement>(selector)?.value).toBe("Groceries draft");
   if (saving) {
     expect(confirm).not.toHaveBeenCalled();
     expect(page.saving()).toBe(true);
@@ -232,4 +248,11 @@ it.each([false, true])("keeps the spending sidebar and typed name on rejected br
   } else {
     expect(confirm).toHaveBeenCalledOnce();
   }
+});
+
+it("opens the item catalogue from the Spending navigation entry", async () => {
+  const { fixture, page } = await setup("/spending");
+  expect(page).toBeInstanceOf(SpendingItems);
+  expect(TestBed.inject(Router).url).toBe("/spending/items");
+  expect(fixture.nativeElement.querySelector('header a[href="/spending"]').classList.contains("active")).toBe(true);
 });

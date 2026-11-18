@@ -1,0 +1,7 @@
+.price-list { list-style: none; padding: 0; margin: 16px 0 24px; }
+.price-list li { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+.price-list p { margin: 4px 0 0; }
+.price-list strong { overflow-wrap: anywhere; }
+.price-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 20px 0; }
+.actions { margin-top: 16px; }
+@media (max-width: 550px) { .price-list li { flex-wrap: wrap; } }

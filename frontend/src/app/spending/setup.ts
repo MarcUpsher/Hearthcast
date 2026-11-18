@@ -10,6 +10,7 @@ import { Api } from "../core/api";
 import { message } from "../core/api-errors";
 import { Workspace } from "../core/workspace";
 import { SpendingSetupEntry, SpendingSetupKind, SpendingSetupStatus } from "./models";
+import { SpendingNavigation } from "./navigation";
 
 interface ListState {
   rows: SpendingSetupEntry[];
@@ -27,7 +28,7 @@ const emptyLists = (): Record<SpendingSetupKind, ListState> => ({
 });
 
 @Component({
-  imports: [FormsModule, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule],
+  imports: [FormsModule, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule, SpendingNavigation],
   templateUrl: "setup.html",
   styleUrl: "setup.scss",
 })
