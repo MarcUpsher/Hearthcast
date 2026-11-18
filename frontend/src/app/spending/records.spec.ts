@@ -4,7 +4,7 @@ import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
 import { MatButtonHarness } from "@angular/material/button/testing";
 import { MatInputHarness } from "@angular/material/input/testing";
 import { MatDialogHarness } from "@angular/material/dialog/testing";
-import { MatSelectHarness } from "@angular/material/select/testing";
+import { MatAutocompleteHarness } from "@angular/material/autocomplete/testing";
 import { HttpErrorResponse } from "@angular/common/http";
 import { provideRouter } from "@angular/router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -242,26 +242,31 @@ describe("Spending history and records", () => {
     const c = await page(), capture = c.capture()!;
     capture.set("merchantId", "first-shop"); capture.setCurrency("GBP"); capture.set("notes", "Keep this visit");
     const first = capture.draft().lines[0].key;
+    capture.setLineKind(first, "category");
     capture.changeLine(first, "categoryId", "first-food"); capture.changeLine(first, "amount", "4");
     capture.addLine(); const key = capture.draft().lines[1].key; capture.changeLine(key, "categoryId", "first-food");
     await settle();
     await (await root().getHarness(MatButtonHarness.with({ selector: '[aria-label="Create item for line 2"]' }))).click();
     const dialog = await root().getHarness(MatDialogHarness);
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("name")).toBe("name"));
-    const fields = { code: "MILK-1L", name: "Milk", unitKey: "litre", unitLabel: "Litre", notes: "Keep chilled" };
+    const fields = { code: "MILK-1L", name: "Milk", unitLabel: "Litre", notes: "Keep chilled" };
+    const internalKey = capture.itemEditor()!.componentInstance.draft().unitKey;
+    expect(internalKey).toMatch(/^[a-f0-9]{32}$/);
+    (document.querySelector('form[aria-label="Create spending item"] details') as HTMLDetailsElement).open = true;
     for (const [name, value] of Object.entries(fields)) {
       await (await dialog.getHarness(MatInputHarness.with({ selector: `[name="${name}"]` }))).setValue(value);
     }
-    const created = spendingItem("first", { id: "milk", ...fields }); send.mockResolvedValueOnce(created);
+    const created = spendingItem("first", { id: "milk", unitKey: internalKey, ...fields }); send.mockResolvedValueOnce(created);
     await (await dialog.getHarness(MatButtonHarness.with({ text: "Create & use item" }))).click();
     await settle();
     await itemClosed(c);
-    expect(send).toHaveBeenCalledExactlyOnceWith("POST", "households/first/spending/items", { ...fields, expenseCategoryId: "first-food" });
+    expect(send).toHaveBeenCalledExactlyOnceWith("POST", "households/first/spending/items", { ...fields, unitKey: internalKey, expenseCategoryId: "first-food" });
     expect(c.items()).toContainEqual(created);
     expect(capture.line(key)).toMatchObject({ itemId: "milk", categoryId: "first-food", quantity: "1", unitPrice: "" });
     expect(capture.line(first)?.amount).toBe("4"); expect(capture.draft().notes).toBe("Keep this visit");
-    const picker = await root().getHarness(MatSelectHarness.with({ selector: '[aria-label="Catalogue item for line 2"]' }));
-    expect(await picker.getValueText()).toContain("MILK-1L · Milk");
+    const picker = await root().getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 2"]' }));
+    expect(await picker.getValue()).toBe("Milk");
+    expect(fixture.nativeElement.textContent).toContain("MILK-1L · Litre");
     expect(await root().getAllHarnesses(MatDialogHarness)).toHaveLength(0);
     capture.changeLine(key, "unitPrice", "2");
     send.mockResolvedValueOnce(spendingRecord()); await capture.save();
@@ -326,7 +331,8 @@ describe("Spending history and records", () => {
   });
   it("prevents a stale lookup from dropping an item created while correcting a saved purchase", async () => {
     const c = await page(); c.view(spendingRecord()); await c.beginEdit(); await settle();
-    const capture = c.capture()!, editor = await createDialog(c); editor.draft.set(spendingDraft());
+    const capture = c.capture()!; capture.setLineKind(capture.draft().lines[0].key, "item");
+    const editor = await createDialog(c); editor.draft.set(spendingDraft());
     const older = deferred<SpendingItem[]>();
     get.mockImplementationOnce(async () => [spendingEntry("food")]).mockImplementationOnce(async () => [spendingEntry("shop")]).mockReturnValueOnce(older.promise);
     const reading = c.loadLookups(); const created = spendingItem("first", { id: "milk" }); send.mockResolvedValueOnce(created);
@@ -345,6 +351,20 @@ describe("Spending history and records", () => {
     if (saved) { editor.draft.set(spendingDraft()); send.mockResolvedValueOnce(spendingItem("first", { id: "milk" })); await editor.save(); }
     else editor.dismiss();
     await itemClosed(c); expect(document.activeElement).toBe(trigger);
+  });
+
+  it("uses a newly created item's actual category even when it differs from the initial filter", async () => {
+    const c = await page(); c.categories.update(categories => [...categories, { ...spendingEntry("food"), id: "clothing", name: "Clothing" }]); await settle();
+    const capture = c.capture()!, key = capture.draft().lines[0].key;
+    capture.changeLine(key, "categoryId", "first-food"); const editor = await createDialog(c);
+    expect(editor.draft().expenseCategoryId).toBe("first-food");
+    for (const [field, value] of Object.entries({ code: "COAT", name: "Coat", unitLabel: "Each", expenseCategoryId: "clothing" })) editor.change(field as "code" | "name" | "unitLabel" | "expenseCategoryId", value);
+    const created = spendingItem("first", { id: "coat", code: "COAT", name: "Coat", expenseCategoryId: "clothing", unitLabel: "Each", unitKey: editor.draft().unitKey });
+    send.mockResolvedValueOnce(created); await editor.save(); await itemClosed(c);
+    expect(capture.line(key)).toMatchObject({ kind: "item", itemId: "coat", categoryId: "clothing" });
+    expect(capture.matchingItems(capture.line(key)!)).toContainEqual(created);
+    const picker = await root().getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 1"]' }));
+    expect(await picker.getValue()).toBe("Coat"); expect(send.mock.calls[0][1]).toBe("households/first/spending/items");
   });
 
 });

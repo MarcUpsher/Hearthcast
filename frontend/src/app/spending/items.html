@@ -25,7 +25,7 @@
       <ul class="items-list" aria-label="Spending items">
         @for (item of visibleRows(); track item.id) {
           <li><div class="item-details"><strong>{{ item.name }}</strong> <span class="badge">{{ item.isRetired ? 'Retired' : 'Active' }}</span>
-            <p class="muted">{{ item.code }} · {{ categoryName(item.expenseCategoryId) }} · {{ item.unitLabel }} ({{ item.unitKey }})</p>
+            <p class="muted">{{ item.code }} · {{ categoryName(item.expenseCategoryId) }} · {{ item.unitLabel }}</p>
             @if (item.notes) { <p class="item-notes">{{ item.notes }}</p> }
           </div><div class="actions">
             <button mat-button [disabled]="!canWrite()" (click)="beginEdit(item)" [attr.aria-label]="'Edit item ' + item.name">Edit</button>

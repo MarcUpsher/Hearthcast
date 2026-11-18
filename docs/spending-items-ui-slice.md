@@ -78,3 +78,7 @@ across 14 files, and the production build passes. No automatic second review.
 Browser access was checked again and remains unavailable, so a live visual check
 could not be completed. Component tests exercise the rendered Material forms and
 sidebar lifecycle. No production records were created by tests.
+
+The subsequent [form usability update](spending-form-usability-plan.md) hides and
+generates unit identities, labels the visible field Sold by / pack size, and
+collapses optional notes. The original field list above records the first slice.

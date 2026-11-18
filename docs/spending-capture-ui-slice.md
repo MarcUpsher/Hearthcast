@@ -96,3 +96,8 @@ production build and staged whitespace checks pass. No second review pass.
 Live browser access remains unavailable; rendered
 Material component tests cover the controls and form lifecycle. Tests do not
 create or void application-database records.
+
+The subsequent [form usability update](spending-form-usability-plan.md) introduces
+explicit item/category line types, searchable name-first item selection with
+linked category filtering/locking, and one-row resizable receipt notes. Saved
+classification and amount-only historical item lines remain supported.

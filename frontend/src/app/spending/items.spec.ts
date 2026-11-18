@@ -97,7 +97,8 @@ describe("Spending item catalogue", () => {
     await settle();
     const form = document.querySelector<HTMLFormElement>('form[aria-label="Edit item"]')!;
     expect(form.querySelector<HTMLInputElement>('input[name="code"]')!.readOnly).toBe(true);
-    expect(form.querySelector<HTMLInputElement>('input[name="unitKey"]')!.readOnly).toBe(true);
+    expect(form.querySelector('input[name="unitKey"]')).toBeNull();
+    expect(c.editDraft().unitKey).toBe("pack-6");
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("name")).toBe("name"));
     c.change(true, "name", "Free range eggs");
     c.change(true, "unitLabel", "Box of six");
@@ -276,4 +277,30 @@ describe("Spending item catalogue", () => {
     expect(prices.draft().amount).toBe("4.125");
     expect(prices.rows()[0].unitLabel).toBe("Six eggs");
   });
+  it("generates a hidden unit identity once, retains it across failure/label edits, and resets cleanly after saving", async () => {
+    const c = await page(), key = c.createDraft().unitKey;
+    expect(key).toMatch(/^[a-f0-9]{32}$/); expect(c.hasUnsavedChanges()).toBe(false);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    expect(c.canLeave()).toBe(true); expect(confirm).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[name="unitKey"]')).toBeNull();
+    const { unitKey: _key, ...fields } = spendingDraft();
+    for (const [field, value] of Object.entries(fields)) c.change(false, field as keyof typeof fields, value);
+    send.mockRejectedValueOnce(new Error("Try again")); await c.submit(false);
+    c.change(false, "unitLabel", "Bottle"); expect(c.createDraft().unitKey).toBe(key);
+    send.mockResolvedValueOnce(spendingItem("first", { id: "milk", unitKey: key })); await c.submit(false);
+    expect(send.mock.calls[0][2].unitKey).toBe(key); expect(send.mock.calls[1][2].unitKey).toBe(key);
+    expect(c.createDraft().unitKey).not.toBe(key); expect(c.hasUnsavedChanges()).toBe(false);
+    expect(fixture.nativeElement.textContent).not.toContain("(pack-6)");
+  });
+  it("preserves existing hidden keys and collapsed notes when editing another item field", async () => {
+    const c = await page(); c.beginEdit(spendingItem("first", { notes: "Keep existing notes" })); await settle();
+    const form = document.querySelector('form[aria-label="Edit item"]')!;
+    expect((form.querySelector("details") as HTMLDetailsElement).open).toBe(false);
+    c.change(true, "name", "New label");
+    send.mockResolvedValueOnce(spendingItem("first", { name: "New label", notes: "Keep existing notes" }));
+    await c.submit(true);
+    expect(send.mock.calls[0][2].notes).toBe("Keep existing notes");
+    expect(send.mock.calls[0][2].unitKey).toBeUndefined(); expect(c.rows().find(item => item.id === "eggs")?.unitKey).toBe("pack-6");
+  });
+
 });

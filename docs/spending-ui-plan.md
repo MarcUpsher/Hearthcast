@@ -5,7 +5,7 @@ reviewed: spending setup, capture/corrections/voids, dated budget plans and reco
 spending totals by category/currency over arbitrary inclusive dates. Budget
 comparisons and historical target allocation remain deferred. The first
 [categories and merchants UI slice](spending-setup-ui-slice.md) is implemented;
-later slices below remain planned.
+the implemented and planned follow-ups are listed below.
 
 ## First slice: categories and merchants (implemented)
 
@@ -113,3 +113,10 @@ and merchant setup remains accessible through Spending navigation.
    [category-report UI](spending-summary-ui-slice.md).
 3. Budget setup and dated plan UI can follow as a separate workflow. Actual-vs-plan
    comparisons still require a later agreed allocation policy.
+
+## Form usability follow-up (implemented)
+
+The [spending form usability plan](spending-form-usability-plan.md) records the
+approved changes: simplify sold-by metadata and hide generated unit keys,
+make item versus category-amount lines explicit, add name-first item search with
+linked category filtering/defaults, and keep receipt notes compact. Existing saved classifications and unit identities are preserved.

@@ -4,7 +4,10 @@ import { MatInputModule } from "@angular/material/input";
 import { MatSelectModule } from "@angular/material/select";
 import { SpendingItemDraft, SpendingSetupEntry } from "./models";
 
-export const emptyItemDraft = (): SpendingItemDraft => ({ code: "", name: "", expenseCategoryId: "", unitKey: "", unitLabel: "", notes: "" });
+export const emptyItemDraft = (): SpendingItemDraft => ({ code: "", name: "", expenseCategoryId: "", unitKey: crypto.randomUUID().replaceAll("-", ""), unitLabel: "", notes: "" });
+export function itemDraftDirty(draft: SpendingItemDraft) {
+  return [draft.code, draft.name, draft.expenseCategoryId, draft.unitLabel, draft.notes].some(value => !!value.trim());
+}
 export function validItemDraft(draft: SpendingItemDraft) {
   return !!draft.name.trim() && !!draft.expenseCategoryId && !!draft.unitLabel.trim() &&
     /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(draft.code.trim()) &&
@@ -24,6 +27,7 @@ export function itemCreateRequest(draft: SpendingItemDraft) {
     .item-fields { display: grid; align-items: start; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px 16px; }
     .item-fields.single-column { grid-template-columns: 1fr; }
     .span { grid-column: 1 / -1; }
+    .item-notes { width: 100%; margin-top: 16px; }
     @media (max-width: 500px) { .item-fields { grid-template-columns: 1fr; } }
   `,
 })

@@ -11,7 +11,7 @@ import { Workspace } from "../core/workspace";
 import { SpendingItem, SpendingItemDraft, SpendingSetupEntry, SpendingSetupStatus } from "./models";
 import { SpendingNavigation } from "./navigation";
 import { SpendingPrices } from "./prices";
-import { emptyItemDraft as emptyDraft, itemCreateRequest, SpendingItemFields, validItemDraft } from "./item-fields";
+import { emptyItemDraft as emptyDraft, itemCreateRequest, itemDraftDirty, SpendingItemFields, validItemDraft } from "./item-fields";
 
 const itemDraft = (item: SpendingItem): SpendingItemDraft => ({ code: item.code, name: item.name,
   expenseCategoryId: item.expenseCategoryId, unitKey: item.unitKey, unitLabel: item.unitLabel, notes: item.notes ?? "" });
@@ -70,7 +70,7 @@ export class SpendingItems {
         this.actionError.set("");
         this.notice.set("");
         this.clearCreate();
-        for (const form of this.forms()) form.resetForm(emptyDraft());
+        for (const form of this.forms()) form.resetForm(this.createDraft());
         this.search.set("");
         this.status.set("active");
         this.category.set("");
@@ -128,9 +128,9 @@ export class SpendingItems {
   }
   clearCreate(form?: NgForm) {
     if (this.saving()) return;
-    this.createDraft.set(emptyDraft());
+    const draft = emptyDraft(); this.createDraft.set(draft);
     this.createError.set("");
-    form?.resetForm(emptyDraft());
+    form?.resetForm(draft);
   }
   editDirty() {
     const editing = this.editing();
@@ -181,7 +181,7 @@ export class SpendingItems {
       if (!this.current(generation, home)) return;
       this.upsert(saved);
       if (edit) this.closeEditor();
-      else { this.createDraft.set(emptyDraft()); form?.resetForm(emptyDraft()); }
+      else { const draft = emptyDraft(); this.createDraft.set(draft); form?.resetForm(draft); }
       this.notice.set(edit ? "Item updated." : "Item added.");
     } catch (error) {
       if (this.current(generation, home)) (edit ? this.editError : this.createError).set(message(error));
@@ -210,7 +210,7 @@ export class SpendingItems {
     this.selectedItem.set(item);
   }
   hasUnsavedChanges() {
-    return Object.values(this.createDraft()).some(value => !!value.trim()) || this.editDirty() || (this.prices()?.hasUnsavedChanges() ?? false);
+    return itemDraftDirty(this.createDraft()) || this.editDirty() || (this.prices()?.hasUnsavedChanges() ?? false);
   }
   canLeave() {
     return !this.busy() && (!this.hasUnsavedChanges() || window.confirm("Discard unsaved spending item or price changes?"));

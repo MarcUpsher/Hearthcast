@@ -24,7 +24,10 @@ occupies that port, or pass another port to `npm start`.
   revision. Zero and six-decimal usual prices are supported. See
   [items and prices UI](../docs/spending-items-ui-slice.md).
   Purchases & history supports quick category amounts/splits and catalogue lines
-  with quantities, overridable usual prices and actual line amounts. Save retries
+  with quantities, overridable usual prices and actual line amounts. Item lines
+  require an explicit searchable selection, showing names first with code/pack
+  context. Category filters narrow results; selecting an item sets and locks its
+  category. Add category amount keeps quick splits explicit. Save retries
   retain the submitted client identity; uncertain outcomes can be checked before
   another write. History has inclusive date filters, bounded pagination, saved
   details and revision-checked voiding. Saved purchases can be edited with narrow
@@ -32,7 +35,10 @@ occupies that port, or pass another port to `npm start`.
   local edits until an explicit reload. See [purchase editing](../docs/spending-edit-ui-slice.md) and [capture/history UI](../docs/spending-capture-ui-slice.md).
   Create item beside a purchase line opens the shared catalogue form and selects
   the saved item without losing the receipt draft. See
-  [inline item creation](../docs/spending-inline-item-ui-slice.md).
+  [inline item creation](../docs/spending-inline-item-ui-slice.md). Sold by / pack
+  size is the visible unit field; internal unit codes are generated automatically.
+  Optional item notes collapse under More details, and receipt notes start as one
+  resizable row. See [form usability](../docs/spending-form-usability-plan.md).
   Spending by category offers month/week shortcuts, arbitrary month selection and
   custom inclusive ranges, with separate currencies, signed net amounts and
   record-level receipt checks. See [category reporting](../docs/spending-summary-ui-slice.md).

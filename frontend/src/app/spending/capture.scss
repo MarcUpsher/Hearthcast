@@ -5,4 +5,7 @@ legend { padding: 0 8px; font-weight: 600; }
 form > .actions { margin-top: 20px; }
 .item-choice { display: flex; flex-direction: column; align-items: start; min-width: 0; gap: 4px; }
 .item-choice mat-form-field { width: 100%; }
+.item-name, .item-meta { display: block; }
+.item-meta { color: var(--mat-sys-on-surface-variant); font-size: 0.8rem; line-height: 1.4; }
+.receipt-notes { resize: vertical; }
 @media (max-width: 500px) { .header-fields, .line-fields { grid-template-columns: 1fr; } }

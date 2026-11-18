@@ -2,6 +2,8 @@ import { signal } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { HttpErrorResponse } from "@angular/common/http";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
+import { TestKey } from "@angular/cdk/testing";
+import { MatAutocompleteHarness } from "@angular/material/autocomplete/testing";
 import { MatSelectHarness } from "@angular/material/select/testing";
 import { MatButtonHarness } from "@angular/material/button/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +37,7 @@ describe("Spending purchase capture", () => {
   function quick(c: SpendingCapture, amount = "10") {
     c.set("date", "2026-11-18"); c.set("merchantId", "first-shop"); c.setCurrency("GBP");
     const key = c.draft().lines[0].key;
+    c.setLineKind(key, "category");
     c.changeLine(key, "categoryId", "first-food"); c.changeLine(key, "amount", amount);
     return key;
   }
@@ -73,7 +76,7 @@ describe("Spending purchase capture", () => {
     c.changeLine(key, "amount", "5"); c.changeLine(key, "promotion", "Yes"); c.changeLine(key, "reference", "EGG SPECIAL");
     c.changeLine(key, "unitPrice", "3.125");
     expect(c.line(key)?.amount).toBe("5");
-    c.addLine();
+    c.addLine("category");
     const other = c.draft().lines[1].key;
     c.changeLine(other, "categoryId", "first-food"); c.changeLine(other, "amount", "2");
     c.set("receiptTotal", "8");
@@ -257,7 +260,7 @@ describe("Spending purchase capture", () => {
     record.lines[0] = { ...record.lines[0], quantity: 2, unitPrice: 6, unitKey: "cup", unitLabel: "Cup", receiptDescription: "COFFEE", notes: "Keep this", merchantItemReference: "C01" };
     const c = await edit(record);
     c.set("notes", "Corrected visit"); c.changeLine("saved-line", "amount", "11");
-    c.addLine(); const key = c.draft().lines[1].key;
+    c.addLine("category"); const key = c.draft().lines[1].key;
     c.changeLine(key, "categoryId", "first-food"); c.changeLine(key, "amount", "2");
     expect(c.editOperation().kind).toBe("replace"); await settle();
     expect(fixture.nativeElement.textContent).toContain("refreshes saved merchant, category and item labels");
@@ -337,6 +340,101 @@ describe("Spending purchase capture", () => {
     c.useSuggestion("saved-line"); expect(c.hasUnsavedChanges()).toBe(false);
     c.set("date", "2026-12-01"); expect(c.editOperation().kind).toBe("header");
     await c.save(); expect(send.mock.calls[0][1]).toBe("households/first/spending/records/record/header");
+  });
+
+  const autocomplete = () => TestbedHarnessEnvironment.loader(fixture).getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 1"]' }));
+  it("requires a selected catalogue identity on default item lines and treats search text as an unsaved draft", async () => {
+    const c = await page(), key = c.draft().lines[0].key;
+    expect(c.line(key)?.kind).toBe("item"); expect(c.hasUnsavedChanges()).toBe(false);
+    await (await autocomplete()).enterText("Eggs");
+    expect(c.hasUnsavedChanges()).toBe(true); expect(c.line(key)?.itemId).toBe("");
+    c.set("merchantId", "first-shop"); c.setCurrency("GBP"); c.changeLine(key, "categoryId", "first-food"); c.changeLine(key, "amount", "3");
+    expect(c.valid()).toBe(false); await c.save(); expect(send).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).not.toContain("Catalogue item (optional)");
+    vi.spyOn(window, "confirm").mockReturnValue(false); expect(c.canLeave()).toBe(false);
+  });
+  it("searches names, codes and pack labels, showing readable names plus secondary identifiers", async () => {
+    const c = await page(); fixture.componentRef.setInput("items", [spendingItem(), spendingItem("first", { id: "big", code: "EGGS-12", unitLabel: "Box of twelve" })]);
+    await settle(); const picker = await autocomplete();
+    await picker.enterText("eGgS-6"); const options = await picker.getOptions(); expect(options).toHaveLength(1);
+    expect(await options[0].getText()).toContain("Eggs"); expect(await options[0].getText()).toContain("EGGS-6");
+    await picker.clear(); await picker.enterText("twelve"); expect((await picker.getOptions())).toHaveLength(1);
+    await picker.selectOption({ text: /EGGS-12/ }); expect(await picker.getValue()).toBe("Eggs");
+    expect(c.draft().lines[0].itemId).toBe("big"); expect(fixture.nativeElement.textContent).toContain("EGGS-12 · Box of twelve");
+    await picker.clear(); await picker.enterText("missing item"); expect(c.draft().lines[0].itemId).toBe("");
+    const empty = await picker.getOptions(); expect(await empty[0].getText()).toContain("No matching items"); expect(await empty[0].isDisabled()).toBe(true);
+  });
+  it("filters by category then sets and locks the selected item's category with keyboard selection", async () => {
+    const c = await page(), key = c.draft().lines[0].key;
+    fixture.componentRef.setInput("categories", [spendingEntry("food"), { ...spendingEntry("food"), id: "clothing", name: "Clothing" }]);
+    fixture.componentRef.setInput("items", [spendingItem(), spendingItem("first", { id: "coat", code: "COAT", name: "Coat", expenseCategoryId: "clothing" })]);
+    await settle(); const category = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatSelectHarness.with({ selector: '[aria-label="Category for line 1"]' }));
+    await category.clickOptions({ text: "Clothing" }); const picker = await autocomplete(); await picker.focus();
+    expect((await picker.getOptions())).toHaveLength(1); expect(await (await picker.getOptions())[0].getText()).toContain("Coat");
+    await (await picker.host()).sendKeys(TestKey.DOWN_ARROW, TestKey.ENTER);
+    expect(c.line(key)?.itemId).toBe("coat"); expect(await category.isDisabled()).toBe(true);
+    c.changeLine(key, "categoryId", "first-food"); expect(c.line(key)?.categoryId).toBe("clothing");
+    await (await button("Change item")).click(); await settle(); expect(await picker.isFocused()).toBe(true); expect(await category.isDisabled()).toBe(false); expect(c.line(key)?.categoryId).toBe("");
+    await picker.enterText("EGGS-6"); await picker.selectOption({ text: /EGGS-6/ }); expect(c.line(key)?.categoryId).toBe("first-food");
+  });
+  it("invalidates a previous selection on typing without losing actual amounts or accepting a late price", async () => {
+    const c = await page(), key = c.draft().lines[0].key, price = deferred<SpendingUsualPrice>(); get.mockReturnValueOnce(price.promise);
+    c.set("merchantId", "first-shop"); c.setCurrency("GBP"); c.selectItem(key, "eggs"); c.changeLine(key, "amount", "2.50");
+    c.searchItem(key, "Milk"); price.resolve(spendingPrice()); await settle();
+    expect(c.line(key)).toMatchObject({ itemId: "", categoryId: "", amount: "2.50", unitPrice: "" }); expect(c.valid()).toBe(false);
+  });
+  it("switches line type only with confirmation when item details would be removed, retaining actuals and receipt metadata", async () => {
+    const record = spendingRecord("first", { receiptTotal: 5 });
+    record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", unitKey: "pack-6", unitLabel: "Six eggs", quantity: 2, unitPrice: 3, netAmount: 5,
+      receiptDescription: "EGGS", merchantItemReference: "E1", notes: "Keep", promotionStatus: "Yes" };
+    const c = await edit(record), original = structuredClone(c.line("saved-line"));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    c.setLineKind("saved-line", "category"); expect(c.line("saved-line")).toEqual(original);
+    confirm.mockReturnValue(true); c.setLineKind("saved-line", "category");
+    expect(c.line("saved-line")).toMatchObject({ kind: "category", itemId: "", quantity: "", unitPrice: "", amount: "5", notes: "Keep", promotion: "Yes" });
+    expect(c.difference()).toBe("0.00"); await c.save();
+    const line = send.mock.calls[0][2].lines[0];
+    expect(line).toMatchObject({ netAmount: 5, receiptDescription: "EGGS", merchantItemReference: "E1", notes: "Keep", promotionStatus: "Yes" });
+    expect(line.kind).toBeUndefined(); expect(line.spendingItemId).toBeUndefined(); expect(line.quantity).toBeUndefined();
+  });
+  it("preserves historical category and absent quantity pairs without blocking header corrections", async () => {
+    const record = spendingRecord(); record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", itemName: "Saved eggs", unitKey: "pack-6", unitLabel: "Old pack" };
+    const c = await edit(record); fixture.componentRef.setInput("items", [spendingItem("first", { expenseCategoryId: "new-category", name: "Renamed eggs" })]); await settle();
+    expect(c.line("saved-line")?.categoryId).toBe("first-food"); expect(c.itemText(c.line("saved-line")!)).toBe("Saved eggs");
+    expect(c.valid()).toBe(true); expect(fixture.nativeElement.textContent).toContain("recorded category is kept");
+    c.set("notes", "Only correct notes"); await c.save(); expect(send.mock.calls[0][1]).toBe("households/first/spending/records/record/header");
+  });
+  it("requires quantity and price for newly added item lines while editing a saved record", async () => {
+    const c = await edit(); c.addLine("item"); const key = c.draft().lines[1].key; c.selectItem(key, "eggs"); await settle();
+    c.changeLine(key, "quantity", ""); c.changeLine(key, "unitPrice", ""); c.changeLine(key, "amount", "3");
+    expect(c.valid()).toBe(false); await c.save(); expect(send).not.toHaveBeenCalled();
+  });
+  it("keeps receipt notes as a one-row textarea without dropping multiline values", async () => {
+    const c = await page(); quick(c); c.set("notes", "First line\nSecond line"); await settle();
+    const notes = fixture.nativeElement.querySelector('textarea[name="notes"]') as HTMLTextAreaElement;
+    expect(notes.rows).toBe(1); expect(notes.value).toBe("First line\nSecond line");
+    await c.save(); expect(send.mock.calls[0][2].notes).toBe("First line\nSecond line");
+  });
+
+  it("requires quantities after deliberately reselecting the same historical amount-only item", async () => {
+    const record = spendingRecord(); record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", itemName: "Eggs", unitKey: "pack-6", unitLabel: "Old pack" };
+    const c = await edit(record); expect(c.valid()).toBe(true);
+    c.changeItem("saved-line"); c.selectItem("saved-line", "eggs"); await settle();
+    c.changeLine("saved-line", "quantity", ""); c.changeLine("saved-line", "unitPrice", "");
+    expect(c.historicalAmountOnly(c.line("saved-line")!)).toBe(false);
+    expect(c.valid()).toBe(false); await c.save(); expect(send).not.toHaveBeenCalled();
+    vi.spyOn(window, "confirm").mockReturnValue(true); get.mockResolvedValueOnce(record);
+    await c.reloadEdit(); expect(c.historicalAmountOnly(c.line("saved-line")!)).toBe(true);
+  });
+  it("confirms before discarding unresolved item searches when switching line type", async () => {
+    const c = await page(), key = c.draft().lines[0].key;
+    c.searchItem(key, "Chicken thighs");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    c.setLineKind(key, "category");
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("item/search"));
+    expect(c.line(key)?.kind).toBe("item"); expect(c.itemText(c.line(key)!)).toBe("Chicken thighs");
+    confirm.mockReturnValue(true); c.setLineKind(key, "category");
+    expect(c.line(key)?.kind).toBe("category"); expect(c.itemText(c.line(key)!)).toBe("");
   });
 
 });

@@ -34,6 +34,7 @@ original single-currency projection and initial screen notes are superseded.
 | Spending-record services, retries and price provenance | [Record services](spending-record-service-slice.md) |
 | Spending-record HTTP capture and bounded history | [Record API](spending-record-api-slice.md) |
 | Purchase entry, exact retries, saved details and bounded history screen | [Capture/history UI](spending-capture-ui-slice.md) |
+| Simplified item fields, searchable item lines, category selection and compact receipt notes | [Form usability](spending-form-usability-plan.md) |
 | Catalogue creation without leaving the purchase draft | [Inline item creation](spending-inline-item-ui-slice.md) |
 | Saved purchase corrections, revision conflicts and reload recovery | [Purchase editing UI](spending-edit-ui-slice.md) |
 | Recorded spending by category/currency over an inclusive date range | [Category-summary service](spending-category-summary-service-slice.md) |

@@ -2,6 +2,7 @@ import { Component, DestroyRef, effect, inject, input, output, signal, untracked
 import { HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
+import { MatAutocompleteModule } from "@angular/material/autocomplete";
 import { MatDialog, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelect, MatSelectModule } from "@angular/material/select";
@@ -14,20 +15,21 @@ import { decimalAmount, localToday, minorAmount, safeAmount, suggestedAmount, va
 import { SpendingItemCreate, SpendingItemCreateData } from "./item-create";
 
 export interface CaptureLineDraft {
+  kind: "item" | "category";
   key: string; itemId: string; categoryId: string; quantity: string; unitPrice: string; amount: string;
   description: string; reference: string; promotion: SpendingPromotion;
-  autoAmount: boolean; priceTouched: boolean; categoryTouched: boolean;
+  autoAmount: boolean; priceTouched: boolean;
   receiptDescription: string; notes: string; unitKey: string; unitLabel: string;
 }
-const newLine = (): CaptureLineDraft => ({ key: crypto.randomUUID(), itemId: "", categoryId: "", quantity: "", unitPrice: "", amount: "",
-  description: "", reference: "", promotion: "Unknown", autoAmount: true, priceTouched: false, categoryTouched: false,
+const newLine = (kind: CaptureLineDraft["kind"] = "item"): CaptureLineDraft => ({ kind, key: crypto.randomUUID(), itemId: "", categoryId: "", quantity: "", unitPrice: "", amount: "",
+  description: "", reference: "", promotion: "Unknown", autoAmount: true, priceTouched: false,
   receiptDescription: "", notes: "", unitKey: "", unitLabel: "" });
 const blankDraft = () => ({ date: localToday(), merchantId: "", currencyCode: "", receiptTotal: "", reference: "", notes: "", lines: [newLine()] });
 type CaptureDraft = ReturnType<typeof blankDraft>;
 
 @Component({
   selector: "app-spending-capture",
-  imports: [FormsModule, MoneyInput, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule],
+  imports: [FormsModule, MoneyInput, MatButtonModule, MatAutocompleteModule, MatDialogModule, MatInputModule, MatSelectModule],
   templateUrl: "capture.html", styleUrl: "capture.scss",
 })
 export class SpendingCapture {
@@ -52,6 +54,7 @@ export class SpendingCapture {
   private baseline = "";
   private originalDraft: CaptureDraft | null = null;
   private priceVersions = new Map<string, number>();
+  private changedSelections = new Set<string>();
   readonly draft = signal(blankDraft());
   readonly formVersion = signal(0);
   readonly saving = signal(false);
@@ -62,6 +65,8 @@ export class SpendingCapture {
   readonly editing = signal<SpendingRecord | null>(null);
   readonly editNeedsReload = signal(false);
   readonly itemEditor = signal<MatDialogRef<SpendingItemCreate, SpendingItem> | null>(null);
+  readonly itemSearches = signal<Record<string, string>>({});
+  readonly displayItem = (value: SpendingItem | string | null) => typeof value === "string" ? value : value?.name ?? "";
 
   constructor() {
     effect(() => {
@@ -103,18 +108,62 @@ export class SpendingCapture {
   line(key: string) { return this.draft().lines.find(line => line.key === key); }
   savedLine(key: string) { return this.editing()?.lines.find(line => line.id === key); }
   unitLabel(itemId: string) { return this.items().find(item => item.id === itemId)?.unitLabel ?? "units"; }
+  itemText(line: CaptureLineDraft) {
+    const saved = this.savedLine(line.key);
+    return this.itemSearches()[line.key] ?? (saved?.spendingItemId === line.itemId ? saved.itemName : this.items().find(item => item.id === line.itemId)?.name) ?? "";
+  }
+  itemContext(line: CaptureLineDraft) {
+    const saved = this.savedLine(line.key), item = this.items().find(item => item.id === line.itemId);
+    return saved?.spendingItemId === line.itemId && line.unitKey ? `${saved.itemCode} · ${saved.unitLabel}` : item ? `${item.code} · ${item.unitLabel}` : "";
+  }
+  matchingItems(line: CaptureLineDraft) {
+    const search = this.itemText(line).trim().toLocaleLowerCase();
+    return this.items().filter(item => (!line.categoryId || item.expenseCategoryId === line.categoryId) &&
+      [item.name, item.code, item.unitLabel].some(value => value.toLocaleLowerCase().includes(search)))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
+  }
+  searchItem(key: string, value: string | SpendingItem | null) {
+    if (this.locked() || (value !== null && typeof value !== "string")) return;
+    const line = this.line(key);
+    if (!line || line.kind !== "item") return;
+    this.itemSearches.update(searches => ({ ...searches, [key]: value ?? "" }));
+    if (line.itemId) {
+      this.changedSelections.add(key);
+      this.priceVersions.set(key, (this.priceVersions.get(key) ?? 0) + 1);
+      this.updateLine(key, old => ({ ...old, itemId: "", categoryId: "" }));
+      this.priceState(key, "");
+    }
+  }
+  changeItem(key: string) { this.searchItem(key, ""); }
+  categoryHint(line: CaptureLineDraft) {
+    const saved = this.savedLine(line.key), item = this.items().find(item => item.id === line.itemId);
+    return saved?.spendingItemId === line.itemId && line.categoryId === saved.expenseCategoryId && item && item.expenseCategoryId !== line.categoryId ?
+      "The recorded category is kept for this saved line." : "Category comes from the selected item. Change the item to choose another.";
+  }
+  setLineKind(key: string, kind: CaptureLineDraft["kind"]) {
+    if (this.locked()) return;
+    const line = this.line(key);
+    if (!line || line.kind === kind) return;
+    if ((line.itemId || line.quantity || line.unitPrice || line.unitKey || this.itemSearches()[key]?.trim()) && !window.confirm(
+      "Change line type? This clears the item/search and quantity/unit-price details, keeping the actual amount and receipt text.")) return;
+    this.changedSelections.add(key);
+    this.priceVersions.set(key, (this.priceVersions.get(key) ?? 0) + 1);
+    this.itemSearches.update(searches => ({ ...searches, [key]: "" })); this.priceState(key, "");
+    this.updateLine(key, old => ({ ...old, kind, itemId: "", quantity: "", unitPrice: "", unitKey: "", unitLabel: "", autoAmount: !old.amount }));
+  }
   changeLine(key: string, field: "categoryId" | "quantity" | "unitPrice" | "amount" | "description" | "reference" | "promotion" | "receiptDescription" | "notes", value: string) {
     if (this.locked()) return;
+    if (field === "categoryId" && this.line(key)?.kind === "item" && this.line(key)?.itemId) return;
     this.updateLine(key, line => {
       const updated = { ...line, [field]: value, autoAmount: field === "amount" ? false : line.autoAmount,
-        priceTouched: field === "unitPrice" ? true : line.priceTouched, categoryTouched: field === "categoryId" ? true : line.categoryTouched };
+        priceTouched: field === "unitPrice" ? true : line.priceTouched };
       return this.recalculate(updated);
     });
     this.error.set("");
   }
   createItem(key: string) {
     const home = this.home, generation = this.generation, line = this.line(key);
-    if (!home || !line || !this.current(generation, home) || this.locked() || !this.categories().length) return;
+    if (!home || !line || line.kind !== "item" || !this.current(generation, home) || this.locked() || !this.categories().length) return;
     const editor = this.dialogs.open<SpendingItemCreate, SpendingItemCreateData, SpendingItem>(SpendingItemCreate, {
       data: { householdId: home, categories: this.categories(), expenseCategoryId: line.categoryId },
       width: "720px", maxWidth: "calc(100vw - 32px)", maxHeight: "calc(100dvh - 32px)",
@@ -134,10 +183,13 @@ export class SpendingCapture {
   }
   private applyItem(key: string, itemId: string, createdItem?: SpendingItem) {
     const item = createdItem ?? this.items().find(row => row.id === itemId);
+    if (!item || this.line(key)?.kind !== "item") return;
+    this.changedSelections.add(key);
+    this.itemSearches.update(searches => ({ ...searches, [key]: item.name }));
     this.priceVersions.set(key, (this.priceVersions.get(key) ?? 0) + 1);
-    this.updateLine(key, line => ({ ...line, itemId, categoryId: line.categoryTouched ? line.categoryId : item?.expenseCategoryId ?? line.categoryId,
-      quantity: item ? "1" : "", unitPrice: "", unitKey: "", unitLabel: "", priceTouched: false, amount: line.autoAmount ? "" : line.amount }));
-    if (item) void this.lookupPrice(key); else this.priceState(key, "");
+    this.updateLine(key, line => ({ ...line, itemId, categoryId: item.expenseCategoryId,
+      quantity: "1", unitPrice: "", unitKey: "", unitLabel: "", priceTouched: false, amount: line.autoAmount ? "" : line.amount }));
+    void this.lookupPrice(key);
   }
   private recalculate(line: CaptureLineDraft) {
     const places = this.minorUnits();
@@ -150,11 +202,13 @@ export class SpendingCapture {
   useSuggestion(key: string) {
     if (!this.locked()) this.updateLine(key, line => this.recalculate({ ...line, autoAmount: true }));
   }
-  addLine() { if (!this.locked()) this.draft.update(draft => ({ ...draft, lines: [...draft.lines, newLine()] })); }
+  addLine(kind: CaptureLineDraft["kind"] = "item") { if (!this.locked()) this.draft.update(draft => ({ ...draft, lines: [...draft.lines, newLine(kind)] })); }
   removeLine(key: string) {
     if (this.locked() || this.draft().lines.length === 1) return;
     this.draft.update(draft => ({ ...draft, lines: draft.lines.filter(line => line.key !== key) }));
     this.priceVersions.delete(key);
+    this.changedSelections.delete(key);
+    this.itemSearches.update(searches => { const next = { ...searches }; delete next[key]; return next; });
   }
   private priceState(key: string, text: string) { this.priceStates.update(states => ({ ...states, [key]: text })); }
   private refreshPrices() {
@@ -202,9 +256,13 @@ export class SpendingCapture {
     const draft = this.draft(), places = this.minorUnits();
     if (!this.home || this.w.current()?.id !== this.home || places === null || !draft.merchantId || !validSpendingDate(draft.date) || !draft.lines.length) return false;
     if (draft.receiptTotal && safeAmount(draft.receiptTotal, places, 1e12) === null) return false;
-    return draft.lines.every(line => !!line.categoryId && safeAmount(line.amount, places, 1e12) !== null &&
-      (!(line.quantity || line.unitPrice || (line.itemId && !this.editing())) ||
+    return draft.lines.every(line => (line.kind !== "item" || !!line.itemId) && !!line.categoryId && safeAmount(line.amount, places, 1e12) !== null &&
+      (!(line.quantity || line.unitPrice || (line.kind === "item" && !this.historicalAmountOnly(line))) ||
         (Number(line.quantity) > 0 && safeAmount(line.quantity, 6, 1e6) !== null && safeAmount(line.unitPrice, 6, 1e9) !== null)));
+  }
+  historicalAmountOnly(line: CaptureLineDraft) {
+    const saved = this.savedLine(line.key);
+    return !this.changedSelections.has(line.key) && !!saved && saved.spendingItemId === line.itemId && saved.quantity === null && saved.unitPrice === null && !line.quantity && !line.unitPrice;
   }
   private request(): SpendingCaptureRequest {
     const draft = this.draft(), places = this.minorUnits()!;
@@ -222,7 +280,7 @@ export class SpendingCapture {
   // Use a single atomic write. Narrow corrections preserve copied receipt labels;
   // wider edits deliberately use the replacement contract and refresh those labels.
   private persistedLine(line: CaptureLineDraft) {
-    const { autoAmount: _auto, priceTouched: _price, categoryTouched: _category, ...values } = line;
+    const { autoAmount: _auto, priceTouched: _price, ...values } = line;
     return { ...values, quantity: this.canonical(line.quantity), unitPrice: this.canonical(line.unitPrice), amount: this.canonical(line.amount),
       description: line.description.trim(), reference: line.reference.trim(), receiptDescription: line.receiptDescription.trim(), notes: line.notes.trim() };
   }
@@ -301,7 +359,7 @@ export class SpendingCapture {
   cancelEdit() { if (this.canLeave()) this.cancelled.emit(); }
   async save() {
     if (this.editing()) { await this.saveEdit(); return; }
-    if (this.busy() || this.disabled() || (!this.frozen() && !this.valid())) return;
+    if (this.busy() || this.itemEditor() || this.disabled() || (!this.frozen() && !this.valid())) return;
     const home = this.home!, generation = this.generation, request = this.frozen() ?? this.request();
     if (!home || !this.current(generation, home)) return;
     this.frozen.set(request);
@@ -335,21 +393,22 @@ export class SpendingCapture {
     this.reset();
   }
   private reset(record: SpendingRecord | null = null) {
-    this.generation++; this.id = null; this.priceVersions.clear();
+    this.generation++; this.id = null; this.priceVersions.clear(); this.changedSelections.clear();
     this.itemEditor()?.close(); this.itemEditor.set(null);
     const draft: CaptureDraft = record ? { date: record.spendingDate, merchantId: record.merchantId, currencyCode: record.currencyCode,
       receiptTotal: record.receiptTotal === null ? "" : String(record.receiptTotal), reference: record.externalReference ?? "", notes: record.notes ?? "",
-      lines: record.lines.map(line => ({ ...newLine(), key: line.id, itemId: line.spendingItemId ?? "", categoryId: line.expenseCategoryId,
+      lines: record.lines.map(line => ({ ...newLine(line.spendingItemId ? "item" : "category"), key: line.id, itemId: line.spendingItemId ?? "", categoryId: line.expenseCategoryId,
         quantity: line.quantity === null ? "" : String(line.quantity), unitPrice: line.unitPrice === null ? "" : String(line.unitPrice), amount: String(line.netAmount),
         description: line.description ?? "", reference: line.merchantItemReference ?? "", promotion: line.promotionStatus,
         receiptDescription: line.receiptDescription ?? "", notes: line.notes ?? "", unitKey: line.unitKey ?? "", unitLabel: line.unitLabel ?? "",
-        autoAmount: false, priceTouched: true, categoryTouched: true })) } : blankDraft();
+        autoAmount: false, priceTouched: true })) } : blankDraft();
     this.editing.set(record); this.editNeedsReload.set(false); this.originalDraft = record ? structuredClone(draft) : null;
     this.draft.set(draft); this.baseline = this.persisted(draft);
-    this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({});
+    this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({}); this.itemSearches.set({});
     this.formVersion.update(version => version + 1);
   }
-  hasUnsavedChanges() { return !!this.frozen() || this.editNeedsReload() || (this.itemEditor()?.componentInstance?.dirty() ?? false) || this.persisted(this.draft()) !== this.baseline; }
+  hasUnsavedChanges() { return !!this.frozen() || this.editNeedsReload() || (this.itemEditor()?.componentInstance?.dirty() ?? false) ||
+    this.draft().lines.some(line => !line.itemId && !!this.itemSearches()[line.key]?.trim()) || this.persisted(this.draft()) !== this.baseline; }
   canLeave() {
     return !this.busy() && (!this.hasUnsavedChanges() || window.confirm(this.frozen() ?
       "A save may have succeeded. Leave this draft and check history before entering the purchase again?" : "Discard this unsaved purchase draft?"));
