@@ -4,7 +4,8 @@
 carry-forward, corrections and reads over the [budget domain](budget-domain-slice.md).
 [Setup services](budget-setup-service-slice.md) continue to own reusable defaults.
 [Budget setup HTTP endpoints](budget-setup-api-slice.md) are implemented. Snapshot
-HTTP contracts/endpoints and UI remain subsequent work.
+HTTP contracts/endpoints are now implemented in the [snapshot API slice](budget-snapshot-api-slice.md).
+UI remains subsequent work.
 
 ## Inputs and capture
 
@@ -168,4 +169,5 @@ No additional tables, dependencies, migration or HTTP registration are needed.
 The effective-date index's existing name is explicitly shared with conflict
 handling. No application database migration/deployment is performed by tests.
 The subsequent [setup API slice](budget-setup-api-slice.md) exposes reusable defaults.
-Next: budget snapshot API contracts/endpoints; reporting allocation and UI remain later work.
+The [snapshot API slice](budget-snapshot-api-slice.md) exposes these workflows.
+Reporting allocation and UI remain later work.

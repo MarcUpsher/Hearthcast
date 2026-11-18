@@ -24,6 +24,7 @@ var connectionString = builder.Configuration.GetConnectionString("Hearthcast")
 
 builder.Services.AddDbContextFactory<HearthcastDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddControllers();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
     context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -31,7 +32,9 @@ builder.Services.AddScoped<HouseholdService>();
 builder.Services.AddScoped<ClassificationService>();
 builder.Services.AddScoped<SpendingSetupService>();
 builder.Services.AddScoped<SpendingRecordService>();
+builder.Services.AddScoped<SpendingCategorySummaryService>();
 builder.Services.AddScoped<BudgetSetupService>();
+builder.Services.AddScoped<BudgetSnapshotService>();
 builder.Services.AddScoped<ProjectionPresetService>();
 builder.Services.AddScoped<ProjectionPreparationService>();
 builder.Services.AddScoped<TrackedItemService>();

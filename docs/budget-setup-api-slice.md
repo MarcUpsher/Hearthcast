@@ -2,8 +2,8 @@
 
 17 November 2026. Exposes [BudgetSetupService](budget-setup-service-slice.md)
 through household-scoped controllers and explicit request/response contracts under
-Hearthcast.Api/Budgets. Snapshot capture/correction, history and current-outgoing
-HTTP endpoints remain the next slice. UI remains deferred.
+Hearthcast.Api/Budgets. [Snapshot capture/correction, history and current-outgoing
+HTTP endpoints](budget-snapshot-api-slice.md) are now implemented. UI remains deferred.
 
 ## Routes
 
@@ -99,4 +99,4 @@ whitespace checks pass. The existing NU1900 warning remains for unavailable NuGe
 vulnerability metadata; no packages were added.
 
 No dependencies or schema changes are added. No application database migration or
-deployment is performed. Next: budget snapshot HTTP contracts and endpoints.
+deployment is performed. See the subsequent [snapshot HTTP slice](budget-snapshot-api-slice.md).

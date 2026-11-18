@@ -96,4 +96,4 @@ No dependencies, schema changes, API registrations or migrations are added.
 The subsequent [snapshot service slice](budget-snapshot-service-slice.md) implements
 canonical create retries, effective-date reads, explicit carry/confirmation and
 transactional correction/source-link detachment. [Setup HTTP endpoints](budget-setup-api-slice.md)
-are also implemented; snapshot HTTP endpoints remain next.
+are also implemented, followed by [snapshot HTTP endpoints](budget-snapshot-api-slice.md).

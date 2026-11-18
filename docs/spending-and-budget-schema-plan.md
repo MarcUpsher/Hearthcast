@@ -11,8 +11,11 @@ conventions. [Setup services](spending-setup-service-slice.md) and the
 implemented. [Budget domain/persistence](budget-domain-slice.md) and
 [budget setup services](budget-setup-service-slice.md) and
 [budget snapshot services](budget-snapshot-service-slice.md) and
-[budget setup API](budget-setup-api-slice.md) are implemented;
-budget snapshot API and UI remain planned.
+[budget setup API](budget-setup-api-slice.md) and
+[budget snapshot API](budget-snapshot-api-slice.md) are implemented;
+[Recorded spending category-summary services](spending-category-summary-service-slice.md)
+and the [date-range summary API](spending-category-summary-api-slice.md) are
+implemented. UI and budget comparisons remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.
@@ -24,6 +27,24 @@ Revised against the [review handoff](spending-and-budget-schema-review.md), incl
 its follow-up review and the decisions clarified with the user there. The rules
 below resolve its review recommendations as agreed design rules. The linked slice
 notes above identify the implemented boundaries; remaining workflows are planned.
+
+## Backend completion checkpoint
+
+18 November 2026. The agreed initial backend is implemented and reviewed, including
+budget snapshot HTTP endpoints and date-range recorded-spending summaries. The
+final historical-precision grouping finding is addressed: one category/currency
+total, maximum saved display precision and an unrounded exact sum.
+
+The complete solution test run passed **990 Data tests and 655 API tests** with
+zero failures or skips after the review fixes. TRX results are in
+`/tmp/hearthcast-backend-final/`. Staged whitespace checks passed. The known
+NuGet `NU1900` vulnerability-feed network warning remains; no dependencies were
+added. Tests use disposable PostgreSQL databases; this checkpoint does not deploy
+the app or migrate its database.
+
+Next is the [spending UI plan](spending-ui-plan.md), starting with category and
+merchant setup, then quick capture/history and category reporting. Budget
+comparisons remain deferred.
 
 ## Purpose and boundaries
 
@@ -515,8 +536,8 @@ workflows are established. The broad feature sequence is:
    void exclusion, and clearing informational price sources on line removal.
 3. BudgetItem setup and dated BudgetSnapshot capture/carry-forward/correction;
    domain aggregates, EF mappings, migration and persistence tests are implemented.
-   Setup and transactional snapshot services and setup HTTP endpoints are
-   implemented; snapshot HTTP endpoints remain next.
+   Setup and transactional snapshot services and setup/snapshot HTTP endpoints
+   are implemented. UI remains deferred.
    Verify effective-date selection, backdated retired items, source-metadata
    copying versus explicit refresh, deliberate omissions versus null/zero,
    additive category totals, stale edits and independent saved copies. Check
@@ -524,10 +545,16 @@ workflows are established. The broad feature sequence is:
    source-entry removal/currency/frequency and effective-date corrections, atomic
    revision checks for affected descendants, snapshot retention and create retries
    after replacement/correction.
-4. Actuals and plan summaries by category/currency; agree period allocation rules
-   before presenting historical target variances. Include actuals with no category
-   budget, incomplete plans and reconciliation warnings visibly; do not infer
-   complete actual spending from recorded receipts alone.
+4. The [recorded spending category-summary service](spending-category-summary-service-slice.md)
+   and tests are implemented: required inclusive `from`/`to` dates, saved line totals by category
+   and currency, signed refunds, void exclusion and reconciliation information.
+   The [summary HTTP endpoint](spending-category-summary-api-slice.md) is implemented
+   with required dates, explicit response contracts and end-to-end capture/report
+   tests. The UI will interpret calendar labels into dates. Budget comparisons
+   remain deferred; agree period allocation rules before presenting historical
+   target variances. Include actuals with no category budget, incomplete plans and
+   reconciliation warnings visibly; do not infer complete actual spending from
+   recorded receipts alone.
 5. Later: receipt attachments and LLM extraction into a reviewable draft using the
    same capture API, merchant aliases, scheduled due dates, bank matching, person
    allocations and explicit projection integration.

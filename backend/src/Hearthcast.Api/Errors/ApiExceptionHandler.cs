@@ -12,6 +12,7 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             Hearthcast.Data.Snapshots.SnapshotConflictException => (409, "Snapshot revision conflict", exception.Message),
             Hearthcast.Data.Spending.SpendingPriceConflictException => (409, "Usual price revision conflict", exception.Message),
             Hearthcast.Data.Spending.SpendingRecordConflictException => (409, "Spending record revision conflict", exception.Message),
+            Hearthcast.Data.Budgets.BudgetSnapshotConflictException => (409, "Budget snapshot revision conflict", exception.Message),
             BusinessRuleViolationException => (409, "Operation conflicts with current state", exception.Message),
             ResourceNotFoundException => (404, "Resource not found", exception.Message),
             InvalidValueException => (400, "Invalid request", "One or more supplied values are invalid."),

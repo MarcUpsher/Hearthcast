@@ -15,8 +15,8 @@ names and timestamps.
 | `Hearthcast.Data/Summaries` | Full/individual/household/merged reports and historical series, calculated from saved snapshots. |
 | `Hearthcast.Data/Projections` | Preset persistence, snapshot preparation and pure monthly simulation. |
 | `Hearthcast.Data/ExchangeRates` | Capture/provider workflows and shared checked conversion using saved quotes. |
-| `Hearthcast.Data/Spending` | Expense categories, merchants, catalogue items, remembered prices and setup services; spending-record/line aggregates, currency precision policy, transactional capture and bounded history services. Setup and record HTTP contracts/controllers live under `Hearthcast.Api/Spending`. |
-| `Hearthcast.Data/Budgets` | Reusable outgoing defaults and setup services; dated full-plan aggregates, transactional capture/carry/correction, provenance detachment, bounded history and consistent as-of/current-outgoing reads. Setup HTTP contracts/controllers live under `Hearthcast.Api/Budgets`; snapshot HTTP endpoints are deferred. |
+| `Hearthcast.Data/Spending` | Expense categories, merchants, catalogue items, remembered prices and setup services; spending-record/line aggregates, currency precision policy, transactional capture, bounded history and recorded category summary services. Setup, record and date-range summary HTTP contracts/controllers live under `Hearthcast.Api/Spending`. |
+| `Hearthcast.Data/Budgets` | Reusable outgoing defaults and setup services; dated full-plan aggregates, transactional capture/carry/correction, provenance detachment, bounded history and consistent as-of/current-outgoing reads. Setup/snapshot HTTP contracts and controllers live under `Hearthcast.Api/Budgets`. |
 | `Hearthcast.Data/Persistence` | DbContext, EF configurations, transaction support, design-time tooling and migrations. |
 | `backend/tools/Hearthcast.HistoryImport` | One-off prepared historical import; not a frontend workflow. |
 | `backend/tests/` | API and data tests; persistence tests use disposable PostgreSQL databases. |
