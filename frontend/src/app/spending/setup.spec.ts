@@ -92,6 +92,12 @@ describe("Spending setup", () => {
     expect(c.lists()[kind].rows).toContainEqual(saved);
     expect(c.newNames()[kind]).toBe("");
     expect(c.newNames()[other]).toBe("Keep this draft");
+    await settle();
+    const input = fixture.nativeElement.querySelector(`form[aria-label="Add ${kind === "categories" ? "category" : "merchant"}"] input`) as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(input.closest("mat-form-field")!.classList.contains("mat-form-field-invalid")).toBe(false);
+    expect(input.classList.contains("ng-pristine")).toBe(true);
+    expect(input.classList.contains("ng-untouched")).toBe(true);
   });
 
   it("rejects a blank creation locally and retains a rejected nonblank draft", async () => {

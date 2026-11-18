@@ -27,7 +27,7 @@
       <section class="panel" [attr.aria-labelledby]="section.kind + '-heading'" [attr.aria-busy]="state.loading">
         <h2 [id]="section.kind + '-heading'">{{ section.title }}</h2>
         <p class="muted">{{ section.description }}</p>
-        <form class="new-entry" (ngSubmit)="create(section.kind)" [attr.aria-label]="'Add ' + section.singular">
+        <form class="new-entry" #createForm="ngForm" (ngSubmit)="create(section.kind, createForm)" [attr.aria-label]="'Add ' + section.singular">
           <mat-form-field>
             <mat-label>New {{ section.singular }} name</mat-label>
             <input matInput name="name" autocomplete="off" required [disabled]="saving()"

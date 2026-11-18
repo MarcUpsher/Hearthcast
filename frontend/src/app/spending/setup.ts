@@ -1,7 +1,7 @@
 import {
   Component, DestroyRef, HostListener, TemplateRef, effect, inject, signal, untracked, viewChild,
 } from "@angular/core";
-import { FormsModule } from "@angular/forms";
+import { FormsModule, NgForm } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatDialog, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatInputModule } from "@angular/material/input";
@@ -118,11 +118,12 @@ export class SpendingSetup {
     return !!this.householdId && this.householdId === this.w.current()?.id && !this.saving() &&
       !this.lists()[kind].loading && !this.lists()[kind].error;
   }
-  async create(kind: SpendingSetupKind) {
+  async create(kind: SpendingSetupKind, form?: NgForm) {
     const name = this.newNames()[kind];
     if (!name.trim() || !this.canWrite(kind)) return;
     await this.write(kind, "POST", "", { name }, () => {
       this.changeNewName(kind, "");
+      form?.resetForm({ name: "" });
       this.notice.set(`${kind === "categories" ? "Category" : "Merchant"} added.`);
     }, error => this.createErrors.update(errors => ({ ...errors, [kind]: error })));
   }

@@ -12,6 +12,10 @@ Both lists share search and Active/Retired/All filtering; Active is the initial
 selection. A failed list does not prevent the other from loading, and its Retry
 reloads only that list. Loading, genuinely empty and filtered-empty states are
 distinct. Names are user-defined; no setup entries are seeded.
+After a successful add, that creation form resets its submitted/touched/dirty
+state along with its name. The cleared required field is ready for another entry,
+without a red validation highlight. The other list's draft and failed-save drafts
+are preserved. Both creation regression cases verify the rendered error state.
 
 Edit opens a right-hand Material dialog with the name input focused. Save sends
 only the name to the resource's `/name` endpoint. Cancel discards that edit without
