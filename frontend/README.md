@@ -15,7 +15,7 @@ occupies that port, or pass another port to `npm start`.
 - Spending: household-scoped category and merchant setup, with inline creation,
   name-edit sidebars, retirement/restoration, search and status filters. Unsaved
   drafts are protected on navigation and household switching; failed saves retain
-  entered names. Purchase capture and spending reports remain subsequent UI work.
+  entered names. Category spending reports remain subsequent UI work.
   See the [spending setup UI slice](../docs/spending-setup-ui-slice.md).
   The Spending landing page is now Items: catalogue creation/editing, immutable
   code/unit identity, category/search/status filters, retirement/restoration and
@@ -23,6 +23,11 @@ occupies that port, or pass another port to `npm start`.
   the draft and require an explicit reload before applying an amount with a new
   revision. Zero and six-decimal usual prices are supported. See
   [items and prices UI](../docs/spending-items-ui-slice.md).
+  Purchases & history supports quick category amounts/splits and catalogue lines
+  with quantities, overridable usual prices and actual line amounts. Save retries
+  retain the submitted client identity; uncertain outcomes can be checked before
+  another write. History has inclusive date filters, bounded pagination, saved
+  details and revision-checked voiding. See [capture/history UI](../docs/spending-capture-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

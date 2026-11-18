@@ -13,6 +13,7 @@ import { Modelling } from "./modelling/modelling";
 import { SnapshotEditor } from "./snapshots/editor";
 import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
+import { SpendingRecords } from "./spending/records";
 import { spendingEntry, spendingItem } from "../testing/spending";
 import { firstValueFrom, filter } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
@@ -29,6 +30,8 @@ async function setup(path: string, history = false) {
     if (path.includes("/spending/items?")) return [spendingItem(path.split("/")[1])];
     if (path.includes("/spending/categories?")) return [spendingEntry("food", path.split("/")[1])];
     if (path.includes("/spending/merchants?")) return [spendingEntry("shop", path.split("/")[1])];
+    if (path.endsWith("/spending/currencies")) return [{ code: "GBP", minorUnits: 2 }];
+    if (path.includes("/spending/records?")) return { records: [], nextCursor: null, pageSize: 25 };
     if (path.endsWith("/snapshots"))
       return [{ id: "latest", snapshotDate: "2026-01-01" }];
     if (path.endsWith("/snapshots/latest"))
@@ -60,7 +63,11 @@ async function setup(path: string, history = false) {
   const outlet = fixture.debugElement
     .query(By.directive(RouterOutlet))
     .injector.get(RouterOutlet);
-  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems;
+  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingRecords;
+  if (page instanceof SpendingRecords) {
+    await vi.waitFor(() => expect(page.lookupLoading()).toBe(false));
+    fixture.detectChanges(); await fixture.whenStable();
+  }
   const workspace = TestBed.inject(Workspace);
   const picker = fixture.debugElement.query(By.css(".household-picker"))
     .componentInstance as MatSelect;
@@ -71,15 +78,17 @@ async function setup(path: string, history = false) {
     await fixture.whenStable();
   };
   const edit = () => {
-    if (page instanceof SpendingItems) page.change(false, "name", "Unsaved item");
+    if (page instanceof SpendingRecords) page.capture()!.set("notes", "Unsaved purchase");
+    else if (page instanceof SpendingItems) page.change(false, "name", "Unsaved item");
     else if (page instanceof SpendingSetup) page.changeNewName("categories", "Unsaved category");
     else if (page instanceof Modelling) page.presetName = "Unsaved scenario";
     else page.date = "2000-01-01";
   };
-  const draft = () => page instanceof SpendingItems ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
+  const draft = () => page instanceof SpendingRecords ? page.capture()!.draft().notes : page instanceof SpendingItems ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
     (page instanceof Modelling ? page.presetName : page.date);
   const writing = () => {
-    if (page instanceof Modelling) page.savingPreset.set(true);
+    if (page instanceof SpendingRecords) page.capture()!.saving.set(true);
+    else if (page instanceof Modelling) page.savingPreset.set(true);
     else page.saving.set(true);
   };
   return {
@@ -101,7 +110,7 @@ afterEach(() => {
   localStorage.removeItem("household");
 });
 
-describe.each(["/modelling", "/record", "/spending/setup", "/spending/items"])(
+describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records"])(
   "Household switching from %s",
   (path) => {
     it("allows a clean page to switch without confirmation", async () => {

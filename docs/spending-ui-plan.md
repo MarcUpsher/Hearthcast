@@ -98,7 +98,9 @@ and merchant setup remains accessible through Spending navigation.
    replace remembered prices. Include errors/retries, receipt reconciliation and
    voiding accidental entries. Detailed corrections and refunds can follow.
    Use the established client-generated capture ID for safe retries. See
-   [record API](spending-record-api-slice.md).
+   [record API](spending-record-api-slice.md). The
+   [capture/history UI](spending-capture-ui-slice.md) is implemented, including
+   both quick amounts and catalogue item lines.
 2. Category reporting: month/week/custom date controls translated to explicit
    inclusive backend dates; separate currencies, recorded-spending wording and
    visible reconciliation information. See

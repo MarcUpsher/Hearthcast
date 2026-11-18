@@ -34,6 +34,11 @@ export const routes: Routes = [
     redirectTo: "spending/items",
   },
   {
+    path: "spending/records",
+    canDeactivate: [(component: import("./spending/records").SpendingRecords) => component.canLeave()],
+    loadComponent: () => import("./spending/records").then((m) => m.SpendingRecords),
+  },
+  {
     path: "spending/items",
     canDeactivate: [
       (component: import("./spending/items").SpendingItems) => component.canLeave(),

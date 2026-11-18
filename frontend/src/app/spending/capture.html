@@ -1,0 +1,66 @@
+<section class="panel" aria-labelledby="purchase-title">
+  <h2 id="purchase-title">Record a purchase</h2>
+  <p class="muted">Use category amounts, catalogue items, or both. Usual prices are suggestions; enter what you actually paid.</p>
+  @for (version of [formVersion()]; track version) {
+    <form (ngSubmit)="save()" aria-label="Record purchase" [attr.aria-busy]="busy()">
+      <div class="header-fields">
+        <mat-form-field><mat-label>Purchase date</mat-label><input matInput type="date" name="date" required [disabled]="locked()" [ngModel]="draft().date" (ngModelChange)="set('date', $event)" /></mat-form-field>
+        <mat-form-field><mat-label>Merchant</mat-label><mat-select name="merchant" required [disabled]="locked()" [ngModel]="draft().merchantId" (ngModelChange)="set('merchantId', $event)">
+          @for (merchant of merchants(); track merchant.id) { <mat-option [value]="merchant.id">{{ merchant.name }}{{ merchant.isRetired ? ' (retired)' : '' }}</mat-option> }
+        </mat-select></mat-form-field>
+        <mat-form-field><mat-label>Currency</mat-label><mat-select #currencyPicker name="currency" required [disabled]="locked()" [ngModel]="draft().currencyCode" (selectionChange)="setCurrency($event.value, currencyPicker)">
+          @for (currency of currencies(); track currency.code) { <mat-option [value]="currency.code">{{ currency.code }}</mat-option> }
+        </mat-select></mat-form-field>
+      </div>
+      @for (line of draft().lines; track line.key; let index = $index) {
+        <fieldset class="purchase-line"><legend>Line {{ index + 1 }}</legend>
+          <div class="line-fields">
+            <mat-form-field><mat-label>Catalogue item (optional)</mat-label><mat-select [name]="'item-' + line.key" [disabled]="locked()" [ngModel]="line.itemId" (ngModelChange)="selectItem(line.key, $event)">
+              <mat-option value="">Category amount</mat-option>
+              @for (item of items(); track item.id) { <mat-option [value]="item.id">{{ item.code }} · {{ item.name }}{{ item.isRetired ? ' (retired)' : '' }}</mat-option> }
+            </mat-select></mat-form-field>
+            <mat-form-field><mat-label>Category</mat-label><mat-select [name]="'category-' + line.key" required [disabled]="locked()" [ngModel]="line.categoryId" (ngModelChange)="changeLine(line.key, 'categoryId', $event)">
+              @for (category of categories(); track category.id) { <mat-option [value]="category.id">{{ category.name }}{{ category.isRetired ? ' (retired)' : '' }}</mat-option> }
+            </mat-select></mat-form-field>
+            @if (line.itemId) {
+              <mat-form-field><mat-label>Quantity ({{ unitLabel(line.itemId) }})</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'quantity-' + line.key" required [disabled]="locked()" [ngModel]="line.quantity" (ngModelChange)="changeLine(line.key, 'quantity', $event)" /><mat-hint>Positive, below one million; up to 6 decimals.</mat-hint></mat-form-field>
+              <mat-form-field><mat-label>Actual unit price</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'price-' + line.key" required [disabled]="locked()" [ngModel]="line.unitPrice" (ngModelChange)="changeLine(line.key, 'unitPrice', $event)" /><mat-hint>Zero is valid; up to 6 decimals, below 1 billion.</mat-hint></mat-form-field>
+            }
+            <mat-form-field><mat-label>Actual line amount</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'amount-' + line.key" required [disabled]="locked()" [ngModel]="line.amount" (ngModelChange)="changeLine(line.key, 'amount', $event)" />
+              <mat-hint>{{ minorUnits() === null ? 'Choose currency first' : 'Up to ' + minorUnits() + ' decimal places. Zero is valid.' }}</mat-hint></mat-form-field>
+            <mat-form-field><mat-label>Description (optional)</mat-label><input matInput [name]="'description-' + line.key" [disabled]="locked()" [ngModel]="line.description" (ngModelChange)="changeLine(line.key, 'description', $event)" /></mat-form-field>
+          </div>
+          @if (line.itemId) {
+            <p class="muted" role="status">{{ priceStates()[line.key] }}</p>
+            <div class="actions">
+              <button mat-button type="button" [disabled]="locked()" (click)="lookupPrice(line.key)">Retry usual price</button>
+              @if (!line.autoAmount && suggestion(line)) { <button mat-button type="button" [disabled]="locked()" (click)="useSuggestion(line.key)">Use calculated amount {{ suggestion(line) }}</button> }
+            </div>
+          }
+          <details><summary>Receipt reference and promotion</summary><div class="line-fields">
+            <mat-form-field><mat-label>Item reference on receipt</mat-label><input matInput [name]="'reference-' + line.key" [disabled]="locked()" [ngModel]="line.reference" (ngModelChange)="changeLine(line.key, 'reference', $event)" /></mat-form-field>
+            <mat-form-field><mat-label>Promotion</mat-label><mat-select [name]="'promotion-' + line.key" [disabled]="locked()" [ngModel]="line.promotion" (ngModelChange)="changeLine(line.key, 'promotion', $event)"><mat-option value="Unknown">Unknown</mat-option><mat-option value="Yes">Yes</mat-option><mat-option value="No">No</mat-option></mat-select></mat-form-field>
+          </div></details>
+          <button mat-button type="button" [disabled]="locked() || draft().lines.length === 1" (click)="removeLine(line.key)" [attr.aria-label]="'Remove line ' + (index + 1)">Remove line</button>
+        </fieldset>
+      }
+      <button mat-stroked-button type="button" [disabled]="locked()" (click)="addLine()">Add line / category split</button>
+      <div class="header-fields receipt-fields">
+        <mat-form-field><mat-label>Receipt total (optional)</mat-label><input matInput appMoney="text" inputmode="decimal" name="receiptTotal" [disabled]="locked()" [ngModel]="draft().receiptTotal" (ngModelChange)="set('receiptTotal', $event)" /></mat-form-field>
+        <mat-form-field><mat-label>Receipt reference (optional)</mat-label><input matInput name="reference" [disabled]="locked()" [ngModel]="draft().reference" (ngModelChange)="set('reference', $event)" /></mat-form-field>
+        <mat-form-field><mat-label>Notes (optional)</mat-label><textarea matInput name="notes" rows="2" [disabled]="locked()" [ngModel]="draft().notes" (ngModelChange)="set('notes', $event)"></textarea></mat-form-field>
+      </div>
+      @if (total(); as amount) { <p><strong>Entered total: {{ draft().currencyCode }} {{ amount }}</strong></p> }
+      @if (difference(); as difference) { <p [class.notice]="hasDifference()">Receipt total minus entered lines: {{ draft().currencyCode }} {{ difference }}. {{ hasDifference() ? 'Mismatch will be saved visibly; line amounts remain authoritative.' : 'Matches.' }}</p> }
+      @if (!draft().receiptTotal) { <p class="muted">Receipt total not supplied; reconciliation will be unchecked.</p> }
+      @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+      @if (frozen() && !busy()) { <p class="notice">A save may have succeeded. The submitted details are locked for an exact retry. Check the saved record or retry this same purchase before starting another.</p>
+        <button mat-stroked-button type="button" [disabled]="busy() || disabled()" (click)="checkSaved()">Check saved purchase</button> }
+      @if (minorUnits() !== null) { <p class="muted">Amounts must fit the selected currency and be safe to send without losing decimal precision.</p> }
+      <div class="actions">
+        <button mat-button type="button" [disabled]="busy()" (click)="clear()">Clear purchase</button>
+        <button mat-flat-button type="submit" [disabled]="busy() || disabled() || (!frozen() && !valid())">{{ saving() ? 'Saving…' : frozen() ? 'Retry same purchase' : 'Save purchase' }}</button>
+      </div>
+    </form>
+  }
+</section>

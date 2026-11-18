@@ -1,4 +1,4 @@
-import { SpendingItem, SpendingItemDraft, SpendingSetupEntry, SpendingUsualPrice } from "../app/spending/models";
+import { SpendingItem, SpendingItemDraft, SpendingRecord, SpendingSetupEntry, SpendingUsualPrice } from "../app/spending/models";
 
 export function spendingEntry(kind: "food" | "shop", home = "first"): SpendingSetupEntry {
   return { id: `${home}-${kind}`, householdId: home, name: kind === "food" ? "Food" : "Shop", isRetired: false };
@@ -19,4 +19,15 @@ export function deferred<T>() {
   let reject!: (reason: unknown) => void;
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
+}
+
+export function spendingRecord(home = "first", extra: Partial<SpendingRecord> = {}): SpendingRecord {
+  return { id: "record", householdId: home, kind: "Payment", spendingDate: "2026-11-18", merchantId: `${home}-shop`,
+    merchantName: "Saved shop", currencyCode: "GBP", currencyMinorUnits: 2, receiptTotal: null, externalReference: null,
+    notes: null, revision: "record-r1", isVoided: false, voidedAtUtc: null, totalAmount: 10, countedAmount: 10,
+    receiptDifference: null, reconciliationStatus: "NotChecked", lines: [{ id: "saved-line", position: 1,
+      expenseCategoryId: `${home}-food`, expenseCategoryName: "Saved food", spendingItemId: null, itemCode: null,
+      itemName: null, unitKey: null, unitLabel: null, quantity: null, unitPrice: null, netAmount: 10,
+      suggestedAmount: null, effectiveUnitPrice: null, description: null, merchantItemReference: null,
+      receiptDescription: null, promotionStatus: "Unknown", notes: null }], ...extra };
 }

@@ -38,3 +38,45 @@ export interface SpendingItemDraft {
   unitLabel: string;
   notes: string;
 }
+
+export interface SpendingCurrency { code: string; minorUnits: number; }
+export type SpendingPromotion = "Unknown" | "Yes" | "No";
+export interface SpendingCaptureLine {
+  expenseCategoryId: string;
+  netAmount: number;
+  spendingItemId?: string;
+  quantity?: number;
+  unitPrice?: number;
+  description?: string | null;
+  merchantItemReference?: string | null;
+  promotionStatus: SpendingPromotion;
+}
+export interface SpendingCaptureRequest {
+  id: string;
+  merchantId: string;
+  spendingDate: string;
+  currencyCode: string;
+  kind: "Payment";
+  lines: SpendingCaptureLine[];
+  receiptTotal: number | null;
+  externalReference: string | null;
+  notes: string | null;
+}
+export interface SpendingRecordedLine {
+  id: string; position: number; expenseCategoryId: string; expenseCategoryName: string;
+  spendingItemId: string | null; itemCode: string | null; itemName: string | null;
+  unitKey: string | null; unitLabel: string | null; quantity: number | null; unitPrice: number | null;
+  netAmount: number; suggestedAmount: number | null; effectiveUnitPrice: number | null;
+  description: string | null; merchantItemReference: string | null; receiptDescription: string | null;
+  promotionStatus: SpendingPromotion; notes: string | null;
+}
+export interface SpendingRecord {
+  id: string; householdId: string; kind: "Payment" | "Refund"; spendingDate: string;
+  merchantId: string; merchantName: string; currencyCode: string; currencyMinorUnits: number;
+  receiptTotal: number | null; externalReference: string | null; notes: string | null;
+  revision: string; isVoided: boolean; voidedAtUtc: string | null;
+  totalAmount: number; countedAmount: number; receiptDifference: number | null;
+  reconciliationStatus: "NotChecked" | "Reconciled" | "Unreconciled";
+  lines: SpendingRecordedLine[];
+}
+export interface SpendingHistoryPage { records: SpendingRecord[]; nextCursor: string | null; pageSize: number; }
