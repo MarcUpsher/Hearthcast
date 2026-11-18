@@ -24,10 +24,13 @@
             <p class="muted">Saved: {{ savedLine.expenseCategoryName }}{{ savedLine.itemName ? ' · ' + savedLine.itemName : '' }}{{ savedLine.unitLabel ? ' · ' + savedLine.unitLabel : '' }}</p>
           }
           <div class="line-fields">
-            <mat-form-field><mat-label>Catalogue item (optional)</mat-label><mat-select [name]="'item-' + line.key" [disabled]="locked()" [ngModel]="line.itemId" (ngModelChange)="selectItem(line.key, $event)">
+            <div class="item-choice"><mat-form-field><mat-label>Catalogue item (optional)</mat-label><mat-select [name]="'item-' + line.key" [aria-label]="'Catalogue item for line ' + (index + 1)" [disabled]="locked()" [ngModel]="line.itemId" (ngModelChange)="selectItem(line.key, $event)">
               <mat-option value="">Category amount</mat-option>
               @for (item of items(); track item.id) { <mat-option [value]="item.id">{{ item.code }} · {{ item.name }}{{ item.isRetired ? ' (retired)' : '' }}</mat-option> }
             </mat-select></mat-form-field>
+              <!-- Keep the trigger focusable for Material's dialog focus restoration. createItem guards re-entry. -->
+              <button mat-button type="button" [disabled]="!itemEditor() && (locked() || !categories().length)" (click)="createItem(line.key)" [attr.aria-label]="'Create item for line ' + (index + 1)">Create item</button>
+            </div>
             <mat-form-field><mat-label>Category</mat-label><mat-select [name]="'category-' + line.key" required [disabled]="locked()" [ngModel]="line.categoryId" (ngModelChange)="changeLine(line.key, 'categoryId', $event)">
               @for (category of categories(); track category.id) { <mat-option [value]="category.id">{{ category.name }}{{ category.isRetired ? ' (retired)' : '' }}</mat-option> }
             </mat-select></mat-form-field>

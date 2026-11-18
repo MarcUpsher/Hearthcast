@@ -2,6 +2,7 @@ import { Component, DestroyRef, effect, inject, input, output, signal, untracked
 import { HttpErrorResponse } from "@angular/common/http";
 import { FormsModule } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
+import { MatDialog, MatDialogModule, MatDialogRef } from "@angular/material/dialog";
 import { MatInputModule } from "@angular/material/input";
 import { MatSelect, MatSelectModule } from "@angular/material/select";
 import { Api } from "../core/api";
@@ -10,6 +11,7 @@ import { MoneyInput } from "../core/money";
 import { Workspace } from "../core/workspace";
 import { SpendingCaptureRequest, SpendingCurrency, SpendingItem, SpendingPromotion, SpendingRecord, SpendingReplacementRequest, SpendingSetupEntry, SpendingUsualPrice } from "./models";
 import { decimalAmount, localToday, minorAmount, safeAmount, suggestedAmount, validSpendingDate } from "./amounts";
+import { SpendingItemCreate, SpendingItemCreateData } from "./item-create";
 
 export interface CaptureLineDraft {
   key: string; itemId: string; categoryId: string; quantity: string; unitPrice: string; amount: string;
@@ -25,7 +27,7 @@ type CaptureDraft = ReturnType<typeof blankDraft>;
 
 @Component({
   selector: "app-spending-capture",
-  imports: [FormsModule, MoneyInput, MatButtonModule, MatInputModule, MatSelectModule],
+  imports: [FormsModule, MoneyInput, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule],
   templateUrl: "capture.html", styleUrl: "capture.scss",
 })
 export class SpendingCapture {
@@ -38,7 +40,9 @@ export class SpendingCapture {
   readonly saved = output<SpendingRecord>();
   readonly reloaded = output<SpendingRecord>();
   readonly cancelled = output<void>();
+  readonly itemCreated = output<SpendingItem>();
   private readonly api = inject(Api);
+  private readonly dialogs = inject(MatDialog);
   private readonly w = inject(Workspace);
   private home: string | null = null;
   private inputRecord: SpendingRecord | null | undefined;
@@ -57,6 +61,7 @@ export class SpendingCapture {
   readonly priceStates = signal<Record<string, string>>({});
   readonly editing = signal<SpendingRecord | null>(null);
   readonly editNeedsReload = signal(false);
+  readonly itemEditor = signal<MatDialogRef<SpendingItemCreate, SpendingItem> | null>(null);
 
   constructor() {
     effect(() => {
@@ -69,12 +74,12 @@ export class SpendingCapture {
         this.reset(record?.householdId === home ? record : null);
       });
     });
-    inject(DestroyRef).onDestroy(() => { this.destroyed = true; this.generation++; });
+    inject(DestroyRef).onDestroy(() => { this.destroyed = true; this.generation++; this.itemEditor()?.close(); });
     this.baseline = this.persisted(this.draft());
   }
   private current(generation: number, home: string) { return !this.destroyed && generation === this.generation && this.w.current()?.id === home; }
-  locked() { return this.saving() || this.checking() || !!this.frozen() || this.editNeedsReload() || this.disabled(); }
-  busy() { return this.saving() || this.checking(); }
+  locked() { return this.saving() || this.checking() || !!this.frozen() || this.editNeedsReload() || !!this.itemEditor() || this.disabled(); }
+  busy() { return this.saving() || this.checking() || (this.itemEditor()?.componentInstance?.saving() ?? false); }
   minorUnits() { return this.editing()?.currencyMinorUnits ?? this.currencies().find(row => row.code === this.draft().currencyCode)?.minorUnits ?? null; }
   set(field: Exclude<keyof CaptureDraft, "lines">, value: string) {
     if (this.locked()) return;
@@ -107,9 +112,28 @@ export class SpendingCapture {
     });
     this.error.set("");
   }
+  createItem(key: string) {
+    const home = this.home, generation = this.generation, line = this.line(key);
+    if (!home || !line || !this.current(generation, home) || this.locked() || !this.categories().length) return;
+    const editor = this.dialogs.open<SpendingItemCreate, SpendingItemCreateData, SpendingItem>(SpendingItemCreate, {
+      data: { householdId: home, categories: this.categories(), expenseCategoryId: line.categoryId },
+      width: "720px", maxWidth: "calc(100vw - 32px)", maxHeight: "calc(100dvh - 32px)",
+      autoFocus: 'input[name="name"]', disableClose: true, closeOnNavigation: false,
+    });
+    this.itemEditor.set(editor);
+    editor.afterClosed().subscribe(saved => {
+      if (this.itemEditor() === editor) this.itemEditor.set(null);
+      if (!saved || !this.current(generation, home) || saved.householdId !== home || !this.line(key)) return;
+      this.itemCreated.emit(saved);
+      this.applyItem(key, saved.id, saved);
+    });
+  }
   selectItem(key: string, itemId: string) {
     if (this.locked()) return;
-    const item = this.items().find(row => row.id === itemId);
+    this.applyItem(key, itemId);
+  }
+  private applyItem(key: string, itemId: string, createdItem?: SpendingItem) {
+    const item = createdItem ?? this.items().find(row => row.id === itemId);
     this.priceVersions.set(key, (this.priceVersions.get(key) ?? 0) + 1);
     this.updateLine(key, line => ({ ...line, itemId, categoryId: line.categoryTouched ? line.categoryId : item?.expenseCategoryId ?? line.categoryId,
       quantity: item ? "1" : "", unitPrice: "", unitKey: "", unitLabel: "", priceTouched: false, amount: line.autoAmount ? "" : line.amount }));
@@ -312,6 +336,7 @@ export class SpendingCapture {
   }
   private reset(record: SpendingRecord | null = null) {
     this.generation++; this.id = null; this.priceVersions.clear();
+    this.itemEditor()?.close(); this.itemEditor.set(null);
     const draft: CaptureDraft = record ? { date: record.spendingDate, merchantId: record.merchantId, currencyCode: record.currencyCode,
       receiptTotal: record.receiptTotal === null ? "" : String(record.receiptTotal), reference: record.externalReference ?? "", notes: record.notes ?? "",
       lines: record.lines.map(line => ({ ...newLine(), key: line.id, itemId: line.spendingItemId ?? "", categoryId: line.expenseCategoryId,
@@ -324,7 +349,7 @@ export class SpendingCapture {
     this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({});
     this.formVersion.update(version => version + 1);
   }
-  hasUnsavedChanges() { return !!this.frozen() || this.editNeedsReload() || this.persisted(this.draft()) !== this.baseline; }
+  hasUnsavedChanges() { return !!this.frozen() || this.editNeedsReload() || (this.itemEditor()?.componentInstance?.dirty() ?? false) || this.persisted(this.draft()) !== this.baseline; }
   canLeave() {
     return !this.busy() && (!this.hasUnsavedChanges() || window.confirm(this.frozen() ?
       "A save may have succeeded. Leave this draft and check history before entering the purchase again?" : "Discard this unsaved purchase draft?"));

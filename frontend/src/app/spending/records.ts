@@ -124,6 +124,12 @@ export class SpendingRecords {
     this.notice.set(record.isVoided ? "The retained saved record is voided." : edited ? "Purchase changes saved." : "Purchase saved.");
     void this.loadHistory("refresh", true);
   }
+  onItemCreated(item: SpendingItem) {
+    if (item.householdId !== this.home || this.home !== this.w.current()?.id) return;
+    // A lookup started before the item was saved must not remove it afterwards.
+    this.lookupVersion++; this.lookupLoading.set(false);
+    this.items.update(items => [...items.filter(row => row.id !== item.id), item]);
+  }
   onReloaded(record: SpendingRecord) {
     if (record.householdId !== this.home || this.w.current()?.id !== this.home || this.editing()?.id !== record.id) return;
     this.selected.set(record);

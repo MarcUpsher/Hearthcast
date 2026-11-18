@@ -30,6 +30,9 @@ occupies that port, or pass another port to `npm start`.
   details and revision-checked voiding. Saved purchases can be edited with narrow
   corrections preserving labels and deliberate wider replacements; conflicts retain
   local edits until an explicit reload. See [purchase editing](../docs/spending-edit-ui-slice.md) and [capture/history UI](../docs/spending-capture-ui-slice.md).
+  Create item beside a purchase line opens the shared catalogue form and selects
+  the saved item without losing the receipt draft. See
+  [inline item creation](../docs/spending-inline-item-ui-slice.md).
   Spending by category offers month/week shortcuts, arbitrary month selection and
   custom inclusive ranges, with separate currencies, signed net amounts and
   record-level receipt checks. See [category reporting](../docs/spending-summary-ui-slice.md).

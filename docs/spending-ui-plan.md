@@ -104,7 +104,8 @@ and merchant setup remains accessible through Spending navigation.
    [capture/history UI](spending-capture-ui-slice.md) is implemented, including
    both quick amounts and catalogue item lines. Saved payment correction is now
    implemented through the shared entry form; see [purchase editing](spending-edit-ui-slice.md).
-   Refund creation/editing remains deferred.
+   [Inline item creation](spending-inline-item-ui-slice.md) is implemented on
+   each purchase line. Refund creation/editing remains deferred.
 2. Category reporting (implemented): month/week/custom date controls translated to explicit
    inclusive backend dates; separate currencies, recorded-spending wording and
    visible reconciliation information. See

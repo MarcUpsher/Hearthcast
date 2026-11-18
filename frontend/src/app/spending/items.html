@@ -44,19 +44,9 @@
 <ng-template #itemForm let-edit="edit">
   @let value = draft(edit);
   <form #form="ngForm" class="item-form" [class.editor-form]="edit" [attr.aria-label]="edit ? 'Edit item' : 'Add item'" [attr.aria-busy]="saving()" (ngSubmit)="submit(edit, form)">
-    <div class="item-fields">
-      <mat-form-field><mat-label>Item code</mat-label><input matInput name="code" required maxlength="64" [readonly]="edit" [disabled]="busy()" [ngModel]="value.code" (ngModelChange)="change(edit, 'code', $event)" />
-        <mat-hint>{{ edit ? 'Fixed for this item' : 'Unique code, e.g. EGGS-6. Letters, digits, dots, hyphens or underscores.' }}</mat-hint></mat-form-field>
-      <mat-form-field><mat-label>Item name</mat-label><input matInput name="name" required [disabled]="busy()" [ngModel]="value.name" (ngModelChange)="change(edit, 'name', $event)" /></mat-form-field>
-      <mat-form-field><mat-label>Default category</mat-label><mat-select name="expenseCategoryId" required [disabled]="busy()" [ngModel]="value.expenseCategoryId" (ngModelChange)="change(edit, 'expenseCategoryId', $event)">
-        @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
-      </mat-select></mat-form-field>
-      <mat-form-field><mat-label>Unit / pack code</mat-label><input matInput name="unitKey" required maxlength="32" [readonly]="edit" [disabled]="busy()" [ngModel]="value.unitKey" (ngModelChange)="change(edit, 'unitKey', $event)" />
-        <mat-hint>{{ edit ? 'Use another item for a different unit or pack size' : 'E.g. each, kg or pack-6. Fixed after creation.' }}</mat-hint></mat-form-field>
-      <mat-form-field><mat-label>Unit label</mat-label><input matInput name="unitLabel" required [disabled]="busy()" [ngModel]="value.unitLabel" (ngModelChange)="change(edit, 'unitLabel', $event)" /><mat-hint>E.g. Six eggs</mat-hint></mat-form-field>
-      <mat-form-field class="span"><mat-label>Notes (optional)</mat-label><textarea matInput name="notes" rows="2" [disabled]="busy()" [ngModel]="value.notes" (ngModelChange)="change(edit, 'notes', $event)"></textarea></mat-form-field>
-      @if (edit ? editError() : createError()) { <p class="error span" role="alert">{{ edit ? editError() : createError() }}</p> }
-    </div>
+    <app-spending-item-fields [value]="value" [categories]="categories()" [disabled]="busy()" [immutable]="edit"
+      (changed)="change(edit, $event.field, $event.value)" />
+    @if (edit ? editError() : createError()) { <p class="error" role="alert">{{ edit ? editError() : createError() }}</p> }
     <div class="actions">
       <button mat-button type="button" [disabled]="busy()" (click)="edit ? cancelEdit() : clearCreate(form)">{{ edit ? 'Cancel' : 'Clear item' }}</button>
       <button mat-flat-button type="submit" [disabled]="!canWrite() || !valid(edit) || (edit && !editDirty())">{{ edit ? 'Save item' : 'Add item' }}</button>

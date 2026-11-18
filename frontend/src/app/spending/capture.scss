@@ -3,4 +3,6 @@
 legend { padding: 0 8px; font-weight: 600; }
 .receipt-fields { margin-top: 24px; }
 form > .actions { margin-top: 20px; }
+.item-choice { display: flex; flex-direction: column; align-items: start; min-width: 0; gap: 4px; }
+.item-choice mat-form-field { width: 100%; }
 @media (max-width: 500px) { .header-fields, .line-fields { grid-template-columns: 1fr; } }

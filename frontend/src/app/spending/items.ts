@@ -11,14 +11,14 @@ import { Workspace } from "../core/workspace";
 import { SpendingItem, SpendingItemDraft, SpendingSetupEntry, SpendingSetupStatus } from "./models";
 import { SpendingNavigation } from "./navigation";
 import { SpendingPrices } from "./prices";
+import { emptyItemDraft as emptyDraft, itemCreateRequest, SpendingItemFields, validItemDraft } from "./item-fields";
 
-const emptyDraft = (): SpendingItemDraft => ({ code: "", name: "", expenseCategoryId: "", unitKey: "", unitLabel: "", notes: "" });
 const itemDraft = (item: SpendingItem): SpendingItemDraft => ({ code: item.code, name: item.name,
   expenseCategoryId: item.expenseCategoryId, unitKey: item.unitKey, unitLabel: item.unitLabel, notes: item.notes ?? "" });
 
 @Component({
   imports: [FormsModule, NgTemplateOutlet, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule,
-    SpendingNavigation, SpendingPrices],
+    SpendingNavigation, SpendingPrices, SpendingItemFields],
   templateUrl: "items.html",
   styleUrl: "items.scss",
 })
@@ -124,10 +124,7 @@ export class SpendingItems {
     (edit ? this.editError : this.createError).set("");
   }
   valid(edit: boolean) {
-    const draft = this.draft(edit);
-    return !!draft.name.trim() && !!draft.expenseCategoryId && !!draft.unitLabel.trim() &&
-      /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(draft.code.trim()) &&
-      /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(draft.unitKey.trim());
+    return validItemDraft(this.draft(edit));
   }
   clearCreate(form?: NgForm) {
     if (this.saving()) return;
@@ -180,7 +177,7 @@ export class SpendingItems {
     try {
       const saved = await this.api.send<SpendingItem>(edit ? "PUT" : "POST",
         `households/${home}/spending/items${edit ? "/" + item!.id + "/details" : ""}`,
-        edit ? details : { ...details, code: draft.code, unitKey: draft.unitKey });
+        edit ? details : itemCreateRequest(draft));
       if (!this.current(generation, home)) return;
       this.upsert(saved);
       if (edit) this.closeEditor();

@@ -6,7 +6,7 @@
   @if (lookupError()) { <p class="error" role="alert">{{ lookupError() }}</p><button mat-stroked-button [disabled]="busy()" (click)="loadLookups()">Retry entry choices</button> }
   @if (!lookupLoading() && !lookupError() && (!categories().length || !merchants().length)) { <p class="notice">Add categories and merchants in Spending setup before recording a purchase.</p> }
   <app-spending-capture [categories]="categories()" [merchants]="merchants()" [items]="items()" [currencies]="currencies()"
-    [record]="editing()" [disabled]="lookupLoading() || !!lookupError() || voiding() || detailLoading()" (saved)="onSaved($event)" (reloaded)="onReloaded($event)" (cancelled)="editing.set(null)" />
+    [record]="editing()" [disabled]="lookupLoading() || !!lookupError() || voiding() || detailLoading()" (saved)="onSaved($event)" (reloaded)="onReloaded($event)" (cancelled)="editing.set(null)" (itemCreated)="onItemCreated($event)" />
   <p role="status" aria-live="polite">{{ notice() }}</p>
   <section class="panel" aria-labelledby="history-title"><h2 id="history-title">Recorded spending history</h2>
     <form class="toolbar" aria-label="History filters" (ngSubmit)="loadHistory()">

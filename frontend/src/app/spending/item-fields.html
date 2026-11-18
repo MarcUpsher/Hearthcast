@@ -1,0 +1,12 @@
+    <div class="item-fields" [class.single-column]="immutable()">
+      <mat-form-field><mat-label>Item code</mat-label><input matInput name="code" required maxlength="64" [readonly]="immutable()" [disabled]="disabled()" [ngModel]="value().code" (ngModelChange)="change('code', $event)" />
+        <mat-hint>{{ immutable() ? 'Fixed for this item' : 'Unique code, e.g. EGGS-6. Letters, digits, dots, hyphens or underscores.' }}</mat-hint></mat-form-field>
+      <mat-form-field><mat-label>Item name</mat-label><input matInput name="name" required [disabled]="disabled()" [ngModel]="value().name" (ngModelChange)="change('name', $event)" /></mat-form-field>
+      <mat-form-field><mat-label>Default category</mat-label><mat-select name="expenseCategoryId" required [disabled]="disabled()" [ngModel]="value().expenseCategoryId" (ngModelChange)="change('expenseCategoryId', $event)">
+        @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
+      </mat-select></mat-form-field>
+      <mat-form-field><mat-label>Unit / pack code</mat-label><input matInput name="unitKey" required maxlength="32" [readonly]="immutable()" [disabled]="disabled()" [ngModel]="value().unitKey" (ngModelChange)="change('unitKey', $event)" />
+        <mat-hint>{{ immutable() ? 'Use another item for a different unit or pack size' : 'E.g. each, kg or pack-6. Fixed after creation.' }}</mat-hint></mat-form-field>
+      <mat-form-field><mat-label>Unit label</mat-label><input matInput name="unitLabel" required [disabled]="disabled()" [ngModel]="value().unitLabel" (ngModelChange)="change('unitLabel', $event)" /><mat-hint>E.g. Six eggs</mat-hint></mat-form-field>
+      <mat-form-field class="span"><mat-label>Notes (optional)</mat-label><textarea matInput name="notes" rows="2" [disabled]="disabled()" [ngModel]="value().notes" (ngModelChange)="change('notes', $event)"></textarea></mat-form-field>
+    </div>

@@ -15,7 +15,7 @@ import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
 import { SpendingRecords } from "./spending/records";
 import { SpendingSummary } from "./spending/summary";
-import { spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
+import { spendingDraft, spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
 import { firstValueFrom, filter } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
 
@@ -297,4 +297,23 @@ it("opens Spending by category from feature navigation and changes household wit
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
   await choose("second");
   expect(workspace.current()?.id).toBe("second"); expect(confirm).not.toHaveBeenCalled(); expect(send).not.toHaveBeenCalled();
+});
+
+it("guards an item creation dialog on browser Back and household changes without losing the purchase", async () => {
+  const { fixture, workspace, choose } = await setup("/setup", true);
+  const router = TestBed.inject(Router); router.initialNavigation(); await router.navigateByUrl("/spending/records");
+  fixture.detectChanges(); await fixture.whenStable();
+  const records = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingRecords;
+  await vi.waitFor(() => expect(records.lookupLoading()).toBe(false)); fixture.detectChanges(); await fixture.whenStable();
+  const capture = records.capture()!; capture.set("notes", "Keep receipt"); capture.createItem(capture.draft().lines[0].key);
+  fixture.detectChanges(); await fixture.whenStable();
+  const editor = capture.itemEditor()!.componentInstance; editor.draft.set(spendingDraft());
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const navigation = firstValueFrom(router.events.pipe(filter(event => event instanceof NavigationEnd || event instanceof NavigationCancel)));
+  TestBed.inject(Location).back(); expect(await navigation).toBeInstanceOf(NavigationCancel);
+  expect(router.url).toBe("/spending/records"); expect(capture.itemEditor()?.componentInstance.draft().name).toBe("Milk");
+  await choose("second"); expect(workspace.current()?.id).toBe("first"); expect(capture.draft().notes).toBe("Keep receipt");
+  confirm.mockReturnValue(true); await choose("second");
+  expect(workspace.current()?.id).toBe("second"); expect(capture.itemEditor()).toBeNull();
+  fixture.destroy();
 });

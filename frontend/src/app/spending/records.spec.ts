@@ -1,5 +1,10 @@
 import { signal } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
+import { MatButtonHarness } from "@angular/material/button/testing";
+import { MatInputHarness } from "@angular/material/input/testing";
+import { MatDialogHarness } from "@angular/material/dialog/testing";
+import { MatSelectHarness } from "@angular/material/select/testing";
 import { HttpErrorResponse } from "@angular/common/http";
 import { provideRouter } from "@angular/router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,8 +12,8 @@ import { Api } from "../core/api";
 import { Workspace } from "../core/workspace";
 import { Household } from "../setup/models";
 import { SpendingRecords } from "./records";
-import { SpendingHistoryPage, SpendingRecord } from "./models";
-import { deferred, spendingEntry, spendingItem, spendingRecord } from "../../testing/spending";
+import { SpendingHistoryPage, SpendingRecord, SpendingItem } from "./models";
+import { deferred, spendingDraft, spendingEntry, spendingItem, spendingRecord } from "../../testing/spending";
 
 describe("Spending history and records", () => {
   let fixture: ComponentFixture<SpendingRecords>;
@@ -20,6 +25,7 @@ describe("Spending history and records", () => {
       const home = path.split("/")[1];
       if (path.includes("/categories?")) return [spendingEntry("food", home)];
       if (path.includes("/merchants?")) return [spendingEntry("shop", home)];
+      if (path.includes("/usual-price?")) return null;
       if (path.includes("/items?")) return [spendingItem(home)];
       if (path.endsWith("/currencies")) return [{ code: "GBP", minorUnits: 2 }];
       if (path.includes("/records?")) return { records: [spendingRecord(home)], nextCursor: null, pageSize: 25 };
@@ -222,6 +228,123 @@ describe("Spending history and records", () => {
     current.set({ id: "second", name: "Second", people: [] }); await settle();
     pending.resolve(spendingRecord()); await reading;
     expect(c.selected()).toBeNull(); expect(c.detailLoading()).toBe(false);
+  });
+
+  const root = () => TestbedHarnessEnvironment.documentRootLoader(fixture);
+  async function itemClosed(c: SpendingRecords) {
+    await vi.waitFor(() => expect(c.capture()?.itemEditor() === null).toBe(true)); await settle();
+  }
+  async function createDialog(c: SpendingRecords, key = c.capture()!.draft().lines[0].key) {
+    c.capture()!.createItem(key); await settle();
+    return c.capture()!.itemEditor()!.componentInstance;
+  }
+  it("creates an item through the rendered purchase form and selects it on the initiating line without saving the purchase", async () => {
+    const c = await page(), capture = c.capture()!;
+    capture.set("merchantId", "first-shop"); capture.setCurrency("GBP"); capture.set("notes", "Keep this visit");
+    const first = capture.draft().lines[0].key;
+    capture.changeLine(first, "categoryId", "first-food"); capture.changeLine(first, "amount", "4");
+    capture.addLine(); const key = capture.draft().lines[1].key; capture.changeLine(key, "categoryId", "first-food");
+    await settle();
+    await (await root().getHarness(MatButtonHarness.with({ selector: '[aria-label="Create item for line 2"]' }))).click();
+    const dialog = await root().getHarness(MatDialogHarness);
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("name")).toBe("name"));
+    const fields = { code: "MILK-1L", name: "Milk", unitKey: "litre", unitLabel: "Litre", notes: "Keep chilled" };
+    for (const [name, value] of Object.entries(fields)) {
+      await (await dialog.getHarness(MatInputHarness.with({ selector: `[name="${name}"]` }))).setValue(value);
+    }
+    const created = spendingItem("first", { id: "milk", ...fields }); send.mockResolvedValueOnce(created);
+    await (await dialog.getHarness(MatButtonHarness.with({ text: "Create & use item" }))).click();
+    await settle();
+    await itemClosed(c);
+    expect(send).toHaveBeenCalledExactlyOnceWith("POST", "households/first/spending/items", { ...fields, expenseCategoryId: "first-food" });
+    expect(c.items()).toContainEqual(created);
+    expect(capture.line(key)).toMatchObject({ itemId: "milk", categoryId: "first-food", quantity: "1", unitPrice: "" });
+    expect(capture.line(first)?.amount).toBe("4"); expect(capture.draft().notes).toBe("Keep this visit");
+    const picker = await root().getHarness(MatSelectHarness.with({ selector: '[aria-label="Catalogue item for line 2"]' }));
+    expect(await picker.getValueText()).toContain("MILK-1L · Milk");
+    expect(await root().getAllHarnesses(MatDialogHarness)).toHaveLength(0);
+    capture.changeLine(key, "unitPrice", "2");
+    send.mockResolvedValueOnce(spendingRecord()); await capture.save();
+    expect(send.mock.calls[1][2].lines[1]).toMatchObject({ spendingItemId: "milk", quantity: 1, unitPrice: 2, netAmount: 2 });
+  });
+  it("retains rejected item fields, permits correction and opens the next dialog without invalid fields", async () => {
+    const c = await page(), editor = await createDialog(c);
+    editor.draft.set(spendingDraft()); send.mockRejectedValueOnce(new HttpErrorResponse({ status: 409, error: { detail: "Code already exists" } }));
+    await (await root().getHarness(MatButtonHarness.with({ text: "Create & use item" }))).click(); await settle();
+    expect(editor.draft()).toEqual(spendingDraft()); expect(editor.error()).toBe("Code already exists");
+    expect(c.items().some(item => item.id === "milk")).toBe(false);
+    editor.change("code", "MILK-2L"); send.mockResolvedValueOnce(spendingItem("first", { id: "milk", code: "MILK-2L" }));
+    await editor.save(); await itemClosed(c);
+    await createDialog(c); await settle();
+    const form = document.querySelector('form[aria-label="Create spending item"]')!;
+    expect(form.classList.contains("ng-submitted")).toBe(false);
+    expect(form.querySelectorAll(".mat-form-field-invalid")).toHaveLength(0);
+    expect(form.querySelector<HTMLInputElement>('[name="name"]')?.value).toBe("");
+  });
+  it("protects an item draft on cancel, Escape and navigation while preserving the purchase", async () => {
+    const c = await page(), capture = c.capture()!;
+    capture.set("notes", "Keep purchase"); const before = structuredClone(capture.draft());
+    const editor = await createDialog(c); editor.change("name", "Unsaved milk");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    editor.dismiss(); expect(capture.itemEditor()).not.toBeNull();
+    await (await root().getHarness(MatDialogHarness)).close(); expect(capture.itemEditor()).not.toBeNull();
+    expect(c.canLeave()).toBe(false);
+    const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); expect(event.defaultPrevented).toBe(true);
+    confirm.mockReturnValue(true); editor.dismiss(); await itemClosed(c);
+    expect(capture.itemEditor()).toBeNull(); expect(capture.draft()).toEqual(before); expect(send).not.toHaveBeenCalled();
+  });
+  it("includes item-only drafts in guards and blocks duplicate submissions, cancellation and navigation during creation", async () => {
+    const c = await page(), editor = await createDialog(c);
+    expect(c.hasUnsavedChanges()).toBe(false); editor.draft.set(spendingDraft()); expect(c.hasUnsavedChanges()).toBe(true);
+    const pending = deferred<SpendingItem>(); send.mockReturnValueOnce(pending.promise);
+    const saving = editor.save(); await editor.save();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    editor.dismiss(); expect(c.canLeave()).toBe(false); expect(confirm).not.toHaveBeenCalled();
+    expect(c.capture()?.itemEditor()).not.toBeNull(); expect(send).toHaveBeenCalledTimes(1);
+    await c.capture()!.save(); expect(send).toHaveBeenCalledTimes(1);
+    pending.resolve(spendingItem("first", { id: "milk" })); await saving; await itemClosed(c);
+    expect(c.busy()).toBe(false);
+  });
+  it.each([false, true])("ignores a pending creation after a forced household switch (failure=%s)", async fail => {
+    const c = await page(), editor = await createDialog(c); editor.draft.set(spendingDraft());
+    const pending = deferred<SpendingItem>(); send.mockReturnValueOnce(pending.promise); const saving = editor.save();
+    current.set({ id: "second", name: "Second", people: [] }); await settle();
+    await vi.waitFor(() => expect(c.lookupLoading()).toBe(false)); await settle();
+    c.capture()!.set("notes", "New household draft");
+    if (fail) pending.reject(new Error("Old error")); else pending.resolve(spendingItem("first", { id: "milk" }));
+    await saving; await settle();
+    expect(c.items().every(item => item.householdId === "second")).toBe(true);
+    expect(c.capture()?.draft().notes).toBe("New household draft"); expect(c.capture()?.itemEditor()).toBeNull();
+    expect(c.capture()?.draft().lines[0].itemId).toBe(""); expect(c.busy()).toBe(false);
+  });
+  it("does not allow frozen/disabled purchase forms to open item creation", async () => {
+    const c = await page(), capture = c.capture()!, key = capture.draft().lines[0].key;
+    c.lookupLoading.set(true); await settle(); capture.createItem(key); expect(capture.itemEditor()).toBeNull();
+    c.lookupLoading.set(false); await settle();
+    capture.frozen.set({ id: "id", merchantId: "shop", spendingDate: "2026-11-18", currencyCode: "GBP", kind: "Payment", receiptTotal: null, externalReference: null, notes: null, lines: [] });
+    capture.createItem(key); expect(capture.itemEditor()).toBeNull();
+  });
+  it("prevents a stale lookup from dropping an item created while correcting a saved purchase", async () => {
+    const c = await page(); c.view(spendingRecord()); await c.beginEdit(); await settle();
+    const capture = c.capture()!, editor = await createDialog(c); editor.draft.set(spendingDraft());
+    const older = deferred<SpendingItem[]>();
+    get.mockImplementationOnce(async () => [spendingEntry("food")]).mockImplementationOnce(async () => [spendingEntry("shop")]).mockReturnValueOnce(older.promise);
+    const reading = c.loadLookups(); const created = spendingItem("first", { id: "milk" }); send.mockResolvedValueOnce(created);
+    await editor.save(); await itemClosed(c);
+    older.resolve([spendingItem()]); await reading; await settle();
+    expect(c.items()).toContainEqual(created); expect(capture.draft().lines[0].itemId).toBe("milk");
+    expect(c.editing()?.id).toBe("record"); expect(capture.editOperation().kind).toBe("replace");
+  });
+
+  it.each([false, true])("returns keyboard focus to the initiating receipt line after closing creation (saved=%s)", async saved => {
+    const c = await page(), capture = c.capture()!; capture.addLine(); await settle();
+    const trigger = fixture.nativeElement.querySelector('button[aria-label="Create item for line 2"]') as HTMLButtonElement;
+    trigger.focus(); const editor = await createDialog(c, capture.draft().lines[1].key);
+    expect(trigger.disabled).toBe(false);
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("name")).toBe("name"));
+    if (saved) { editor.draft.set(spendingDraft()); send.mockResolvedValueOnce(spendingItem("first", { id: "milk" })); await editor.save(); }
+    else editor.dismiss();
+    await itemClosed(c); expect(document.activeElement).toBe(trigger);
   });
 
 });
