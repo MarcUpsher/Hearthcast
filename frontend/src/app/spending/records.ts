@@ -42,6 +42,7 @@ export class SpendingRecords {
   readonly filters = signal<HistoryFilters>({ from: "", to: "", includeVoided: false });
   readonly applied = signal<HistoryFilters>({ from: "", to: "", includeVoided: false });
   readonly selected = signal<SpendingRecord | null>(null);
+  readonly editing = signal<SpendingRecord | null>(null);
   readonly detailLoading = signal(false);
   readonly detailError = signal("");
   readonly voiding = signal(false);
@@ -59,7 +60,7 @@ export class SpendingRecords {
         this.categories.set([]); this.merchants.set([]); this.items.set([]); this.currencies.set([]);
         this.lookupLoading.set(false); this.lookupError.set("");
         this.page.set(emptyPage()); this.historyLoading.set(false); this.historyError.set("");
-        this.selected.set(null); this.detailLoading.set(false); this.detailError.set("");
+        this.selected.set(null); this.editing.set(null); this.detailLoading.set(false); this.detailError.set("");
         this.voiding.set(false); this.needsReload.set(new Set()); this.notice.set("");
         this.filters.set({ from: "", to: "", includeVoided: false }); this.applied.set(this.filters());
         this.cursor = null; this.previous.set([]);
@@ -117,17 +118,41 @@ export class SpendingRecords {
     finally { if (current()) this.historyLoading.set(false); }
   }
   onSaved(record: SpendingRecord) {
+    const edited = !!this.editing();
+    this.editing.set(null);
     this.view(record);
-    this.notice.set(record.isVoided ? "The retained saved record is voided." : "Purchase saved.");
+    this.notice.set(record.isVoided ? "The retained saved record is voided." : edited ? "Purchase changes saved." : "Purchase saved.");
     void this.loadHistory("refresh", true);
   }
+  onReloaded(record: SpendingRecord) {
+    if (record.householdId !== this.home || this.w.current()?.id !== this.home || this.editing()?.id !== record.id) return;
+    this.selected.set(record);
+    this.needsReload.update(ids => { const next = new Set(ids); next.delete(record.id); return next; });
+    void this.loadHistory("refresh", true);
+  }
+  async beginEdit() {
+    const selected = this.selected(), home = this.home, generation = this.generation;
+    if (!selected || !home || !this.current(generation, home) || selected.isVoided || selected.kind !== "Payment" || this.editing() || this.busy() || this.detailLoading()) return;
+    if (!(this.capture()?.canLeave() ?? true)) return;
+    const version = ++this.detailVersion;
+    const current = () => this.current(generation, home) && version === this.detailVersion && this.selected()?.id === selected.id;
+    this.detailLoading.set(true); this.detailError.set("");
+    try {
+      const record = await this.api.get<SpendingRecord>(`households/${home}/spending/records/${selected.id}`);
+      if (!current()) return;
+      this.selected.set(record);
+      if (record.isVoided) { this.detailError.set("This record has been voided and cannot be edited."); return; }
+      this.editing.set(record); this.notice.set("");
+    } catch (error) { if (current()) this.detailError.set(message(error)); }
+    finally { if (current()) this.detailLoading.set(false); }
+  }
   view(record: SpendingRecord) {
-    if (this.voiding() || record.householdId !== this.home || this.home !== this.w.current()?.id) return;
+    if (this.voiding() || this.editing() || record.householdId !== this.home || this.home !== this.w.current()?.id) return;
     this.detailVersion++; this.detailLoading.set(false); this.detailError.set(""); this.selected.set(record);
   }
   async reloadDetail() {
     const home = this.home, generation = this.generation, selected = this.selected();
-    if (!home || !selected || !this.current(generation, home) || this.voiding()) return;
+    if (!home || !selected || !this.current(generation, home) || this.voiding() || this.editing()) return;
     const version = ++this.detailVersion;
     const current = () => this.current(generation, home) && version === this.detailVersion && this.selected()?.id === selected.id;
     this.detailLoading.set(true); this.detailError.set("");
@@ -142,7 +167,7 @@ export class SpendingRecords {
   }
   async voidRecord() {
     const selected = this.selected(), home = this.home, generation = this.generation;
-    if (!home || !selected || !this.current(generation, home) || selected.householdId !== home || selected.isVoided || this.busy() || this.detailLoading() || this.needsReload().has(selected.id)) return;
+    if (!home || !selected || !this.current(generation, home) || selected.householdId !== home || selected.isVoided || this.editing() || this.busy() || this.detailLoading() || this.needsReload().has(selected.id)) return;
     if (!window.confirm("Void this accidental record? It will be excluded from spending totals and retained in history.")) return;
     this.voiding.set(true); this.detailError.set(""); this.notice.set("");
     try {

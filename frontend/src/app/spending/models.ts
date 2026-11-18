@@ -50,6 +50,10 @@ export interface SpendingCaptureLine {
   description?: string | null;
   merchantItemReference?: string | null;
   promotionStatus: SpendingPromotion;
+  unitKey?: string | null;
+  unitLabel?: string | null;
+  receiptDescription?: string | null;
+  notes?: string | null;
 }
 export interface SpendingCaptureRequest {
   id: string;
@@ -57,6 +61,15 @@ export interface SpendingCaptureRequest {
   spendingDate: string;
   currencyCode: string;
   kind: "Payment";
+  lines: SpendingCaptureLine[];
+  receiptTotal: number | null;
+  externalReference: string | null;
+  notes: string | null;
+}
+export interface SpendingReplacementRequest {
+  expectedRevision: string;
+  merchantId: string;
+  spendingDate: string;
   lines: SpendingCaptureLine[];
   receiptTotal: number | null;
   externalReference: string | null;

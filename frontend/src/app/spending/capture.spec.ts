@@ -2,6 +2,7 @@ import { signal } from "@angular/core";
 import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { HttpErrorResponse } from "@angular/common/http";
 import { TestbedHarnessEnvironment } from "@angular/cdk/testing/testbed";
+import { MatSelectHarness } from "@angular/material/select/testing";
 import { MatButtonHarness } from "@angular/material/button/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Api } from "../core/api";
@@ -216,4 +217,126 @@ describe("Spending purchase capture", () => {
     pending.resolve(spendingPrice()); await settle();
     expect(c.draft().lines).toHaveLength(1); expect(c.line(key)).toBeUndefined();
   });
+  async function edit(record = spendingRecord()) {
+    const c = await page();
+    fixture.componentRef.setInput("record", record); await settle();
+    return c;
+  }
+  it("opens saved values without price lookups or recalculation and fixes currency", async () => {
+    const record = spendingRecord();
+    record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", quantity: 2, unitPrice: 3, netAmount: 5, itemName: "Saved eggs", unitKey: "pack-6", unitLabel: "Old pack" };
+    const c = await edit(record);
+    expect(c.draft().lines[0]).toMatchObject({ quantity: "2", unitPrice: "3", amount: "5", autoAmount: false });
+    expect(c.hasUnsavedChanges()).toBe(false); expect(get).not.toHaveBeenCalled();
+    c.setCurrency("EUR"); expect(c.draft().currencyCode).toBe("GBP");
+    const picker = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatSelectHarness.with({ selector: '[name="currency"]' }));
+    expect(await picker.isDisabled()).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain("Saved eggs");
+    expect(fixture.nativeElement.textContent).toContain("Old pack");
+  });
+  it("corrects only the header with explicit nullable fields and the saved revision", async () => {
+    const c = await edit(spendingRecord("first", { receiptTotal: 10, externalReference: "old", notes: "old" }));
+    c.set("date", "2026-12-01"); c.set("receiptTotal", ""); c.set("reference", ""); c.set("notes", "");
+    const received = vi.fn(); c.saved.subscribe(received);
+    await (await button("Save changes")).click();
+    expect(send).toHaveBeenCalledExactlyOnceWith("PUT", "households/first/spending/records/record/header", {
+      expectedRevision: "record-r1", spendingDate: "2026-12-01", receiptTotal: null, externalReference: null, notes: null,
+    });
+    expect(received).toHaveBeenCalledOnce(); expect(c.hasUnsavedChanges()).toBe(false);
+  });
+  it("corrects one line's actual values without refreshing historical labels", async () => {
+    const c = await edit(); const key = c.draft().lines[0].key;
+    c.changeLine(key, "amount", "0"); c.changeLine(key, "promotion", "Yes"); c.changeLine(key, "notes", "A refund adjustment");
+    expect(c.editOperation().kind).toBe("line"); await c.save();
+    expect(send).toHaveBeenCalledExactlyOnceWith("PUT", "households/first/spending/records/record/lines/saved-line", {
+      expectedRevision: "record-r1", netAmount: 0, quantity: null, unitPrice: null, promotionStatus: "Yes", notes: "A refund adjustment",
+    });
+  });
+  it("replaces wider changes atomically, retaining receipt metadata and standalone units", async () => {
+    const record = spendingRecord();
+    record.lines[0] = { ...record.lines[0], quantity: 2, unitPrice: 6, unitKey: "cup", unitLabel: "Cup", receiptDescription: "COFFEE", notes: "Keep this", merchantItemReference: "C01" };
+    const c = await edit(record);
+    c.set("notes", "Corrected visit"); c.changeLine("saved-line", "amount", "11");
+    c.addLine(); const key = c.draft().lines[1].key;
+    c.changeLine(key, "categoryId", "first-food"); c.changeLine(key, "amount", "2");
+    expect(c.editOperation().kind).toBe("replace"); await settle();
+    expect(fixture.nativeElement.textContent).toContain("refreshes saved merchant, category and item labels");
+    await (await button("Save changes & refresh labels")).click();
+    const [method, path, body] = send.mock.calls[0];
+    expect([method, path]).toEqual(["PUT", "households/first/spending/records/record"]);
+    expect(body).toMatchObject({ expectedRevision: "record-r1", merchantId: "first-shop", notes: "Corrected visit" });
+    expect(body.lines).toHaveLength(2);
+    expect(body.lines[0]).toMatchObject({ netAmount: 11, quantity: 2, unitPrice: 6, unitKey: "cup", unitLabel: "Cup", receiptDescription: "COFFEE", notes: "Keep this", merchantItemReference: "C01" });
+    expect(body.id).toBeUndefined(); expect(body.kind).toBeUndefined(); expect(body.currencyCode).toBeUndefined(); expect(body.rememberPrices).toBeUndefined();
+  });
+  it("preserves linked lines without quantities and does not override item units on replacement", async () => {
+    const record = spendingRecord();
+    record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", itemName: "Eggs", unitKey: "pack-6", unitLabel: "Pack" };
+    const c = await edit(record); c.set("merchantId", "another-shop");
+    expect(c.valid()).toBe(true); await c.save();
+    expect(send.mock.calls[0][2].lines[0]).toMatchObject({ spendingItemId: "eggs", netAmount: 10 });
+    expect(send.mock.calls[0][2].lines[0].unitKey).toBeUndefined();
+    expect(send.mock.calls[0][2].lines[0].quantity).toBeUndefined();
+  });
+  it("retains entered amounts when editing quantity until calculation is explicitly requested", async () => {
+    const record = spendingRecord();
+    record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", quantity: 2, unitPrice: 3, netAmount: 5 };
+    const c = await edit(record); c.changeLine("saved-line", "quantity", "3");
+    expect(c.line("saved-line")?.amount).toBe("5");
+    c.useSuggestion("saved-line"); expect(c.line("saved-line")?.amount).toBe("9.00");
+    expect(c.editOperation().kind).toBe("line");
+  });
+  it.each([0, 408, 409, 500])("retains edits and requires an explicit reload after HTTP %s without replaying a new revision", async status => {
+    const c = await edit(); c.set("notes", "Keep proposed changes");
+    send.mockRejectedValueOnce(new HttpErrorResponse({ status })); await c.save();
+    expect(c.editNeedsReload()).toBe(true); expect(c.draft().notes).toBe("Keep proposed changes");
+    await c.save(); expect(send).toHaveBeenCalledTimes(1);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await c.reloadEdit(); expect(get).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true); get.mockResolvedValueOnce(spendingRecord("first", { revision: "r2", notes: "Another user" }));
+    await c.reloadEdit(); expect(c.draft().notes).toBe("Another user");
+    expect(c.editNeedsReload()).toBe(false); expect(c.hasUnsavedChanges()).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+    c.set("notes", "New intentional correction"); await c.save();
+    expect(send.mock.calls[1][2].expectedRevision).toBe("r2");
+  });
+  it("keeps validation rejections editable, and failed reloads retain the draft", async () => {
+    const c = await edit(); c.set("notes", "Keep");
+    send.mockRejectedValueOnce(new HttpErrorResponse({ status: 400 })); await c.save();
+    expect(c.editNeedsReload()).toBe(false); c.set("notes", "Fixed"); expect(c.draft().notes).toBe("Fixed");
+    vi.spyOn(window, "confirm").mockReturnValue(true); get.mockRejectedValueOnce(new Error("Offline"));
+    await c.reloadEdit(); expect(c.draft().notes).toBe("Fixed"); expect(c.error()).toBe("Offline");
+  });
+  it("does not allow saving a record found voided during reload", async () => {
+    const c = await edit(); get.mockResolvedValueOnce(spendingRecord("first", { isVoided: true }));
+    await c.reloadEdit(); expect(c.editNeedsReload()).toBe(true); expect(c.error()).toContain("voided");
+    await c.save(); expect(send).not.toHaveBeenCalled();
+  });
+  it("guards cancellation, blocks it during saves, and ignores a previous household's late correction", async () => {
+    const c = await edit(); c.set("notes", "Keep"); const cancelled = vi.fn(); c.cancelled.subscribe(cancelled);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    c.cancelEdit(); expect(cancelled).not.toHaveBeenCalled();
+    const pending = deferred<SpendingRecord>(); send.mockReturnValueOnce(pending.promise); const writing = c.save();
+    c.cancelEdit(); expect(confirm).toHaveBeenCalledOnce(); expect(cancelled).not.toHaveBeenCalled();
+    const received = vi.fn(); c.saved.subscribe(received);
+    current.set({ id: "second", name: "Other", people: [] }); await settle();
+    c.set("notes", "New household draft"); pending.resolve(spendingRecord()); await writing;
+    expect(c.draft().notes).toBe("New household draft"); expect(c.editing()).toBeNull(); expect(received).not.toHaveBeenCalled();
+  });
+  it("preserves a draft when household metadata changes without switching household", async () => {
+    const c = await edit(); c.set("notes", "Keep");
+    current.set({ id: "first", name: "Renamed", people: [] }); await settle();
+    expect(c.draft().notes).toBe("Keep");
+  });
+
+  it("compares persisted decimal values and ignores UI flags when classifying corrections", async () => {
+    const record = spendingRecord();
+    record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", quantity: 2, unitPrice: 5 };
+    const c = await edit(record);
+    c.changeLine("saved-line", "amount", "10.00"); c.changeLine("saved-line", "quantity", "2.000");
+    c.useSuggestion("saved-line"); expect(c.hasUnsavedChanges()).toBe(false);
+    c.set("date", "2026-12-01"); expect(c.editOperation().kind).toBe("header");
+    await c.save(); expect(send.mock.calls[0][1]).toBe("households/first/spending/records/record/header");
+  });
+
 });

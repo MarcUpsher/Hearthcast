@@ -27,7 +27,9 @@ occupies that port, or pass another port to `npm start`.
   with quantities, overridable usual prices and actual line amounts. Save retries
   retain the submitted client identity; uncertain outcomes can be checked before
   another write. History has inclusive date filters, bounded pagination, saved
-  details and revision-checked voiding. See [capture/history UI](../docs/spending-capture-ui-slice.md).
+  details and revision-checked voiding. Saved purchases can be edited with narrow
+  corrections preserving labels and deliberate wider replacements; conflicts retain
+  local edits until an explicit reload. See [purchase editing](../docs/spending-edit-ui-slice.md) and [capture/history UI](../docs/spending-capture-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

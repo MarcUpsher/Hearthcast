@@ -162,4 +162,66 @@ describe("Spending history and records", () => {
     const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
   });
+  it("opens a fresh record for editing and updates details/history after saving", async () => {
+    const c = await page(); c.view(spendingRecord());
+    get.mockResolvedValueOnce(spendingRecord("first", { revision: "fresh", notes: "Saved note" }));
+    await c.beginEdit(); await settle();
+    expect(c.editing()?.revision).toBe("fresh"); expect(c.capture()?.draft().notes).toBe("Saved note");
+    c.capture()!.set("notes", "Correction");
+    send.mockResolvedValueOnce(spendingRecord("first", { notes: "Correction", revision: "new" }));
+    await c.capture()!.save(); await settle();
+    expect(c.editing()).toBeNull(); expect(c.selected()?.notes).toBe("Correction");
+    expect(c.notice()).toBe("Purchase changes saved.");
+    expect(c.capture()?.hasUnsavedChanges()).toBe(false);
+  });
+  it("protects a new purchase draft before entering edit mode and retains it on failed read", async () => {
+    const c = await page(); c.view(spendingRecord()); c.capture()!.set("notes", "Keep receipt");
+    get.mockClear(); const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await c.beginEdit(); expect(get).not.toHaveBeenCalled(); expect(c.editing()).toBeNull();
+    confirm.mockReturnValue(true); get.mockRejectedValueOnce(new Error("Offline")); await c.beginEdit();
+    expect(c.editing()).toBeNull(); expect(c.capture()?.draft().notes).toBe("Keep receipt");
+    expect(c.detailError()).toBe("Offline");
+  });
+  it("blocks detail switching/voiding while editing, guards navigation and cancellation", async () => {
+    const c = await page(); c.view(spendingRecord()); await c.beginEdit(); await settle();
+    c.capture()!.set("notes", "Edit draft");
+    c.view(spendingRecord("first", { id: "other" })); await c.voidRecord();
+    expect(c.selected()?.id).toBe("record"); expect(send).not.toHaveBeenCalled();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    expect(c.canLeave()).toBe(false); c.capture()!.cancelEdit(); expect(c.editing()).not.toBeNull();
+    vi.mocked(window.confirm).mockReturnValue(true); c.capture()!.cancelEdit(); await settle();
+    expect(c.editing()).toBeNull(); expect(c.capture()?.hasUnsavedChanges()).toBe(false);
+  });
+  it("does not open an editor for refunds, voided records or stale edit reads", async () => {
+    const c = await page(); c.view(spendingRecord("first", { kind: "Refund" })); get.mockClear();
+    await c.beginEdit(); expect(get).not.toHaveBeenCalled();
+    c.view(spendingRecord("first", { isVoided: true })); await c.beginEdit(); expect(get).not.toHaveBeenCalled();
+    c.view(spendingRecord()); const pending = deferred<SpendingRecord>(); get.mockReturnValueOnce(pending.promise);
+    const opening = c.beginEdit(); c.view(spendingRecord("first", { id: "other" }));
+    pending.resolve(spendingRecord()); await opening; expect(c.editing()).toBeNull();
+    expect(c.selected()?.id).toBe("other");
+    get.mockResolvedValueOnce(spendingRecord("first", { id: "other", isVoided: true })); await c.beginEdit();
+    expect(c.editing()).toBeNull(); expect(c.detailError()).toContain("voided");
+  });
+
+  it.each([false, true])("updates selected details on editor reload, including voided=%s, before cancelling", async voided => {
+    const c = await page(); c.view(spendingRecord()); await c.beginEdit(); await settle();
+    const latest = spendingRecord("first", { revision: "latest", notes: "Other changes", isVoided: voided });
+    get.mockResolvedValueOnce(latest); await c.capture()!.reloadEdit(); await settle();
+    expect(c.selected()?.revision).toBe("latest"); expect(c.selected()?.isVoided).toBe(voided);
+    vi.spyOn(window, "confirm").mockReturnValue(true); c.capture()!.cancelEdit(); await settle();
+    expect(c.editing()).toBeNull(); expect(c.selected()?.notes).toBe("Other changes");
+    await c.voidRecord();
+    if (voided) expect(send).not.toHaveBeenCalled();
+    else expect(send.mock.calls[0][2]).toEqual({ expectedRevision: "latest" });
+  });
+  it("allows leaving during a stalled detail read and ignores its late household response", async () => {
+    const c = await page(); c.view(spendingRecord());
+    const pending = deferred<SpendingRecord>(); get.mockReturnValueOnce(pending.promise);
+    const reading = c.reloadDetail(); expect(c.canLeave()).toBe(true);
+    current.set({ id: "second", name: "Second", people: [] }); await settle();
+    pending.resolve(spendingRecord()); await reading;
+    expect(c.selected()).toBeNull(); expect(c.detailLoading()).toBe(false);
+  });
+
 });

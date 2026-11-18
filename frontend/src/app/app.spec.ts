@@ -14,7 +14,7 @@ import { SnapshotEditor } from "./snapshots/editor";
 import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
 import { SpendingRecords } from "./spending/records";
-import { spendingEntry, spendingItem } from "../testing/spending";
+import { spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
 import { firstValueFrom, filter } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
 
@@ -32,6 +32,7 @@ async function setup(path: string, history = false) {
     if (path.includes("/spending/merchants?")) return [spendingEntry("shop", path.split("/")[1])];
     if (path.endsWith("/spending/currencies")) return [{ code: "GBP", minorUnits: 2 }];
     if (path.includes("/spending/records?")) return { records: [], nextCursor: null, pageSize: 25 };
+    if (path.includes("/spending/records/")) return spendingRecord(path.split("/")[1]);
     if (path.endsWith("/snapshots"))
       return [{ id: "latest", snapshotDate: "2026-01-01" }];
     if (path.endsWith("/snapshots/latest"))
@@ -264,4 +265,20 @@ it("opens the item catalogue from the Spending navigation entry", async () => {
   expect(page).toBeInstanceOf(SpendingItems);
   expect(TestBed.inject(Router).url).toBe("/spending/items");
   expect(fixture.nativeElement.querySelector('header a[href="/spending"]').classList.contains("active")).toBe(true);
+});
+
+it("guards saved purchase edits across route and household changes", async () => {
+  const { fixture, page, get, choose, workspace } = await setup("/spending/records");
+  const records = page as SpendingRecords;
+  records.view(spendingRecord()); get.mockResolvedValueOnce(spendingRecord());
+  await records.beginEdit(); fixture.detectChanges(); await fixture.whenStable();
+  records.capture()!.set("notes", "Keep saved-record correction");
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  expect(await TestBed.inject(Router).navigateByUrl("/spending/items")).toBe(false);
+  await choose("second");
+  expect(workspace.current()?.id).toBe("first");
+  expect(records.capture()?.draft().notes).toBe("Keep saved-record correction");
+  expect(records.editing()?.id).toBe("record");
+  confirm.mockReturnValue(true); await choose("second");
+  expect(records.editing()).toBeNull(); expect(records.hasUnsavedChanges()).toBe(false);
 });
