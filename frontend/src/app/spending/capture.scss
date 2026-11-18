@@ -1,4 +1,4 @@
-.header-fields, .line-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px 16px; }
+.header-fields, .line-fields { display: grid; align-items: start; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px 16px; }
 .purchase-line { border: 1px solid var(--mat-sys-outline-variant); border-radius: 8px; margin: 16px 0; padding: 16px; min-width: 0; }
 legend { padding: 0 8px; font-weight: 600; }
 .receipt-fields { margin-top: 24px; }

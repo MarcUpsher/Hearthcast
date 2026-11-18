@@ -1,4 +1,4 @@
-.item-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px 16px; }
+.item-fields { display: grid; align-items: start; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px 16px; }
 .item-form > .actions { margin-top: 20px; }
 .toolbar { margin-top: 28px; }
 .toolbar mat-form-field:first-child { flex: 1; }
