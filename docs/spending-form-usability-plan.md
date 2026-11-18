@@ -173,3 +173,7 @@ Final verification after fixes: **364 tests** across 22 frontend files pass unde
 `TZ=Europe/London`; production build and whitespace checks pass. No backend tests
 were rerun because backend contracts, schema and implementation are unchanged.
 No application spending records were created by verification.
+
+New purchase drafts default to GBP, including after save, clear and household
+switches. The currency remains selectable; opening a saved record uses its saved
+currency and precision.

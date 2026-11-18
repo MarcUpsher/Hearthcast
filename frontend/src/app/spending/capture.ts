@@ -24,7 +24,7 @@ export interface CaptureLineDraft {
 const newLine = (kind: CaptureLineDraft["kind"] = "item"): CaptureLineDraft => ({ kind, key: crypto.randomUUID(), itemId: "", categoryId: "", quantity: "", unitPrice: "", amount: "",
   description: "", reference: "", promotion: "Unknown", autoAmount: true, priceTouched: false,
   receiptDescription: "", notes: "", unitKey: "", unitLabel: "" });
-const blankDraft = () => ({ date: localToday(), merchantId: "", currencyCode: "", receiptTotal: "", reference: "", notes: "", lines: [newLine()] });
+const blankDraft = () => ({ date: localToday(), merchantId: "", currencyCode: "GBP", receiptTotal: "", reference: "", notes: "", lines: [newLine()] });
 type CaptureDraft = ReturnType<typeof blankDraft>;
 
 @Component({
