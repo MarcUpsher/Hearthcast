@@ -3,10 +3,11 @@
 18 November 2026. The backend for the agreed first version is implemented and
 reviewed: spending setup, capture/corrections/voids, dated budget plans and recorded
 spending totals by category/currency over arbitrary inclusive dates. Budget
-comparisons and historical target allocation remain deferred. No UI implementation
-is included in this planning document.
+comparisons and historical target allocation remain deferred. The first
+[categories and merchants UI slice](spending-setup-ui-slice.md) is implemented;
+later slices below remain planned.
 
-## First slice: categories and merchants
+## First slice: categories and merchants (implemented)
 
 Let the selected household create, rename, retire and restore spending categories
 and merchants. These are the prerequisites for quick spending capture. Catalogue
@@ -45,17 +46,17 @@ and displays the error; loading a page never writes setup records.
 
 ## Implementation and review organisation
 
-One coordinator owns the scope, integration, verification and final delivery.
-For a multi-agent run, give one implementation agent ownership of the new spending
-feature files. The coordinator owns shared navigation/routes and agrees the model
-and component exports first. Avoid concurrent edits to the same files.
+The agreed workflow uses Sol high as the main builder/coordinator and Astra low
+as an independent reviewer. Sol implements and tests the agreed slice, then Astra
+reviews the completed changes once. Sol assesses the findings, fixes valid issues,
+reruns relevant checks, commits and pushes. There is no automatic second review.
+After delivery, discuss and agree on the next slice before starting it.
 
-Give an independent reviewer the brief and completed diff, then have the
-implementer/coordinator resolve concrete findings before final verification. Focus
-review on user workflows, household-switch races, unsaved edits, request contracts
-and failure recovery. The coordinator remains responsible for a working combined
-result; splitting work does not relax the acceptance criteria. Reviewers should
-keep local findings in ignored `review.md` unless another location is agreed.
+Only the builder edits product code. The reviewer focuses on user workflows,
+household-switch races, unsaved edits, request contracts and failure recovery, and
+returns concrete findings to the builder. The coordinator owns integration and
+verification; delegation does not relax acceptance criteria. Local `review.md`
+remains ignored when used for manual reviews.
 
 Useful existing frontend references:
 

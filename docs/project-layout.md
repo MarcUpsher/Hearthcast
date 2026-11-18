@@ -40,6 +40,7 @@ and EF. Shared helpers contain specific reusable rules, not household policy.
 | `frontend/src/app/core/workspace.ts` | Household discovery/current selection. The app shell checks the active page's leave policy before a user switches household. |
 | `setup/models.ts`, `snapshots/models.ts`, `summaries/models.ts`, `history/models.ts`, `modelling/models.ts` | Feature-owned wire contracts. Snapshot consumers share one complete response shape. |
 | `setup/`, `snapshots/`, `history/` | Setup/editing, snapshot entry/browsing and historical graphs. |
+| `spending/` | Spending-specific wire models and category/merchant setup with request scoping, draft/navigation protection and edit sidebars. Separate from asset/debt classification setup. |
 | `modelling/modelling.ts` | One owner for assumptions, preset drafts, saves, selection and request/lifecycle coordination. |
 | `modelling/chart/` | Pure chart geometry and a presentational chart with local pointer/keyboard state. |
 | `modelling/results/` | Presentational expense-target and growth-breakdown panels. No API calls or draft copies. |

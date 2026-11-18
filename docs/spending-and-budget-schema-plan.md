@@ -15,7 +15,8 @@ implemented. [Budget domain/persistence](budget-domain-slice.md) and
 [budget snapshot API](budget-snapshot-api-slice.md) are implemented;
 [Recorded spending category-summary services](spending-category-summary-service-slice.md)
 and the [date-range summary API](spending-category-summary-api-slice.md) are
-implemented. UI and budget comparisons remain planned.
+implemented. The [spending setup UI](spending-setup-ui-slice.md) is implemented;
+purchase/reporting UI and budget comparisons remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.

@@ -23,6 +23,8 @@ import { Workspace } from "./core/workspace";
           >Modelling</a
         ><a mat-button routerLink="/record" routerLinkActive="active"
           >Record snapshot</a
+        ><a mat-button routerLink="/spending/setup" routerLinkActive="active"
+          >Spending</a
         ><a mat-button routerLink="/setup" routerLinkActive="active"
           >Household setup</a
         >

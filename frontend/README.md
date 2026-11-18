@@ -12,6 +12,11 @@ occupies that port, or pass another port to `npm start`.
 
 - History: date-range and interval controls, currency views, household/category and
   person investment lines with hover readings.
+- Spending: household-scoped category and merchant setup, with inline creation,
+  name-edit sidebars, retirement/restoration, search and status filters. Unsaved
+  drafts are protected on navigation and household switching; failed saves retain
+  entered names. Purchase capture and spending reports remain subsequent UI work.
+  See the [spending setup UI slice](../docs/spending-setup-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

@@ -29,6 +29,13 @@ export const routes: Routes = [
       import("./snapshots/editor").then((m) => m.SnapshotEditor),
   },
   {
+    path: "spending/setup",
+    canDeactivate: [
+      (component: import("./spending/setup").SpendingSetup) => component.canLeave(),
+    ],
+    loadComponent: () => import("./spending/setup").then((m) => m.SpendingSetup),
+  },
+  {
     path: "setup",
     loadComponent: () => import("./setup/setup").then((m) => m.Setup),
   },

@@ -28,6 +28,7 @@ original single-currency projection and initial screen notes are superseded.
 | Spending setup domain and persistence | [Spending setup slice](spending-setup-slice.md) |
 | Spending setup service operations and concurrency | [Spending setup services](spending-setup-service-slice.md) |
 | Spending setup HTTP contracts and endpoints | [Spending setup API](spending-setup-api-slice.md) |
+| Spending category/merchant setup screen and draft protection | [Spending setup UI](spending-setup-ui-slice.md) |
 | Spending-record domain and persistence | [Spending records](spending-records-slice.md) |
 | Spending-record services, retries and price provenance | [Record services](spending-record-service-slice.md) |
 | Spending-record HTTP capture and bounded history | [Record API](spending-record-api-slice.md) |
@@ -64,11 +65,12 @@ The [recorded spending category-summary service](spending-category-summary-servi
 implements inclusive date-range totals by category/currency with reconciliation
 information. The [category-summary API](spending-category-summary-api-slice.md)
 exposes it through a required date range. Its [original handoff](spending-category-summary-service-handoff.md)
-records the service scope. UI and budget comparisons remain later work.
+records the service scope. [Spending setup UI](spending-setup-ui-slice.md) is
+implemented; purchase/reporting UI and budget comparisons remain later work.
 
-The [spending UI plan](spending-ui-plan.md) scopes the next categories/merchants
-screen, its existing API contracts, implementation/review ownership and acceptance
-criteria, followed by capture, reporting and optional item detail.
+The [spending UI plan](spending-ui-plan.md) records the categories/merchants screen
+scope, API contracts, implementation/review ownership and acceptance criteria,
+followed by planned capture, reporting and optional item detail.
 
 The [initial schema proposal](schema-proposal.md) and [relational plan](relational-schema-plan.md)
 explain the original model. Household, classification, tracked-item, financed-asset,
