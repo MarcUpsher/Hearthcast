@@ -93,3 +93,16 @@ export interface SpendingRecord {
   lines: SpendingRecordedLine[];
 }
 export interface SpendingHistoryPage { records: SpendingRecord[]; nextCursor: string | null; pageSize: number; }
+
+export interface SpendingCategoryTotal {
+  expenseCategoryId: string; categoryName: string; currencyCode: string; currencyMinorUnits: number; netAmount: string;
+}
+export interface SpendingReceiptWarning {
+  spendingRecordId: string; spendingDate: string; merchantName: string; currencyCode: string;
+  receiptTotal: string; lineTotal: string; difference: string;
+}
+export interface SpendingCategorySummary {
+  householdId: string; from: string; to: string; categories: SpendingCategoryTotal[];
+  reconciliationRecordCounts: { notChecked: number; reconciled: number; unreconciled: number };
+  warnings: SpendingReceiptWarning[];
+}

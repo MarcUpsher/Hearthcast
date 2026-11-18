@@ -552,8 +552,10 @@ workflows are established. The broad feature sequence is:
    and currency, signed refunds, void exclusion and reconciliation information.
    The [summary HTTP endpoint](spending-category-summary-api-slice.md) is implemented
    with required dates, explicit response contracts and end-to-end capture/report
-   tests. The UI will interpret calendar labels into dates. Budget comparisons
-   remain deferred; agree period allocation rules before presenting historical
+   tests. The [category-report UI](spending-summary-ui-slice.md) now interprets
+   calendar shortcuts and month selection into explicit dates, alongside custom
+   ranges. [Saved purchase editing](spending-edit-ui-slice.md) is also implemented.
+   Budget comparisons remain deferred; agree period allocation rules before presenting historical
    target variances. Include actuals with no category budget, incomplete plans and
    reconciliation warnings visibly; do not infer complete actual spending from
    recorded receipts alone.
@@ -575,7 +577,7 @@ schema. Extracted prices or item matches should be reviewed before saving actual
   silently clear defaults. Document setup's existing last-writer-wins behaviour;
   snapshot revision protection does not apply to setup forms. Keep current outgoing
   amounts in the effective-plan read model, not editable BudgetItem metadata.
-- Future spending UI must use ordinary header/line corrections for minor edits.
+- Spending UI uses ordinary header/line corrections for minor edits.
   Explicit replacement refreshes saved setup metadata and regenerates lines, so
   it must remain a deliberate action. Retain the original create payload and UUID
   for retries; after an uncertain mutation response, reload the saved record

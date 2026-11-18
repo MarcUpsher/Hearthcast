@@ -1,0 +1,13 @@
+.toolbar { margin-top: 20px; align-items: start; }
+.currency-table { overflow-x: auto; margin: 20px 0; }
+table { width: 100%; border-collapse: collapse; }
+caption { text-align: left; font-weight: 600; margin-bottom: 12px; }
+th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+tbody th { font-weight: 400; }
+.amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.receipt-counts { display: flex; flex-wrap: wrap; gap: 24px; }
+.receipt-counts dd { margin: 8px 0 0; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.warnings { list-style: none; padding: 0; }
+.warnings li { padding: 12px 0; border-top: 1px solid var(--mat-sys-outline-variant); }
+.warnings p { margin: 6px 0; }
+@media (max-width: 550px) { .toolbar mat-form-field { flex-basis: 100%; } th, td { padding: 12px 6px; } }

@@ -8,6 +8,9 @@ export class Api {
   get<T>(path: string) {
     return firstValueFrom(this.http.get<T>("/api/" + path));
   }
+  getText(path: string) {
+    return firstValueFrom(this.http.get("/api/" + path, { responseType: "text" }));
+  }
   send<T>(method: string, path: string, body: unknown) {
     return firstValueFrom(
       this.http.request<T>(method, "/api/" + path, { body }),

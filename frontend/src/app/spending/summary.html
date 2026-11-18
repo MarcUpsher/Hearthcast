@@ -1,0 +1,65 @@
+<app-spending-navigation />
+<section class="page-heading"><div><h1>Spending by category</h1><p class="muted">Recorded spending over any inclusive date range. Payments add, refunds subtract on their own dates, and voided records are excluded.</p></div></section>
+@if (w.current(); as household) {
+  <p class="muted">For {{ household.name }}. Currencies stay separate; totals reflect only the spending you have recorded.</p>
+  <section class="panel" aria-labelledby="range-title">
+    <h2 id="range-title">Date range</h2>
+    <div class="actions" aria-label="Date shortcuts">
+      <button mat-button [disabled]="loading()" (click)="preset('thisMonth')">This month</button>
+      <button mat-button [disabled]="loading()" (click)="preset('lastMonth')">Last month</button>
+      <button mat-button [disabled]="loading()" (click)="preset('thisWeek')">This week</button>
+      <button mat-button [disabled]="loading()" (click)="preset('lastWeek')">Last week</button>
+    </div>
+    <form class="toolbar" aria-label="Choose report month" (ngSubmit)="showMonth()">
+      <mat-form-field><mat-label>Month and year</mat-label><input matInput type="month" name="month" required [ngModel]="month()" (ngModelChange)="month.set($event)" /></mat-form-field>
+      <button mat-stroked-button type="submit" [disabled]="loading()">Show month</button>
+    </form>
+    <form class="toolbar" aria-label="Spending report date range" (ngSubmit)="load()">
+      <mat-form-field><mat-label>From (inclusive)</mat-label><input matInput type="date" name="from" required [ngModel]="range().from" (ngModelChange)="change('from', $event)" /></mat-form-field>
+      <mat-form-field><mat-label>To (inclusive)</mat-label><input matInput type="date" name="to" required [ngModel]="range().to" (ngModelChange)="change('to', $event)" /></mat-form-field>
+      <button mat-flat-button type="submit" [disabled]="loading()">Show recorded spending / refresh</button>
+    </form>
+    @if (loading()) { <p role="status">Loading recorded spending…</p> }
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    @if (changed()) { <p class="notice">The dates have changed. Apply the range to update the report below.</p> }
+  </section>
+  @if (report(); as report) {
+    <section class="panel" aria-labelledby="totals-title" [attr.aria-busy]="loading()">
+      <h2 id="totals-title">Recorded spending · {{ date(report.from) }} – {{ date(report.to) }}</h2>
+      @if (!report.categories.length) { <p class="muted">No recorded spending in this range. This does not establish that nothing was spent.</p> }
+      @for (group of groups(); track group.currency) {
+        <div class="currency-table">
+          <table><caption>{{ group.currency }} recorded spending by category</caption>
+            <thead><tr><th scope="col">Category</th><th scope="col" class="amount">Net recorded spending</th></tr></thead>
+            <tbody>
+              @for (category of group.rows; track category.expenseCategoryId) {
+                <tr><th scope="row">{{ category.categoryName }}</th><td class="amount">{{ money(category.netAmount, category.currencyCode, category.currencyMinorUnits) }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (report.categories.length) { <p class="muted">Categories use saved classification; labels come from the most recent contributing saved record. Negative amounts mean recorded refunds exceed payments in this range.</p> }
+    </section>
+    <section class="panel" aria-labelledby="receipt-title">
+      <h2 id="receipt-title">Receipt checks</h2>
+      <p class="muted">Counts are for records, across all currencies. A matching receipt total checks the entered lines; it does not prove that all spending was captured.</p>
+      <dl class="receipt-counts">
+        <div><dt>Receipt total not supplied</dt><dd>{{ report.reconciliationRecordCounts.notChecked }}</dd></div>
+        <div><dt>Receipt total matches</dt><dd>{{ report.reconciliationRecordCounts.reconciled }}</dd></div>
+        <div><dt>Receipt total differs</dt><dd>{{ report.reconciliationRecordCounts.unreconciled }}</dd></div>
+      </dl>
+      @if (report.warnings.length) {
+        <p class="notice">Saved line amounts are counted in the category totals. Receipt discrepancies are shown once per record and are not allocated to categories.</p>
+        <ul class="warnings" aria-label="Receipt discrepancies">
+          @for (warning of report.warnings; track warning.spendingRecordId) {
+            <li><strong>{{ warning.merchantName }} · {{ date(warning.spendingDate) }}</strong>
+              <p>Receipt: {{ warningMoney(warning, warning.receiptTotal) }} · Lines: {{ warningMoney(warning, warning.lineTotal) }}</p>
+              <p>Receipt minus lines: {{ warningMoney(warning, warning.difference) }}</p>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+} @else { <p class="notice">Select or create a household to see recorded spending.</p> }

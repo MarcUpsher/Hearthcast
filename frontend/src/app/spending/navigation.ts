@@ -7,6 +7,7 @@ import { MatButtonModule } from "@angular/material/button";
   imports: [RouterLink, RouterLinkActive, MatButtonModule],
   template: `<nav aria-label="Spending">
     <a mat-button routerLink="/spending/records" routerLinkActive="active">Purchases &amp; history</a>
+    <a mat-button routerLink="/spending/summary" routerLinkActive="active">Spending by category</a>
     <a mat-button routerLink="/spending/items" routerLinkActive="active">Items</a>
     <a mat-button routerLink="/spending/setup" routerLinkActive="active">Categories &amp; merchants</a>
   </nav>`,

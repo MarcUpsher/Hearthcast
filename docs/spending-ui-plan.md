@@ -80,7 +80,9 @@ sidebar focus, narrow layouts and error presentation in the rendered UI.
 
 Run the relevant component tests during development, then `npm test` and
 `npm run build` from `frontend/`. Report actual results and any limitations. Do not
-deploy the app or migrate the application database as part of frontend work.
+migrate the application database as part of frontend work. The user subsequently
+authorized rebuilding/updating the running web service after reviewed UI delivery;
+use the web-only Compose command without restarting backend/database services.
 
 ## Item catalogue and usual prices (implemented)
 
@@ -96,16 +98,17 @@ and merchant setup remains accessible through Spending navigation.
    amounts/splits and optional catalogue-item lines with quantity and actual price.
    Usual prices prefill entry but are overridable; actual amounts never silently
    replace remembered prices. Include errors/retries, receipt reconciliation and
-   voiding accidental entries. Detailed corrections and refunds can follow.
+   voiding accidental entries. Refund creation/editing remains separate.
    Use the established client-generated capture ID for safe retries. See
    [record API](spending-record-api-slice.md). The
    [capture/history UI](spending-capture-ui-slice.md) is implemented, including
    both quick amounts and catalogue item lines. Saved payment correction is now
    implemented through the shared entry form; see [purchase editing](spending-edit-ui-slice.md).
    Refund creation/editing remains deferred.
-2. Category reporting: month/week/custom date controls translated to explicit
+2. Category reporting (implemented): month/week/custom date controls translated to explicit
    inclusive backend dates; separate currencies, recorded-spending wording and
    visible reconciliation information. See
-   [summary API](spending-category-summary-api-slice.md).
+   [summary API](spending-category-summary-api-slice.md) and
+   [category-report UI](spending-summary-ui-slice.md).
 3. Budget setup and dated plan UI can follow as a separate workflow. Actual-vs-plan
    comparisons still require a later agreed allocation policy.

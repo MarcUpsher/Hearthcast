@@ -14,6 +14,7 @@ import { SnapshotEditor } from "./snapshots/editor";
 import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
 import { SpendingRecords } from "./spending/records";
+import { SpendingSummary } from "./spending/summary";
 import { spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
 import { firstValueFrom, filter } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
@@ -33,6 +34,11 @@ async function setup(path: string, history = false) {
     if (path.endsWith("/spending/currencies")) return [{ code: "GBP", minorUnits: 2 }];
     if (path.includes("/spending/records?")) return { records: [], nextCursor: null, pageSize: 25 };
     if (path.includes("/spending/records/")) return spendingRecord(path.split("/")[1]);
+    if (path.includes("/spending/summary?")) {
+      const query = new URL(path, "http://test/").searchParams;
+      return { householdId: path.split("/")[1], from: query.get("from")!, to: query.get("to")!, categories: [],
+        reconciliationRecordCounts: { notChecked: 0, reconciled: 0, unreconciled: 0 }, warnings: [] };
+    }
     if (path.endsWith("/snapshots"))
       return [{ id: "latest", snapshotDate: "2026-01-01" }];
     if (path.endsWith("/snapshots/latest"))
@@ -52,7 +58,7 @@ async function setup(path: string, history = false) {
     providers: [
       provideRouter(routes),
       ...(history ? provideLocationMocks() : []),
-      { provide: Api, useValue: { get, send } },
+      { provide: Api, useValue: { get, send, getText: async (path: string) => JSON.stringify(await get(path)) } },
     ],
   });
   const fixture = TestBed.createComponent(App);
@@ -281,4 +287,14 @@ it("guards saved purchase edits across route and household changes", async () =>
   expect(records.editing()?.id).toBe("record");
   confirm.mockReturnValue(true); await choose("second");
   expect(records.editing()).toBeNull(); expect(records.hasUnsavedChanges()).toBe(false);
+});
+
+it("opens Spending by category from feature navigation and changes household without a draft prompt", async () => {
+  const { fixture, page, choose, workspace, send } = await setup("/spending/summary");
+  expect(page).toBeInstanceOf(SpendingSummary);
+  const link = fixture.nativeElement.querySelector('a[href="/spending/summary"]');
+  expect(link.textContent).toContain("Spending by category"); expect(link.classList.contains("active")).toBe(true);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  await choose("second");
+  expect(workspace.current()?.id).toBe("second"); expect(confirm).not.toHaveBeenCalled(); expect(send).not.toHaveBeenCalled();
 });

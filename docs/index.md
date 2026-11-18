@@ -37,6 +37,7 @@ original single-currency projection and initial screen notes are superseded.
 | Saved purchase corrections, revision conflicts and reload recovery | [Purchase editing UI](spending-edit-ui-slice.md) |
 | Recorded spending by category/currency over an inclusive date range | [Category-summary service](spending-category-summary-service-slice.md) |
 | Recorded spending date-range HTTP contract | [Category-summary API](spending-category-summary-api-slice.md) |
+| Recorded category spending screen, month/week/custom dates and receipt checks | [Category-summary UI](spending-summary-ui-slice.md) |
 | Budget domain, provenance and persistence | [Budget domain slice](budget-domain-slice.md) |
 | Budget setup service operations | [Budget setup services](budget-setup-service-slice.md) |
 | Budget setup HTTP contracts and endpoints | [Budget setup API](budget-setup-api-slice.md) |
@@ -70,7 +71,9 @@ information. The [category-summary API](spending-category-summary-api-slice.md)
 exposes it through a required date range. Its [original handoff](spending-category-summary-service-handoff.md)
 records the service scope. [Spending setup UI](spending-setup-ui-slice.md) is
 implemented, followed by [purchase capture/history](spending-capture-ui-slice.md).
-Category reporting UI and budget comparisons remain later work.
+Saved [purchase editing](spending-edit-ui-slice.md) and
+[category reporting UI](spending-summary-ui-slice.md) are implemented.
+Budget screens and budget comparisons remain later work.
 
 The [spending UI plan](spending-ui-plan.md) records the categories/merchants screen
 scope, API contracts, implementation/review ownership and acceptance criteria,
