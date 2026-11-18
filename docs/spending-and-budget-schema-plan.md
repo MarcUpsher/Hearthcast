@@ -539,7 +539,8 @@ workflows are established. The broad feature sequence is:
 3. BudgetItem setup and dated BudgetSnapshot capture/carry-forward/correction;
    domain aggregates, EF mappings, migration and persistence tests are implemented.
    Setup and transactional snapshot services and setup/snapshot HTTP endpoints
-   are implemented. UI remains deferred.
+   are implemented. The [regular outgoing setup UI](budget-setup-ui-slice.md)
+   is implemented; dated plan capture/history UI is the next slice.
    Verify effective-date selection, backdated retired items, source-metadata
    copying versus explicit refresh, deliberate omissions versus null/zero,
    additive category totals, stale edits and independent saved copies. Check

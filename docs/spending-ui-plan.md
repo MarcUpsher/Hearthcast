@@ -111,8 +111,10 @@ and merchant setup remains accessible through Spending navigation.
    visible reconciliation information. See
    [summary API](spending-category-summary-api-slice.md) and
    [category-report UI](spending-summary-ui-slice.md).
-3. Budget setup and dated plan UI can follow as a separate workflow. Actual-vs-plan
-   comparisons still require a later agreed allocation policy.
+3. [Regular outgoing setup UI](budget-setup-ui-slice.md) is implemented with
+   metadata, recurrence, retirement and shared category/merchant choices. Dated
+   outgoing plans and amounts are next. Actual-vs-plan comparisons still require
+   a later agreed allocation policy.
 
 ## Form usability follow-up (implemented)
 

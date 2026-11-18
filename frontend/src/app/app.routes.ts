@@ -43,6 +43,11 @@ export const routes: Routes = [
     loadComponent: () => import("./spending/summary").then((m) => m.SpendingSummary),
   },
   {
+    path: "spending/outgoings",
+    canDeactivate: [(component: import("./budgets/outgoings").RegularOutgoings) => component.canLeave()],
+    loadComponent: () => import("./budgets/outgoings").then((m) => m.RegularOutgoings),
+  },
+  {
     path: "spending/items",
     canDeactivate: [
       (component: import("./spending/items").SpendingItems) => component.canLeave(),

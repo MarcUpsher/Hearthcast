@@ -41,6 +41,7 @@ and EF. Shared helpers contain specific reusable rules, not household policy.
 | `setup/models.ts`, `snapshots/models.ts`, `summaries/models.ts`, `history/models.ts`, `modelling/models.ts` | Feature-owned wire contracts. Snapshot consumers share one complete response shape. |
 | `setup/`, `snapshots/`, `history/` | Setup/editing, snapshot entry/browsing and historical graphs. |
 | `spending/` | Spending-specific wire models, setup/catalogue/usual prices, purchase capture, exact draft decimal arithmetic, bounded history, saved purchase corrections, record details/voiding and read-only category reports with calendar range controls and exact decimal decoding/display. Shares catalogue fields with an inline item-creation dialog. Owns request scoping, retry identities, nested draft/navigation protection and edit sidebars. Separate from asset/debt classification setup. |
+| `budgets/` | Regular outgoing setup models, creation/edit sidebar, recurrence/default validation, retirement and scoped draft/request protection. Amounts remain on dated plan entries in the backend; plan UI follows separately. |
 | `modelling/modelling.ts` | One owner for assumptions, preset drafts, saves, selection and request/lifecycle coordination. |
 | `modelling/chart/` | Pure chart geometry and a presentational chart with local pointer/keyboard state. |
 | `modelling/results/` | Presentational expense-target and growth-breakdown panels. No API calls or draft copies. |

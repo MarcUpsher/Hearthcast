@@ -14,6 +14,8 @@ import { SnapshotEditor } from "./snapshots/editor";
 import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
 import { SpendingRecords } from "./spending/records";
+import { RegularOutgoings } from "./budgets/outgoings";
+import { budgetItem } from "../testing/budgets";
 import { SpendingSummary } from "./spending/summary";
 import { spendingDraft, spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
 import { firstValueFrom, filter } from "rxjs";
@@ -28,6 +30,7 @@ async function setup(path: string, history = false) {
   }));
   const get = vi.fn(async (path: string) => {
     if (path === "households") return households;
+    if (path.includes("/budgets/items?")) return [budgetItem(path.split("/")[1])];
     if (path.includes("/spending/items?")) return [spendingItem(path.split("/")[1])];
     if (path.includes("/spending/categories?")) return [spendingEntry("food", path.split("/")[1])];
     if (path.includes("/spending/merchants?")) return [spendingEntry("shop", path.split("/")[1])];
@@ -70,10 +73,13 @@ async function setup(path: string, history = false) {
   const outlet = fixture.debugElement
     .query(By.directive(RouterOutlet))
     .injector.get(RouterOutlet);
-  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingRecords;
+  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingRecords | RegularOutgoings;
   if (page instanceof SpendingRecords) {
     await vi.waitFor(() => expect(page.lookupLoading()).toBe(false));
     fixture.detectChanges(); await fixture.whenStable();
+  }
+  if (page instanceof RegularOutgoings) {
+    await vi.waitFor(() => expect(page.loading()).toBe(false)); fixture.detectChanges(); await fixture.whenStable();
   }
   const workspace = TestBed.inject(Workspace);
   const picker = fixture.debugElement.query(By.css(".household-picker"))
@@ -86,12 +92,12 @@ async function setup(path: string, history = false) {
   };
   const edit = () => {
     if (page instanceof SpendingRecords) page.capture()!.set("notes", "Unsaved purchase");
-    else if (page instanceof SpendingItems) page.change(false, "name", "Unsaved item");
+    else if (page instanceof SpendingItems || page instanceof RegularOutgoings) page.change(false, "name", "Unsaved item");
     else if (page instanceof SpendingSetup) page.changeNewName("categories", "Unsaved category");
     else if (page instanceof Modelling) page.presetName = "Unsaved scenario";
     else page.date = "2000-01-01";
   };
-  const draft = () => page instanceof SpendingRecords ? page.capture()!.draft().notes : page instanceof SpendingItems ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
+  const draft = () => page instanceof SpendingRecords ? page.capture()!.draft().notes : (page instanceof SpendingItems || page instanceof RegularOutgoings) ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
     (page instanceof Modelling ? page.presetName : page.date);
   const writing = () => {
     if (page instanceof SpendingRecords) page.capture()!.saving.set(true);
@@ -117,7 +123,7 @@ afterEach(() => {
   localStorage.removeItem("household");
 });
 
-describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records"])(
+describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records", "/spending/outgoings"])(
   "Household switching from %s",
   (path) => {
     it("allows a clean page to switch without confirmation", async () => {
@@ -213,7 +219,7 @@ it("guards leaving spending setup through the router and exposes its navigation 
 });
 
 it.each([
-  ["/spending/setup", false], ["/spending/setup", true], ["/spending/items", false], ["/spending/items", true],
+  ["/spending/setup", false], ["/spending/setup", true], ["/spending/items", false], ["/spending/items", true], ["/spending/outgoings", false], ["/spending/outgoings", true],
 ] as const)("keeps the %s sidebar and typed name on rejected browser Back (saving=%s)", async (path, saving) => {
   const { fixture, send } = await setup("/setup", true);
   const router = TestBed.inject(Router);
@@ -221,9 +227,12 @@ it.each([
   await router.navigateByUrl(path);
   fixture.detectChanges();
   await fixture.whenStable();
-  const page = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingSetup | SpendingItems;
-  const entry = path === "/spending/items" ? spendingItem() : { id: "food", householdId: "first", name: "Food", isRetired: false };
-  if (page instanceof SpendingItems) {
+  const page = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingSetup | SpendingItems | RegularOutgoings;
+  const entry = path === "/spending/items" ? spendingItem() : path === "/spending/outgoings" ? budgetItem() : { id: "food", householdId: "first", name: "Food", isRetired: false };
+  if (page instanceof RegularOutgoings) {
+    await vi.waitFor(() => expect(page.loading()).toBe(false));
+    page.beginEdit(budgetItem()); page.change(true, "name", "Groceries draft");
+  } else if (page instanceof SpendingItems) {
     await vi.waitFor(() => expect(page.loading()).toBe(false));
     page.beginEdit(spendingItem());
     page.change(true, "name", "Groceries draft");
@@ -231,14 +240,14 @@ it.each([
     page.beginEdit("categories", entry);
     page.editName.set("Groceries draft");
   }
-  const draft = () => page instanceof SpendingItems ? page.editDraft().name : page.editName();
+  const draft = () => page instanceof SpendingSetup ? page.editName() : page.editDraft().name;
   fixture.detectChanges();
   await fixture.whenStable();
   let finish!: (result: unknown) => void;
   let writing: Promise<void> | undefined;
   if (saving) {
     send.mockReturnValue(new Promise(resolve => { finish = resolve; }));
-    writing = page instanceof SpendingItems ? page.submit(true) : page.saveEdit();
+    writing = page instanceof SpendingSetup ? page.saveEdit() : page.submit(true);
   }
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
   const navigation = firstValueFrom(router.events.pipe(filter(event =>
@@ -252,9 +261,9 @@ it.each([
   expect(outcome).toBeInstanceOf(NavigationCancel);
   expect(router.url).toBe(path);
   expect(draft()).toBe("Groceries draft");
-  expect(page instanceof SpendingItems ? page.editing()?.id : page.editing()?.entry.id).toBe(entry.id);
+  expect(page instanceof SpendingSetup ? page.editing()?.entry.id : page.editing()?.id).toBe(entry.id);
   expect(TestBed.inject(MatDialog).openDialogs).toHaveLength(1);
-  const selector = page instanceof SpendingItems ? 'form[aria-label="Edit item"] input[name="name"]' : 'input[name="editName"]';
+  const selector = page instanceof SpendingSetup ? 'input[name="editName"]' : page instanceof SpendingItems ? 'form[aria-label="Edit item"] input[name="name"]' : 'form[aria-label="Edit outgoing"] input[name="name"]';
   expect(document.querySelector<HTMLInputElement>(selector)?.value).toBe("Groceries draft");
   if (saving) {
     expect(confirm).not.toHaveBeenCalled();
@@ -316,4 +325,14 @@ it("guards an item creation dialog on browser Back and household changes without
   confirm.mockReturnValue(true); await choose("second");
   expect(workspace.current()?.id).toBe("second"); expect(capture.itemEditor()).toBeNull();
   fixture.destroy();
+});
+
+it("opens regular outgoing setup from Spending navigation and guards leaving its draft", async () => {
+  const { fixture, page, edit, draft } = await setup("/spending/outgoings");
+  expect(page).toBeInstanceOf(RegularOutgoings);
+  expect(fixture.nativeElement.querySelector('a[href="/spending/outgoings"]').classList.contains("active")).toBe(true);
+  expect(fixture.nativeElement.querySelector('header a[href="/spending"]').classList.contains("active")).toBe(true);
+  edit(); const before = draft(), confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  expect(await TestBed.inject(Router).navigateByUrl("/spending/records")).toBe(false); expect(draft()).toBe(before);
+  confirm.mockReturnValue(true); expect(await TestBed.inject(Router).navigateByUrl("/spending/records")).toBe(true);
 });

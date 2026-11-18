@@ -1,0 +1,87 @@
+<app-spending-navigation />
+<section class="page-heading"><div><h1>Regular outgoings</h1><p class="muted">Set up rent, utilities, subscriptions and other regular expenses.</p></div></section>
+@if (w.current(); as household) {
+  <p class="muted">For {{ household.name }}. These are reusable defaults; amounts belong to dated outgoing plans.</p>
+  @if (loading()) { <p role="status">Loading regular outgoings…</p> }
+  @if (error()) { <p class="error" role="alert">{{ error() }}</p><button mat-stroked-button [disabled]="saving() || loading()" (click)="load()">Retry outgoings</button> }
+  <section class="panel" aria-labelledby="create-outgoing-title"><h2 id="create-outgoing-title">Add outgoing</h2>
+    @if (!loading() && !error() && !categories().length) { <p class="notice">Add a spending category in Categories &amp; merchants first.</p> }
+    <ng-container [ngTemplateOutlet]="outgoingForm" [ngTemplateOutletContext]="{ edit: false }" />
+  </section>
+  <div class="toolbar">
+    <mat-form-field><mat-label>Search outgoings</mat-label><input matInput type="search" [ngModel]="search()" (ngModelChange)="search.set($event)" /></mat-form-field>
+    <mat-form-field><mat-label>Category filter</mat-label><mat-select [ngModel]="category()" (ngModelChange)="category.set($event)">
+      <mat-option value="">All categories</mat-option>
+      @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
+    </mat-select></mat-form-field>
+    <mat-form-field><mat-label>Status</mat-label><mat-select [ngModel]="status()" (ngModelChange)="status.set($event)">
+      <mat-option value="active">Active</mat-option><mat-option value="retired">Retired</mat-option><mat-option value="all">All</mat-option>
+    </mat-select></mat-form-field>
+  </div>
+  @if (actionError()) { <p class="error" role="alert">{{ actionError() }}</p> }
+  <p class="feedback" role="status" aria-live="polite">{{ saving() ? 'Saving…' : notice() }}</p>
+  @if (!loading() && !error()) {
+    @if (visibleRows().length) {
+      <ul class="outgoings-list" aria-label="Regular outgoings">
+        @for (item of visibleRows(); track item.id) {
+          <li><div class="outgoing-details"><strong>{{ item.name }}</strong> <span class="badge">{{ item.isRetired ? 'Retired' : 'Active' }}</span>
+            <p class="muted">{{ item.code }} · {{ categoryName(item.expenseCategoryId) }} · {{ item.currencyCode }} · {{ recurrence(item.frequency, item.intervalCount) }}</p>
+            @if (item.merchantId) { <p>{{ merchantName(item.merchantId) }}</p> }
+            @if (item.notes) { <p class="notes">{{ item.notes }}</p> }
+          </div><div class="actions">
+            <button mat-button [disabled]="!canWrite()" (click)="beginEdit(item)" [attr.aria-label]="'Edit outgoing ' + item.name">Edit</button>
+            <button mat-button [disabled]="!canWrite()" (click)="setRetirement(item)" [attr.aria-label]="(item.isRetired ? 'Restore ' : 'Retire ') + item.name">{{ item.isRetired ? 'Restore' : 'Retire' }}</button>
+          </div></li>
+        }
+      </ul>
+    } @else { <p class="notice">{{ rows().length ? 'No outgoings match your filters.' : 'No regular outgoings yet. Add your first one above.' }}</p> }
+  }
+} @else { <p class="notice">Select or create a household to manage regular outgoings.</p> }
+
+<ng-template #outgoingForm let-edit="edit">
+  @let value = draft(edit);
+  <form #form="ngForm" class="outgoing-form" [class.editor-form]="edit" [attr.aria-label]="edit ? 'Edit outgoing' : 'Add outgoing'" [attr.aria-busy]="saving()" (ngSubmit)="submit(edit, form)">
+    <div class="outgoing-fields">
+      @if (edit) { <p class="muted span">Changes update the defaults. Saved outgoing plans keep their recorded details.</p> }
+      <mat-form-field><mat-label>Outgoing name</mat-label><input matInput name="name" required [disabled]="saving()" [ngModel]="value.name" (ngModelChange)="change(edit, 'name', $event)" /></mat-form-field>
+      <mat-form-field><mat-label>Outgoing code</mat-label><input matInput name="code" required maxlength="64" [pattern]="codePattern" [readonly]="edit" [disabled]="saving()" [ngModel]="value.code" (ngModelChange)="change(edit, 'code', $event)" />
+        <mat-hint>{{ edit ? 'Fixed for this outgoing' : 'Unique code, e.g. INTERNET. Start with a letter or digit; then letters, digits, dots, hyphens or underscores.' }}</mat-hint>
+        <mat-error>Start with a letter or digit. Use up to 64 letters, digits, dots, hyphens or underscores.</mat-error>
+      </mat-form-field>
+      <mat-form-field><mat-label>Category</mat-label><mat-select name="expenseCategoryId" required [disabled]="saving()" [ngModel]="value.expenseCategoryId" (ngModelChange)="change(edit, 'expenseCategoryId', $event)">
+        @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
+      </mat-select></mat-form-field>
+      <mat-form-field><mat-label>Currency</mat-label><mat-select name="currencyCode" required [disabled]="saving()" [ngModel]="value.currencyCode" (ngModelChange)="change(edit, 'currencyCode', $event)">
+        @for (currency of currencies(); track currency.code) { <mat-option [value]="currency.code">{{ currency.code }}</mat-option> }
+        @if (edit && historicalCurrency(); as code) { <mat-option [value]="code">{{ code }} (saved currency)</mat-option> }
+      </mat-select>
+        @if (edit && historicalCurrency()) { <mat-hint>The saved currency can be retained on this outgoing.</mat-hint> }
+      </mat-form-field>
+      <mat-form-field><mat-label>Every</mat-label><input matInput appBudgetInterval name="intervalCount" inputmode="numeric" required [disabled]="saving()" [ngModel]="value.intervalCount" (ngModelChange)="change(edit, 'intervalCount', $event)" />
+        <mat-hint>Use a positive whole number (1 or more), e.g. 3 months.</mat-hint>
+        <mat-error>Use a positive whole number from 1 to 2147483647.</mat-error>
+      </mat-form-field>
+      <mat-form-field><mat-label>Period</mat-label><mat-select name="frequency" required [disabled]="saving()" [ngModel]="value.frequency" (ngModelChange)="change(edit, 'frequency', $event)">
+        <mat-option value="Week">{{ value.intervalCount === '1' ? 'Week' : 'Weeks' }}</mat-option>
+        <mat-option value="Month">{{ value.intervalCount === '1' ? 'Month' : 'Months' }}</mat-option>
+        <mat-option value="Year">{{ value.intervalCount === '1' ? 'Year' : 'Years' }}</mat-option>
+      </mat-select></mat-form-field>
+      <details class="span"><summary>Merchant and notes (optional)</summary><div class="optional-fields">
+        <mat-form-field><mat-label>Merchant</mat-label><mat-select name="merchantId" [disabled]="saving()" [ngModel]="value.merchantId" (ngModelChange)="change(edit, 'merchantId', $event)">
+          <mat-option value="">No default merchant</mat-option>
+          @for (entry of merchants(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
+        </mat-select></mat-form-field>
+        <mat-form-field><mat-label>Notes</mat-label><textarea matInput name="notes" rows="1" [disabled]="saving()" [ngModel]="value.notes" (ngModelChange)="change(edit, 'notes', $event)"></textarea></mat-form-field>
+      </div></details>
+      @if (edit ? editError() : createError()) { <p class="error span" role="alert">{{ edit ? editError() : createError() }}</p> }
+    </div>
+    <div class="actions">
+      <button mat-button type="button" [disabled]="saving()" (click)="edit ? cancelEdit() : clearCreate(form)">{{ edit ? 'Cancel' : 'Clear outgoing' }}</button>
+      <button mat-flat-button type="submit" [disabled]="!canWrite() || !valid(edit) || (edit && !editDirty())">{{ edit ? 'Save outgoing' : 'Add outgoing' }}</button>
+    </div>
+  </form>
+</ng-template>
+<ng-template #editPanel>
+  <h2 mat-dialog-title>Edit outgoing · {{ editing()?.name }}</h2>
+  <div class="edit-content"><ng-container [ngTemplateOutlet]="outgoingForm" [ngTemplateOutletContext]="{ edit: true }" /></div>
+</ng-template>

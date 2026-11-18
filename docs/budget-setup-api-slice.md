@@ -3,7 +3,9 @@
 17 November 2026. Exposes [BudgetSetupService](budget-setup-service-slice.md)
 through household-scoped controllers and explicit request/response contracts under
 Hearthcast.Api/Budgets. [Snapshot capture/correction, history and current-outgoing
-HTTP endpoints](budget-snapshot-api-slice.md) are now implemented. UI remains deferred.
+HTTP endpoints](budget-snapshot-api-slice.md) are now implemented. The subsequent
+[regular outgoings setup UI](budget-setup-ui-slice.md) is also implemented; dated
+plan UI remains a following slice.
 
 ## Routes
 
