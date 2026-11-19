@@ -57,6 +57,11 @@ occupies that port, or pass another port to `npm start`.
   commitments, with shared dated capture/carry-forward and additive subtotals.
   Allowances have no merchant or payment schedule; their setup is maintained
   inline without another navigation tab. See [allowances](../docs/budget-allowances-slice.md).
+  Budget overview also shows monthly planning averages for its selected effective
+  plan, split into commitments/allowances/combined by currency. Exact arithmetic,
+  explicit 52-week conversion, partial unknown subtotals and independent currency
+  display metadata keep the scope visible. Original amounts remain below. See
+  [monthly planning averages](../docs/monthly-planning-average-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

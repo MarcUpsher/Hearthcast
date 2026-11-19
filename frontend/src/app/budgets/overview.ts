@@ -8,16 +8,17 @@ import { Api } from "../core/api";
 import { message } from "../core/api-errors";
 import { Workspace } from "../core/workspace";
 import { localToday, spendingDate } from "../spending/amounts";
-import { SpendingSetupEntry } from "../spending/models";
+import { SpendingCurrency, SpendingSetupEntry } from "../spending/models";
 import { SpendingNavigation } from "../spending/navigation";
 import { BudgetPaymentDate } from "./payment-date";
 import { nextPaymentDate, validPaymentAnchor } from "./payment-schedule";
 import { BudgetItemKind, CurrentOutgoing, CurrentOutgoings, budgetRecurrence } from "./models";
 import { BudgetTotals } from "./totals";
+import { MonthlyBudgetSummary } from "./monthly-summary";
 import { parseBudget, planMoney, planTotals } from "./plan-data";
 
 @Component({
-  imports: [FormsModule, RouterLink, MatButtonModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetPaymentDate, BudgetTotals],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetPaymentDate, BudgetTotals, MonthlyBudgetSummary],
   templateUrl: "overview.html", styleUrl: "overview.scss",
 })
 export class OutgoingOverview {
@@ -31,6 +32,7 @@ export class OutgoingOverview {
   readonly report = signal<CurrentOutgoings | null>(null);
   readonly categories = signal<SpendingSetupEntry[]>([]);
   readonly merchants = signal<SpendingSetupEntry[]>([]);
+  readonly currencies = signal<SpendingCurrency[] | null>(null);
   readonly loading = signal(false);
   readonly error = signal("");
   readonly search = signal("");
@@ -67,7 +69,7 @@ export class OutgoingOverview {
       untracked(() => {
         if (home === this.home) return;
         this.home = home; this.generation++; this.version++;
-        this.report.set(null); this.categories.set([]); this.merchants.set([]); this.loading.set(false); this.error.set("");
+        this.report.set(null); this.categories.set([]); this.merchants.set([]); this.currencies.set(null); this.loading.set(false); this.error.set("");
         this.search.set(""); this.status.set("all"); this.category.set(""); this.asOf.set(localToday());
         if (home) void this.load();
       });
@@ -82,6 +84,12 @@ export class OutgoingOverview {
     if (!home || this.w.current()?.id !== home || this.destroyed) return;
     if (form?.invalid || !asOf || !validPaymentAnchor(asOf)) { this.error.set("Choose a supported as-of date."); return; }
     const version = ++this.version; this.loading.set(true); this.error.set("");
+    // Optional display metadata must not delay the saved plan, even when the
+    // request stalls. Start with the explicit fallback and refine when available.
+    this.currencies.set(null);
+    void this.api.get<SpendingCurrency[]>(`households/${home}/spending/currencies`)
+      .then(currencies => { if (this.current(home, generation, version)) this.currencies.set(currencies); })
+      .catch(() => { /* The labelled six-place fallback remains available. */ });
     try {
       const [text, categories, merchants] = await Promise.all([
         this.api.getText(`households/${home}/budgets/current-outgoings?asOf=${asOf}&includeRetired=true`),

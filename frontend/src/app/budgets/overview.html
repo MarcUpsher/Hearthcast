@@ -21,11 +21,13 @@
           @if (result.isComplete === false) { <p>Contains unknown amounts. Known subtotals are partial.</p> }
         } @else { <p>No effective plan on this date. Create a dated plan to record expected amounts.</p> }
         <p class="muted">{{ unknown() }} unknown amount(s) · {{ missing() }} outgoing(s) {{ result.snapshotId ? 'not included in plan' : 'without an effective plan' }}. An omitted outgoing never falls back to an older amount.</p>
+        @if (result.snapshotId) { <app-monthly-budget-summary [entries]="entries()" [currencies]="currencies()" [asOf]="result.asOf" /> }
+        <h3>Original amounts by recurrence</h3>
         <div class="totals" aria-label="All included plan totals">
           <app-budget-totals [entries]="entries()" />
           @if (result.snapshotId && !totals().length) { <p>This plan includes no outgoings.</p> }
         </div>
-        <p class="muted">Totals cover all included plan entries, including retired definitions, and stay unchanged by the list filters. Currencies and recurrences remain separate. These are expected costs per recurrence, with no monthly conversion or payment-date allocation.</p>
+        <p class="muted">Original totals cover all included plan entries, including retired definitions, and stay unchanged by the list filters. These totals keep currencies and recurrences separate; payment dates are shown with each commitment.</p>
       </section>
       <section class="panel" aria-labelledby="overview-list-title">
         <h2 id="overview-list-title">Outgoing details</h2>

@@ -120,7 +120,9 @@ and merchant setup remains accessible through Spending navigation.
    brings effective amounts and current payment schedules together. The next
    [commitments and allowances slice](budget-allowances-slice.md) is implemented:
    saved item classification, lean category allowance entry and one two-section
-   dated budget, retaining explicitly additive amounts. Actual-vs-plan comparisons still require a later agreed
+   dated budget, retaining explicitly additive amounts. [Monthly planning averages](monthly-planning-average-slice.md)
+   now summarize one effective plan using explicit 52-week/12-month conventions,
+   keeping original values and currencies separate. Actual-vs-plan comparisons still require a later agreed
    allocation policy.
 
 ## Form usability follow-up (implemented)

@@ -13,6 +13,8 @@ import { budgetItem } from "../../testing/budgets";
 import { deferred, spendingEntry } from "../../testing/spending";
 import { BudgetEntry, CurrentOutgoing, CurrentOutgoings } from "./models";
 import { OutgoingOverview } from "./overview";
+import { By } from "@angular/platform-browser";
+import { MonthlyBudgetSummary } from "./monthly-summary";
 
 const saved = (extra: Partial<BudgetEntry> = {}): BudgetEntry => ({ id: "entry", budgetItemId: "internet", kind: "Commitment", itemCode: "OLD", itemName: "Saved Internet",
   expenseCategoryId: "saved-category", expenseCategoryName: "Saved category", merchantId: null, merchantName: null, plannedAmount: "30.123456",
@@ -29,7 +31,7 @@ describe("Current outgoings overview", () => {
   const home = (id: string): Household => ({ id, name: id, people: [] });
   beforeEach(() => {
     response = report(); current = signal<Household | null>(home("first"));
-    get = vi.fn(async (path: string) => [spendingEntry(path.includes("/categories?") ? "food" : "shop", path.split("/")[1])]);
+    get = vi.fn(async (path: string) => path.endsWith("/currencies") ? [{ code: "GBP", minorUnits: 2 }, { code: "EUR", minorUnits: 2 }] : [spendingEntry(path.includes("/categories?") ? "food" : "shop", path.split("/")[1])]);
     text = vi.fn(async () => JSON.stringify(response)); send = vi.fn();
     TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: Workspace, useValue: { current } }, { provide: Api, useValue: { get, getText: text, send } }] });
   });
@@ -39,7 +41,7 @@ describe("Current outgoings overview", () => {
 
   it("uses explicit local dates, includes retired definitions and never writes or reads history", async () => {
     await page(); expect(text).toHaveBeenCalledExactlyOnceWith(`households/first/budgets/current-outgoings?asOf=${localToday()}&includeRetired=true`);
-    expect(get.mock.calls.map(([path]) => path).sort()).toEqual(["households/first/spending/categories?includeRetired=true", "households/first/spending/merchants?includeRetired=true"]);
+    expect(get.mock.calls.map(([path]) => path).sort()).toEqual(["households/first/spending/categories?includeRetired=true", "households/first/spending/currencies", "households/first/spending/merchants?includeRetired=true"]);
     expect(send).not.toHaveBeenCalled();
   });
   it("displays saved amount/context/provenance instead of changed live defaults", async () => {
@@ -80,6 +82,74 @@ describe("Current outgoings overview", () => {
   it("shows current lookup labels for rows without a saved entry", async () => {
     response.items = [row(null)]; const c = await page(); const body = fixture.nativeElement.textContent;
     expect(body).toContain("Food"); expect(body).toContain("Shop"); expect(c.categoryOptions()[0].id).toBe("first-food");
+  });
+  it("shows averages from the selected saved plan while leaving originals and filter scope intact", async () => {
+    const commitment = row(saved({ plannedAmount: "100", frequency: "Week" })); commitment.item.frequency = "Year"; commitment.item.isRetired = true;
+    response = report({ asOf: "2026-02-15", effectiveUntilExclusive: "2026-02-20", items: [commitment,
+      { item: budgetItem("first", { id: "allowance", kind: "Allowance" }), entry: saved({ id: "allowance-entry", budgetItemId: "allowance", kind: "Allowance", plannedAmount: "400" }) },
+      { item: budgetItem("first", { id: "missing" }), entry: null }] });
+    const c = await page(), summary = fixture.debugElement.query(By.directive(MonthlyBudgetSummary)).componentInstance as MonthlyBudgetSummary;
+    expect(summary.averages()[0].commitments.amount).toBe("433.33"); expect(summary.averages()[0].allowances.amount).toBe("400.00"); expect(summary.averages()[0].combined.amount).toBe("833.33");
+    const body = fixture.nativeElement.textContent; expect(body).toContain("Based on the plan effective on 15 Feb 2026"); expect(body).toContain("until before 20 Feb 2026");
+    expect(body).toContain("Weekly costs use 52 weeks per year"); expect(body).toContain("GBP 100.00"); expect(body).toContain("Every week");
+    const before = summary.averages(); c.status.set("active"); c.search.set("nothing"); await settle(); expect(summary.averages()).toEqual(before);
+    expect(c.missing()).toBe(1); expect(send).not.toHaveBeenCalled();
+  });
+  it("does not show a zero monthly budget before the first plan and labels an empty plan", async () => {
+    response = report({ snapshotId: null, effectiveFrom: null, isComplete: null, items: [row(null)] }); const c = await page();
+    expect(fixture.nativeElement.querySelector("app-monthly-budget-summary")).toBeNull();
+    response = report({ items: [row(null)] }); await c.load(); await settle();
+    expect(fixture.nativeElement.textContent).toContain("no commitments or allowances to average");
+    expect(fixture.nativeElement.querySelector("app-monthly-budget-summary table")).toBeNull();
+  });
+  it("labels unknown-only averages and mixed partial totals without converting unknowns to zero", async () => {
+    response = report({ isComplete: false, items: [row(saved({ plannedAmount: null })),
+      { item: budgetItem("first", { id: "allowance", kind: "Allowance" }), entry: saved({ id: "allowance-entry", budgetItemId: "allowance", kind: "Allowance", plannedAmount: "400" }) }] });
+    await page(); const cells = fixture.nativeElement.querySelectorAll("app-monthly-budget-summary tbody td");
+    expect(cells[0].textContent).toContain("Unknown"); expect(cells[0].textContent).not.toContain("GBP 0.00");
+    expect(cells[2].textContent).toContain("Known subtotal"); expect(cells[2].textContent).toContain("GBP 400.00"); expect(cells[2].textContent).toContain("1 unknown");
+  });
+  it("keeps plan reads available when display currency metadata fails", async () => {
+    get.mockImplementation(async path => { if (path.endsWith("/currencies")) throw new Error("Policy unavailable"); return [spendingEntry("food")]; });
+    const c = await page(); expect(c.error()).toBe(""); expect(c.currencies()).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain("GBP display precision is unavailable");
+    expect(fixture.nativeElement.querySelector("app-monthly-budget-summary table")).not.toBeNull();
+  });
+  it("renders the saved plan while optional currency metadata is stalled, then refines precision", async () => {
+    const pending = deferred<{ code: string; minorUnits: number }[]>();
+    get.mockImplementation(async path => path.endsWith("/currencies") ? pending.promise : [spendingEntry("food")]);
+    const c = await page(); expect(c.loading()).toBe(false); expect(c.currencies()).toBeNull();
+    expect(fixture.nativeElement.querySelector("app-monthly-budget-summary table")).not.toBeNull();
+    pending.resolve([{ code: "GBP", minorUnits: 2 }]);
+    await vi.waitFor(() => expect(c.currencies()).toEqual([{ code: "GBP", minorUnits: 2 }])); await settle();
+    expect(fixture.nativeElement.textContent).not.toContain("GBP display precision is unavailable");
+  });
+  it("rejects an older currency lookup after a newer request refines the same household", async () => {
+    const pending = deferred<{ code: string; minorUnits: number }[]>(); let initial = true;
+    get.mockImplementation(async path => {
+      if (!path.endsWith("/currencies")) return [spendingEntry("food")];
+      if (initial) { initial = false; return pending.promise; } return [{ code: "GBP", minorUnits: 2 }];
+    });
+    const c = await page(); await c.load(); pending.resolve([{ code: "GBP", minorUnits: 3 }]); await settle();
+    expect(c.currencies()).toEqual([{ code: "GBP", minorUnits: 2 }]);
+  });
+  it.each([false, true])("ignores stale optional currency completion after a household round trip (failure=%s)", async fail => {
+    const pending = deferred<{ code: string; minorUnits: number }[]>(); let initial = true;
+    get.mockImplementation(async path => {
+      if (!path.endsWith("/currencies")) return [spendingEntry("food", path.split("/")[1])];
+      if (initial) { initial = false; return pending.promise; } return [{ code: "GBP", minorUnits: 2 }];
+    });
+    const c = await page(); current.set(home("second")); await settle(); current.set(home("first")); await settle();
+    if (fail) pending.reject(new Error("Stale policy failure")); else pending.resolve([{ code: "GBP", minorUnits: 0 }]); await settle();
+    expect(c.currencies()).toEqual([{ code: "GBP", minorUnits: 2 }]); expect(c.error()).toBe("");
+  });
+  it("uses the displayed report date until a new date is applied and replaces averages with the next plan", async () => {
+    response = report({ asOf: "2026-02-15", items: [row(saved({ plannedAmount: "400" }))] }); const c = await page();
+    c.asOf.set("2026-03-01"); await settle(); let summary = fixture.debugElement.query(By.directive(MonthlyBudgetSummary)).componentInstance as MonthlyBudgetSummary;
+    expect(summary.asOf()).toBe("2026-02-15"); expect(summary.averages()[0].combined.amount).toBe("400.00");
+    response = report({ asOf: "2026-03-01", snapshotId: "new-plan", effectiveFrom: "2026-03-01", items: [row(saved({ plannedAmount: "500" }))] });
+    await c.load(); await settle(); summary = fixture.debugElement.query(By.directive(MonthlyBudgetSummary)).componentInstance as MonthlyBudgetSummary;
+    expect(summary.asOf()).toBe("2026-03-01"); expect(summary.averages()[0].combined.amount).toBe("500.00");
   });
   it("shows allowances under their saved category without internal codes or payment schedules", async () => {
     response = report({ items: [{ item: budgetItem("first", { kind: "Allowance", code: "ALW_INTERNAL", name: "Internal allowance", merchantId: null }),
