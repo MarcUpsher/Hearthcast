@@ -43,7 +43,9 @@ occupies that port, or pass another port to `npm start`.
   custom inclusive ranges, with separate currencies, signed net amounts and
   record-level receipt checks. See [category reporting](../docs/spending-summary-ui-slice.md).
   Regular outgoings maintains reusable expense definitions with currency, category,
-  recurrence, optional merchant/notes and retirement. Amounts and dated outgoing
+  recurrence, optional payment reference dates, merchant/notes and retirement.
+  Next expected payments retain anchored weekdays/day-of-month and handle short
+  months without drift. Amounts and dated outgoing
   plan capture follow separately. See [outgoing setup](../docs/budget-setup-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.

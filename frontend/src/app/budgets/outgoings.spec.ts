@@ -60,7 +60,7 @@ describe("Regular outgoing setup", () => {
     const c = await page(); c.createDraft.set(budgetDraft());
     const saved = budgetItem("first", { id: "energy", code: "ENERGY", name: "Electricity", intervalCount: 3, notes: "Variable usage" });
     send.mockResolvedValueOnce(saved); await settle(); await (await button("Add outgoing")).click();
-    expect(send).toHaveBeenCalledExactlyOnceWith("POST", "households/first/budgets/items", { ...budgetDraft(), intervalCount: 3 });
+    expect(send).toHaveBeenCalledExactlyOnceWith("POST", "households/first/budgets/items", { ...budgetDraft(), intervalCount: 3, paymentAnchorDate: null });
     expect(c.rows()).toContainEqual(saved); expect(c.hasUnsavedChanges()).toBe(false);
     expect(c.createDraft()).toMatchObject({ name: "", currencyCode: "GBP", frequency: "Month", intervalCount: "1" });
     await settle(); const form = fixture.nativeElement.querySelector('form[aria-label="Add outgoing"]');
@@ -113,7 +113,7 @@ describe("Regular outgoing setup", () => {
     send.mockResolvedValueOnce(budgetItem("first", { name: "New internet", merchantId: null, notes: null, intervalCount: 12 }));
     await (await button("Save outgoing")).click();
     expect(send).toHaveBeenCalledExactlyOnceWith("PUT", "households/first/budgets/items/internet/details", {
-      expenseCategoryId: "first-food", name: "New internet", merchantId: null, currencyCode: "GBP", frequency: "Month", intervalCount: 12, notes: null,
+      expenseCategoryId: "first-food", name: "New internet", merchantId: null, currencyCode: "GBP", frequency: "Month", intervalCount: 12, notes: null, paymentAnchorDate: null,
     });
     expect(c.rows()[1].code).toBe("INTERNET"); expect(c.editing()).toBeNull();
     await vi.waitFor(async () => expect(await root().getAllHarnesses(MatDialogHarness)).toHaveLength(0));
@@ -225,6 +225,39 @@ describe("Regular outgoing setup", () => {
     const c = await page(); send.mockRejectedValueOnce(new Error("Retirement failed")); await c.setRetirement(budgetItem());
     c.createDraft.set(budgetDraft()); send.mockResolvedValueOnce(budgetItem("first", { id: "energy", code: "ENERGY" }));
     await c.submit(false); expect(c.actionError()).toBe(""); expect(c.notice()).toBe("Outgoing added.");
+  });
+
+  it("saves a chosen reference date through the rendered form and resets it after success", async () => {
+    const c = await page(); c.createDraft.set(budgetDraft()); c.asOf.set("2026-11-19"); await settle();
+    const input = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatInputHarness.with({ selector: '[name="paymentAnchorDate"]' }));
+    await input.setValue("2026-11-25"); expect(fixture.nativeElement.textContent).toContain("Next expected: 25 Nov 2026");
+    send.mockResolvedValueOnce(budgetItem("first", { paymentAnchorDate: "2026-11-25" }));
+    await (await button("Add outgoing")).click(); expect(send.mock.calls[0][2].paymentAnchorDate).toBe("2026-11-25");
+    expect(c.createDraft().paymentAnchorDate).toBe(""); expect(c.hasUnsavedChanges()).toBe(false);
+  });
+  it("edits and explicitly clears a saved reference date while retaining rejected drafts", async () => {
+    const c = await page(); c.beginEdit(budgetItem("first", { paymentAnchorDate: "2026-11-25" })); await settle();
+    expect(c.editDraft().paymentAnchorDate).toBe("2026-11-25");
+    c.change(true, "paymentAnchorDate", "2026-11-19"); send.mockRejectedValueOnce(new Error("Failed")); await c.submit(true);
+    expect(c.editDraft().paymentAnchorDate).toBe("2026-11-19");
+    c.change(true, "paymentAnchorDate", ""); send.mockResolvedValueOnce(budgetItem()); await c.submit(true);
+    expect(send.mock.calls[1][2].paymentAnchorDate).toBeNull(); expect(c.rows().find(item => item.id === "internet")?.paymentAnchorDate).toBeNull();
+  });
+  it.each(["0001-01-01", "9999-12-31", "2026-02-30", "not a date"])("rejects invalid payment reference %s", async value => {
+    const c = await page(); c.createDraft.set({ ...budgetDraft(), paymentAnchorDate: value }); await c.submit(false); expect(send).not.toHaveBeenCalled();
+  });
+  it("shows calendar timing and next dates for active outgoings without forecasting retired payments", async () => {
+    const c = await page(); c.asOf.set("2026-11-19"); c.status.set("all");
+    c.rows.set([budgetItem("first", { paymentAnchorDate: "2026-01-31" }), budgetItem("first", { id: "retired", code: "RETIRED", name: "Old", isRetired: true, paymentAnchorDate: "2026-01-25" })]); await settle();
+    const rows = fixture.nativeElement.querySelectorAll(".outgoings-list li");
+    expect(rows[0].textContent).toContain("On the 31st"); expect(rows[0].textContent).toContain("Next expected: 30 Nov 2026");
+    expect(rows[1].textContent).not.toContain("Next expected:"); expect(rows[1].textContent).toContain("Payment reference: 25 Jan 2026");
+    c.search.set("31st"); expect(c.visibleRows()).toHaveLength(1);
+    c.search.set(""); c.status.set("retired"); await settle();
+    await (await button("Edit")).click();
+    const editor = document.querySelector('form[aria-label="Edit outgoing"]')!;
+    expect(editor.querySelector<HTMLInputElement>('[name="paymentAnchorDate"]')!.value).toBe("2026-01-25");
+    expect(editor.textContent).not.toContain("Next expected:");
   });
 
 });

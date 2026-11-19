@@ -435,4 +435,49 @@ public sealed class BudgetSetupApiTests : IAsyncLifetime
         }
         public HearthcastDbContext CreateDbContext() => new(_options);
     }
+    [Fact]
+    public async Task PaymentDatesRoundTripAndOmittedDatePreservesWhileExplicitNullClears()
+    {
+        var d = await SeedAsync(); var create = Body(d); create["paymentAnchorDate"] = "2026-11-19";
+        var item = await CreateAsync(d.Root, create); var path = d.Root + $"/{item.Id}";
+        Assert.Equal(new DateOnly(2026, 11, 19), item.PaymentAnchorDate);
+        var wire = await _client.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal("2026-11-19", wire.GetProperty("paymentAnchorDate").GetString());
+        var body = Body(d, true);
+        using var older = await _client.PutAsJsonAsync(path + "/details", body); older.EnsureSuccessStatusCode();
+        Assert.Equal(item.PaymentAnchorDate, (await older.Content.ReadFromJsonAsync<BudgetItemResponse>())!.PaymentAnchorDate);
+        body["paymentAnchorDate"] = "2024-02-29";
+        using var edit = await _client.PutAsJsonAsync(path + "/details", body); edit.EnsureSuccessStatusCode();
+        Assert.Equal(new DateOnly(2024, 2, 29), (await edit.Content.ReadFromJsonAsync<BudgetItemResponse>())!.PaymentAnchorDate);
+        using var retire = await _client.PutAsJsonAsync(path + "/retirement", new { isRetired = true }); retire.EnsureSuccessStatusCode();
+        Assert.Equal(new DateOnly(2024, 2, 29), (await retire.Content.ReadFromJsonAsync<BudgetItemResponse>())!.PaymentAnchorDate);
+        body["paymentAnchorDate"] = null;
+        using var clear = await _client.PutAsJsonAsync(path + "/details", body); clear.EnsureSuccessStatusCode();
+        Assert.Null((await clear.Content.ReadFromJsonAsync<BudgetItemResponse>())!.PaymentAnchorDate);
+        Assert.Null(d.Item.PaymentAnchorDate);
+    }
+
+    [Theory]
+    [InlineData("0001-01-01")]
+    [InlineData("9999-12-31")]
+    [InlineData("2026-02-30")]
+    [InlineData("2026-11-19T00:00:00Z")]
+    [InlineData("")]
+    [InlineData("not a date")]
+    public async Task InvalidPaymentDatesFailWithoutChangingSetup(string date)
+    {
+        var d = await SeedAsync(); var body = Body(d); body["paymentAnchorDate"] = date;
+        await Problem(await _client.PostAsJsonAsync(d.Root, body), 400);
+        body.Remove("code"); await Problem(await _client.PutAsJsonAsync(d.ItemPath + "/details", body), 400);
+        Assert.Equal(d.Item, await _client.GetFromJsonAsync<BudgetItemResponse>(d.ItemPath));
+    }
+
+    [Fact]
+    public async Task PaymentDateUpdatesCannotCrossHouseholds()
+    {
+        var d = await SeedAsync(); var foreign = await SeedAsync(); var body = Body(d, true); body["paymentAnchorDate"] = "2026-11-25";
+        await Problem(await _client.PutAsJsonAsync(d.Root + $"/{foreign.Item.Id}/details", body), 404);
+        Assert.Equal(foreign.Item, await _client.GetFromJsonAsync<BudgetItemResponse>(foreign.ItemPath));
+    }
+
 }

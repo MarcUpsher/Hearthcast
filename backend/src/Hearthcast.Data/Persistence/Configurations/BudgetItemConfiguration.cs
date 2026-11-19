@@ -19,6 +19,7 @@ public sealed class BudgetItemConfiguration : IEntityTypeConfiguration<BudgetIte
             table.HasCheckConstraint("CK_BudgetItems_Notes", $"\"Notes\" IS NULL OR ({SpendingSetupConfigurationRules.CanonicalText("Notes")})");
             table.HasCheckConstraint("CK_BudgetItems_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
             table.HasCheckConstraint("CK_BudgetItems_Recurrence", "\"Frequency\" IN (1, 2, 3) AND \"IntervalCount\" > 0");
+            table.HasCheckConstraint("CK_BudgetItems_PaymentAnchorDate", "\"PaymentAnchorDate\" IS NULL OR (\"PaymentAnchorDate\" >= DATE '0001-01-02' AND \"PaymentAnchorDate\" <= DATE '9999-12-30')");
         });
         builder.HasKey(i => i.Id);
         builder.Property(i => i.Id).ValueGeneratedNever();

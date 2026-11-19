@@ -112,7 +112,9 @@ and merchant setup remains accessible through Spending navigation.
    [summary API](spending-category-summary-api-slice.md) and
    [category-report UI](spending-summary-ui-slice.md).
 3. [Regular outgoing setup UI](budget-setup-ui-slice.md) is implemented with
-   metadata, recurrence, retirement and shared category/merchant choices. Dated
+   metadata, recurrence, retirement and shared category/merchant choices.
+   [Expected payment dates](budget-payment-date-slice.md) provide optional schedule
+   references and next-payment displays. Dated
    outgoing plans and amounts are next. Actual-vs-plan comparisons still require
    a later agreed allocation policy.
 

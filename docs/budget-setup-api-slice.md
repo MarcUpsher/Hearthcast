@@ -102,3 +102,7 @@ vulnerability metadata; no packages were added.
 
 No dependencies or schema changes are added. No application database migration or
 deployment is performed. See the subsequent [snapshot HTTP slice](budget-snapshot-api-slice.md).
+
+The [payment-date extension](budget-payment-date-slice.md) adds nullable
+`paymentAnchorDate` to creation and item responses. Details updates preserve it
+when omitted and clear it when explicitly null, retaining existing clients.

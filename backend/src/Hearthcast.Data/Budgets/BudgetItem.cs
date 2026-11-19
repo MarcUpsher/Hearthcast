@@ -8,7 +8,8 @@ public sealed class BudgetItem
     private BudgetItem() { }
 
     internal BudgetItem(ExpenseCategory category, string code, string name, string currencyCode,
-        BudgetFrequency frequency, int intervalCount = 1, Merchant? merchant = null, string? notes = null)
+        BudgetFrequency frequency, int intervalCount = 1, Merchant? merchant = null, string? notes = null,
+        DateOnly? paymentAnchorDate = null)
     {
         Id = Guid.NewGuid();
         HouseholdId = category.HouseholdId;
@@ -18,6 +19,7 @@ public sealed class BudgetItem
         SetTerms(currencyCode, frequency, intervalCount);
         SetMerchant(merchant);
         SetNotes(notes);
+        SetPaymentAnchorDate(paymentAnchorDate);
     }
 
     public Guid Id { get; private set; }
@@ -29,12 +31,14 @@ public sealed class BudgetItem
     public string CurrencyCode { get; private set; } = string.Empty;
     public BudgetFrequency Frequency { get; private set; }
     public int IntervalCount { get; private set; }
+    public DateOnly? PaymentAnchorDate { get; private set; }
     public string? Notes { get; private set; }
     public bool IsRetired { get; private set; }
 
     public void Rename(string name) => Name = SpendingSetupRules.Text(name);
     public void SetNotes(string? notes) => Notes = SpendingSetupRules.Notes(notes);
     public void SetRetired(bool isRetired) => IsRetired = isRetired;
+    public void SetPaymentAnchorDate(DateOnly? date) => PaymentAnchorDate = date.HasValue ? BudgetRules.Date(date.Value) : null;
 
     public void SetCategory(ExpenseCategory category)
     {

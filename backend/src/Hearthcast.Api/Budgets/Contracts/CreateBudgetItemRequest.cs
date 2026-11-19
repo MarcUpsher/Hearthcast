@@ -15,9 +15,11 @@ public sealed record CreateBudgetItemRequest : IValidatableObject
     [Required, JsonConverter(typeof(BudgetFrequencyJsonConverter))] public BudgetFrequency? Frequency { get; init; }
     [Required, Range(1, int.MaxValue), JsonNumberHandling(JsonNumberHandling.Strict)] public int? IntervalCount { get; init; } = 1;
     public string? Notes { get; init; }
+    public DateOnly? PaymentAnchorDate { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
         BudgetSetupRequestValidation.Ids((ExpenseCategoryId, nameof(ExpenseCategoryId)), (MerchantId, nameof(MerchantId)))
             .Concat(BudgetSetupRequestValidation.Text((Code, nameof(Code)), (Name, nameof(Name)),
-                (CurrencyCode, nameof(CurrencyCode)), (Notes, nameof(Notes))));
+                (CurrencyCode, nameof(CurrencyCode)), (Notes, nameof(Notes))))
+            .Concat(BudgetSnapshotRequestValidation.Date(PaymentAnchorDate, nameof(PaymentAnchorDate)));
 }

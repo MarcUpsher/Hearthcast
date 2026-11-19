@@ -13,7 +13,7 @@ public sealed class BudgetItemsController(BudgetSetupService setup) : Controller
         CancellationToken cancellationToken)
     {
         var item = await setup.CreateItemAsync(householdId, request.ExpenseCategoryId!.Value, request.Code!, request.Name!,
-            request.CurrencyCode!, request.Frequency!.Value, request.IntervalCount!.Value, request.MerchantId, request.Notes, cancellationToken);
+            request.CurrencyCode!, request.Frequency!.Value, request.IntervalCount!.Value, request.MerchantId, request.Notes, request.PaymentAnchorDate, cancellationToken);
         return CreatedAtAction(nameof(Get), new { householdId, itemId = item.Id }, BudgetItemResponse.From(item));
     }
 
@@ -29,7 +29,11 @@ public sealed class BudgetItemsController(BudgetSetupService setup) : Controller
     [HttpPut("{itemId:guid}/details")]
     public async Task<ActionResult<BudgetItemResponse>> Update(Guid householdId, Guid itemId,
         UpdateBudgetItemRequest request, CancellationToken cancellationToken) =>
-        BudgetItemResponse.From(await setup.UpdateItemAsync(householdId, itemId, request.ExpenseCategoryId!.Value,
+        BudgetItemResponse.From(request.PaymentAnchorDateSpecified
+            ? await setup.UpdateItemAsync(householdId, itemId, request.ExpenseCategoryId!.Value,
+                request.Name!, request.CurrencyCode!, request.Frequency!.Value, request.IntervalCount!.Value,
+                request.MerchantId, request.Notes, request.PaymentAnchorDate, cancellationToken)
+            : await setup.UpdateItemAsync(householdId, itemId, request.ExpenseCategoryId!.Value,
             request.Name!, request.CurrencyCode!, request.Frequency!.Value, request.IntervalCount!.Value,
             request.MerchantId, request.Notes, cancellationToken));
 

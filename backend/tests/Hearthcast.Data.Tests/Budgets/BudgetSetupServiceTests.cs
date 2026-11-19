@@ -4,6 +4,8 @@ using Hearthcast.Data.Spending;
 using Hearthcast.Data.Tests.Infrastructure;
 using Hearthcast.Data.Validation;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace Hearthcast.Data.Tests.Budgets;
@@ -59,8 +61,10 @@ public sealed class BudgetSetupServiceTests : IAsyncLifetime
         Assert.Equal(BudgetFrequency.Year, changed.Frequency);
         Assert.Equal(3, changed.IntervalCount);
         Assert.Equal("Updated", changed.Notes);
+        changed = await Service.UpdateItemAsync(d.Home, d.Item.Id, category.Id, changed.Name, "ZAR", BudgetFrequency.Year, 3, merchant.Id, "Updated", new DateOnly(2026, 11, 25));
         await Service.SetItemRetiredAsync(d.Home, d.Item.Id, true);
         changed = await Service.UpdateItemAsync(d.Home, d.Item.Id, category.Id, changed.Name, "ZAR", BudgetFrequency.Week, 2, null, " \u2000 ");
+        Assert.Equal(new DateOnly(2026, 11, 25), changed.PaymentAnchorDate);
         Assert.True(changed.IsRetired);
         Assert.Null(changed.MerchantId);
         Assert.Null(changed.Notes);
@@ -279,4 +283,53 @@ public sealed class BudgetSetupServiceTests : IAsyncLifetime
         Assert.Single(await Service.ListItemsAsync(d.Home));
         Assert.Equivalent(d.Item, await Service.GetItemAsync(d.Home, d.Item.Id));
     }
+    [Fact]
+    public async Task PaymentDateRoundTripsCanBeClearedAndIsPreservedByOlderEdits()
+    {
+        var d = await SeedAsync();
+        var date = new DateOnly(2026, 11, 19);
+        var created = await Service.CreateItemAsync(d.Home, d.Category.Id, "SCHEDULED", "Scheduled", "GBP", BudgetFrequency.Month, 1, null, null, date);
+        Assert.Equal(date, (await Service.GetItemAsync(d.Home, created.Id)).PaymentAnchorDate);
+        var changed = await Service.UpdateItemAsync(d.Home, created.Id, d.Category.Id, "Changed", "GBP", BudgetFrequency.Week, 2, null, null);
+        Assert.Equal(date, changed.PaymentAnchorDate);
+        changed = await Service.UpdateItemAsync(d.Home, created.Id, d.Category.Id, "Changed", "GBP", BudgetFrequency.Month, 1, null, null, new DateOnly(2024, 2, 29));
+        Assert.Equal(new DateOnly(2024, 2, 29), (await Service.GetItemAsync(d.Home, created.Id)).PaymentAnchorDate);
+        changed = await Service.UpdateItemAsync(d.Home, created.Id, d.Category.Id, "Changed", "GBP", BudgetFrequency.Month, 1, null, null, (DateOnly?)null);
+        Assert.Null(changed.PaymentAnchorDate);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NonFinitePaymentDatesRejectCreationAndRollBackOtherEditedDefaults(bool maximum)
+    {
+        var d = await SeedAsync(); var date = maximum ? DateOnly.MaxValue : DateOnly.MinValue;
+        await Assert.ThrowsAsync<InvalidValueException>(() => Service.CreateItemAsync(d.Home, d.Category.Id, "BAD-DATE", "Invalid", "GBP", BudgetFrequency.Month, 1, null, null, date));
+        await Assert.ThrowsAsync<InvalidValueException>(() => Service.UpdateItemAsync(d.Home, d.Item.Id, d.Category.Id, "Changed", "USD", BudgetFrequency.Year, 3, null, "Changed", date));
+        Assert.Equivalent(d.Item, await Service.GetItemAsync(d.Home, d.Item.Id)); Assert.Single(await Service.ListItemsAsync(d.Home));
+    }
+
+    [Theory]
+    [InlineData("0001-01-01")]
+    [InlineData("9999-12-31")]
+    [InlineData("infinity")]
+    [InlineData("-infinity")]
+    public async Task DatabaseRejectsNonFiniteOrReservedPaymentDates(string date)
+    {
+        var d = await SeedAsync(); await using var context = _database.CreateDbContext();
+        var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""UPDATE "BudgetItems" SET "PaymentAnchorDate" = {date}::date WHERE "Id" = {d.Item.Id}"""));
+        Assert.Equal("CK_BudgetItems_PaymentAnchorDate", error.ConstraintName);
+        Assert.Null((await Service.GetItemAsync(d.Home, d.Item.Id)).PaymentAnchorDate);
+    }
+
+    [Fact]
+    public async Task PaymentDateMigrationPreservesExistingOutgoingRows()
+    {
+        var d = await SeedAsync(); await using var context = _database.CreateDbContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261117190213_AddBudgetPlans"); await migrator.MigrateAsync();
+        Assert.Equivalent(d.Item, await Service.GetItemAsync(d.Home, d.Item.Id));
+        Assert.False(context.Database.HasPendingModelChanges());
+    }
+
 }

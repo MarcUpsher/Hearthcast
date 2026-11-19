@@ -60,3 +60,7 @@ inspection. Test writes use mocked transport, not the application database.
 After review fixes, **410 frontend tests** across 23 files pass under
 `TZ=Europe/London`; production build and whitespace checks pass. Backend tests
 were not rerun because backend code, contracts and schema are unchanged.
+
+The [expected payment date follow-up](budget-payment-date-slice.md) adds optional
+reference dates, timing descriptions and next expected dates from current setup
+recurrence, including short-month and leap-year handling.

@@ -11,16 +11,19 @@ import { Workspace } from "../core/workspace";
 import { SpendingCurrency, SpendingSetupEntry, SpendingSetupStatus } from "../spending/models";
 import { SpendingNavigation } from "../spending/navigation";
 import { BudgetItem, BudgetItemDetails, BudgetItemDraft, budgetRecurrence } from "./models";
+import { localToday, spendingDate } from "../spending/amounts";
+import { nextPaymentDate, paymentTiming, validPaymentAnchor } from "./payment-schedule";
+import { BudgetPaymentDate } from "./payment-date";
 import { BudgetInterval, budgetInterval } from "./interval";
 
 const emptyDraft = (): BudgetItemDraft => ({ code: "", name: "", expenseCategoryId: "", merchantId: "",
-  currencyCode: "GBP", frequency: "Month", intervalCount: "1", notes: "" });
+  currencyCode: "GBP", frequency: "Month", intervalCount: "1", notes: "", paymentAnchorDate: "" });
 const itemDraft = (item: BudgetItem): BudgetItemDraft => ({ code: item.code, name: item.name,
   expenseCategoryId: item.expenseCategoryId, merchantId: item.merchantId ?? "", currencyCode: item.currencyCode,
-  frequency: item.frequency, intervalCount: String(item.intervalCount), notes: item.notes ?? "" });
+  frequency: item.frequency, intervalCount: String(item.intervalCount), notes: item.notes ?? "", paymentAnchorDate: item.paymentAnchorDate ?? "" });
 
 @Component({
-  imports: [FormsModule, NgTemplateOutlet, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetInterval],
+  imports: [FormsModule, NgTemplateOutlet, MatButtonModule, MatDialogModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetInterval, BudgetPaymentDate],
   templateUrl: "outgoings.html", styleUrl: "outgoings.scss",
 })
 export class RegularOutgoings {
@@ -52,6 +55,19 @@ export class RegularOutgoings {
   readonly editDraft = signal(emptyDraft());
   readonly editError = signal("");
   readonly recurrence = budgetRecurrence;
+  readonly asOf = signal(localToday());
+  readonly date = spendingDate;
+  readonly timing = paymentTiming;
+  @HostListener("window:focus")
+  refreshDate() { this.asOf.set(localToday()); }
+  nextExpected(item: BudgetItem) { return nextPaymentDate(item.paymentAnchorDate, item.frequency, item.intervalCount, this.asOf()); }
+  paymentPreview(edit: boolean) {
+    if (edit && this.editing()?.isRetired) return "";
+    const draft = this.draft(edit);
+    if (!draft.paymentAnchorDate || !validPaymentAnchor(draft.paymentAnchorDate) || budgetInterval(draft.intervalCount) === null) return "";
+    const next = nextPaymentDate(draft.paymentAnchorDate, draft.frequency, Number(draft.intervalCount), this.asOf());
+    return next ? "Next expected: " + this.date(next) : "No further occurrence within the supported date range.";
+  }
   readonly codePattern = "\\s*[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\s*";
 
   constructor() {
@@ -76,7 +92,7 @@ export class RegularOutgoings {
     const home = this.home, generation = this.generation;
     if (!home || !this.current(home, generation) || this.saving()) return;
     const version = ++this.version, current = () => this.current(home, generation) && version === this.version;
-    this.loading.set(true); this.error.set("");
+    this.refreshDate(); this.loading.set(true); this.error.set("");
     try {
       const [rows, categories, merchants, currencies] = await Promise.all([
         this.api.get<BudgetItem[]>(`households/${home}/budgets/items?includeRetired=true`),
@@ -95,7 +111,7 @@ export class RegularOutgoings {
     return this.rows().filter(row => (this.status() === "all" || row.isRetired === (this.status() === "retired")) &&
       (!this.category() || row.expenseCategoryId === this.category()) &&
       [row.name, row.code, row.currencyCode, row.notes ?? "", this.categoryName(row.expenseCategoryId),
-        row.merchantId ? this.merchantName(row.merchantId) : "", this.recurrence(row.frequency, row.intervalCount)]
+        row.merchantId ? this.merchantName(row.merchantId) : "", this.recurrence(row.frequency, row.intervalCount), row.paymentAnchorDate ?? "", row.paymentAnchorDate ? this.timing(row.paymentAnchorDate, row.frequency) : ""]
         .some(value => value.toLocaleLowerCase().includes(search)))
       .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
   }
@@ -115,7 +131,7 @@ export class RegularOutgoings {
       this.categories().some(row => row.id === draft.expenseCategoryId) &&
       (!draft.merchantId || this.merchants().some(row => row.id === draft.merchantId)) &&
       (this.currencies().some(row => row.code === draft.currencyCode) || (edit && this.editing()?.currencyCode === draft.currencyCode)) &&
-      ["Week", "Month", "Year"].includes(draft.frequency) && budgetInterval(draft.intervalCount) !== null;
+      ["Week", "Month", "Year"].includes(draft.frequency) && budgetInterval(draft.intervalCount) !== null && validPaymentAnchor(draft.paymentAnchorDate);
   }
   clearCreate(form?: NgForm) {
     if (this.saving()) return;
@@ -139,10 +155,10 @@ export class RegularOutgoings {
     this.editing.set(null); this.editDraft.set(emptyDraft()); this.editError.set("");
   }
   async submit(edit: boolean, form?: NgForm) {
-    if (!this.canWrite() || !this.valid(edit) || (edit && (!this.editing() || !this.editDirty()))) return;
+    if (form?.invalid || !this.canWrite() || !this.valid(edit) || (edit && (!this.editing() || !this.editDirty()))) return;
     const home = this.home!, generation = this.generation, item = this.editing(), draft = this.draft(edit);
     const details: BudgetItemDetails = { name: draft.name, expenseCategoryId: draft.expenseCategoryId, merchantId: draft.merchantId || null,
-      currencyCode: draft.currencyCode, frequency: draft.frequency, intervalCount: Number(draft.intervalCount), notes: draft.notes.trim() ? draft.notes : null };
+      currencyCode: draft.currencyCode, frequency: draft.frequency, intervalCount: Number(draft.intervalCount), notes: draft.notes.trim() ? draft.notes : null, paymentAnchorDate: draft.paymentAnchorDate || null };
     this.saving.set(true); this.notice.set(""); this.actionError.set(""); (edit ? this.editError : this.createError).set("");
     try {
       const saved = await this.api.send<BudgetItem>(edit ? "PUT" : "POST", `households/${home}/budgets/items${edit ? "/" + item!.id + "/details" : ""}`,

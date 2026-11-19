@@ -14,11 +14,17 @@ public sealed class BudgetSetupService(IDbContextFactory<HearthcastDbContext> co
     public Task<BudgetItem> CreateItemAsync(Guid householdId, Guid expenseCategoryId, string code,
         string name, string currencyCode, BudgetFrequency frequency, int intervalCount = 1,
         Guid? merchantId = null, string? notes = null, CancellationToken cancellationToken = default) =>
+        CreateItemAsync(householdId, expenseCategoryId, code, name, currencyCode, frequency, intervalCount,
+            merchantId, notes, null, cancellationToken);
+
+    public Task<BudgetItem> CreateItemAsync(Guid householdId, Guid expenseCategoryId, string code,
+        string name, string currencyCode, BudgetFrequency frequency, int intervalCount, Guid? merchantId,
+        string? notes, DateOnly? paymentAnchorDate, CancellationToken cancellationToken = default) =>
         WriteAsync(async (context, token) =>
         {
             var category = await FindCategoryAsync(context, householdId, expenseCategoryId, token);
             var merchant = merchantId.HasValue ? await FindMerchantAsync(context, householdId, merchantId.Value, token) : null;
-            var item = new BudgetItem(category, code, name, currencyCode, frequency, intervalCount, merchant, notes);
+            var item = new BudgetItem(category, code, name, currencyCode, frequency, intervalCount, merchant, notes, paymentAnchorDate);
             if (await context.BudgetItems.AnyAsync(i => i.HouseholdId == householdId && i.Code == item.Code, token))
                 throw new BusinessRuleViolationException(DuplicateCodeMessage);
             context.BudgetItems.Add(item);
@@ -29,6 +35,18 @@ public sealed class BudgetSetupService(IDbContextFactory<HearthcastDbContext> co
     public Task<BudgetItem> UpdateItemAsync(Guid householdId, Guid itemId, Guid expenseCategoryId,
         string name, string currencyCode, BudgetFrequency frequency, int intervalCount, Guid? merchantId,
         string? notes, CancellationToken cancellationToken = default) =>
+        UpdateItemCoreAsync(householdId, itemId, expenseCategoryId, name, currencyCode, frequency, intervalCount,
+            merchantId, notes, false, null, cancellationToken);
+
+    public Task<BudgetItem> UpdateItemAsync(Guid householdId, Guid itemId, Guid expenseCategoryId,
+        string name, string currencyCode, BudgetFrequency frequency, int intervalCount, Guid? merchantId,
+        string? notes, DateOnly? paymentAnchorDate, CancellationToken cancellationToken = default) =>
+        UpdateItemCoreAsync(householdId, itemId, expenseCategoryId, name, currencyCode, frequency, intervalCount,
+            merchantId, notes, true, paymentAnchorDate, cancellationToken);
+
+    private Task<BudgetItem> UpdateItemCoreAsync(Guid householdId, Guid itemId, Guid expenseCategoryId,
+        string name, string currencyCode, BudgetFrequency frequency, int intervalCount, Guid? merchantId,
+        string? notes, bool changePaymentDate, DateOnly? paymentAnchorDate, CancellationToken cancellationToken) =>
         WriteAsync(async (context, token) =>
         {
             var item = await FindItemAsync(context, householdId, itemId, token);
@@ -39,6 +57,7 @@ public sealed class BudgetSetupService(IDbContextFactory<HearthcastDbContext> co
             item.SetMerchant(merchant);
             item.SetTerms(currencyCode, frequency, intervalCount);
             item.SetNotes(notes);
+            if (changePaymentDate) item.SetPaymentAnchorDate(paymentAnchorDate);
             return item;
         }, cancellationToken);
 

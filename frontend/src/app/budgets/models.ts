@@ -5,15 +5,15 @@ export interface BudgetItem {
   id: string; householdId: string; code: string; name: string;
   expenseCategoryId: string; merchantId: string | null;
   currencyCode: string; frequency: BudgetFrequency; intervalCount: number;
-  notes: string | null; isRetired: boolean;
+  notes: string | null; isRetired: boolean; paymentAnchorDate: string | null;
 }
 export interface BudgetItemDraft {
   code: string; name: string; expenseCategoryId: string; merchantId: string;
-  currencyCode: string; frequency: BudgetFrequency; intervalCount: string; notes: string;
+  currencyCode: string; frequency: BudgetFrequency; intervalCount: string; notes: string; paymentAnchorDate: string;
 }
 export interface BudgetItemDetails {
   name: string; expenseCategoryId: string; merchantId: string | null;
-  currencyCode: string; frequency: BudgetFrequency; intervalCount: number; notes: string | null;
+  currencyCode: string; frequency: BudgetFrequency; intervalCount: number; notes: string | null; paymentAnchorDate: string | null;
 }
 export function budgetRecurrence(frequency: BudgetFrequency, count: number) {
   const period = frequency.toLowerCase();

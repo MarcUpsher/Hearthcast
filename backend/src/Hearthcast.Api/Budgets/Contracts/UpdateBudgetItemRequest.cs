@@ -14,8 +14,17 @@ public sealed record UpdateBudgetItemRequest : IValidatableObject
     [Required, JsonConverter(typeof(BudgetFrequencyJsonConverter))] public BudgetFrequency? Frequency { get; init; }
     [Required, Range(1, int.MaxValue), JsonNumberHandling(JsonNumberHandling.Strict)] public int? IntervalCount { get; init; }
     [JsonRequired] public string? Notes { get; init; }
+    private DateOnly? paymentAnchorDate;
+    public DateOnly? PaymentAnchorDate
+    {
+        get => paymentAnchorDate;
+        init { paymentAnchorDate = value; PaymentAnchorDateSpecified = true; }
+    }
+    // Omission by existing clients preserves the date; explicit null clears it.
+    internal bool PaymentAnchorDateSpecified { get; private init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
         BudgetSetupRequestValidation.Ids((ExpenseCategoryId, nameof(ExpenseCategoryId)), (MerchantId, nameof(MerchantId)))
-            .Concat(BudgetSetupRequestValidation.Text((Name, nameof(Name)), (CurrencyCode, nameof(CurrencyCode)), (Notes, nameof(Notes))));
+            .Concat(BudgetSetupRequestValidation.Text((Name, nameof(Name)), (CurrencyCode, nameof(CurrencyCode)), (Notes, nameof(Notes))))
+            .Concat(BudgetSnapshotRequestValidation.Date(PaymentAnchorDate, nameof(PaymentAnchorDate)));
 }

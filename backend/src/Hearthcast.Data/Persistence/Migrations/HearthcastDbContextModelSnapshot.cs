@@ -169,10 +169,14 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
+                    b.Property<DateOnly?>("PaymentAnchorDate")
+                        .HasColumnType("date");
+
                     b.HasKey("Id");
 
                     b.HasIndex("HouseholdId", "Code")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_BudgetItems_HouseholdId_Code");
 
                     b.HasIndex("HouseholdId", "ExpenseCategoryId");
 
@@ -189,6 +193,8 @@ namespace Hearthcast.Data.Persistence.Migrations
                             t.HasCheckConstraint("CK_BudgetItems_Name", "length(\"Name\") > 0 AND \"Name\" = btrim(\"Name\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
 
                             t.HasCheckConstraint("CK_BudgetItems_Notes", "\"Notes\" IS NULL OR (length(\"Notes\") > 0 AND \"Notes\" = btrim(\"Notes\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000'))");
+
+                            t.HasCheckConstraint("CK_BudgetItems_PaymentAnchorDate", "\"PaymentAnchorDate\" IS NULL OR (\"PaymentAnchorDate\" >= DATE '0001-01-02' AND \"PaymentAnchorDate\" <= DATE '9999-12-30')");
 
                             t.HasCheckConstraint("CK_BudgetItems_Recurrence", "\"Frequency\" IN (1, 2, 3) AND \"IntervalCount\" > 0");
                         });
@@ -231,7 +237,8 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.HasIndex("HouseholdId", "CopiedFromBudgetSnapshotId");
 
                     b.HasIndex("HouseholdId", "EffectiveFrom")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_BudgetSnapshots_HouseholdId_EffectiveFrom");
 
                     b.ToTable("BudgetSnapshots", null, t =>
                         {
