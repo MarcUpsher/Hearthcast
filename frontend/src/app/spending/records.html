@@ -37,11 +37,12 @@
   @if (selected(); as record) {
     <section class="panel" aria-labelledby="record-title"><h2 id="record-title">Record · {{ record.merchantName }}</h2>
       <p>{{ date(record.spendingDate) }} · {{ record.kind }}{{ record.isVoided ? ' · Voided' : '' }} · {{ record.currencyCode }}</p>
-      <p><strong>Recorded line total: {{ money(record.totalAmount, record.currencyCode, record.currencyMinorUnits) }}</strong></p>
+      <p><strong>Recorded spending total: {{ money(record.totalAmount, record.currencyCode, record.currencyMinorUnits) }}</strong></p>
+      @if (record.discounts?.length) { <p>Item lines: {{ money(record.grossAmount!, record.currencyCode, record.currencyMinorUnits) }} · Receipt discounts: −{{ money(record.discountAmount!, record.currencyCode, record.currencyMinorUnits) }}</p> }
       @if (record.isVoided) { <p class="notice">Voided records are retained but count as zero toward spending.</p> }
       @if (record.receiptTotal !== null) {
         <p>Receipt total: {{ money(record.receiptTotal, record.currencyCode, record.currencyMinorUnits) }}</p>
-        @if (record.reconciliationStatus === 'Unreconciled') { <p class="notice">Receipt mismatch: {{ money(record.receiptDifference!, record.currencyCode, record.currencyMinorUnits) }} (receipt minus lines). Saved line amounts are counted.</p> }
+        @if (record.reconciliationStatus === 'Unreconciled') { <p class="notice">Receipt mismatch: {{ money(record.receiptDifference!, record.currencyCode, record.currencyMinorUnits) }} (receipt minus recorded total). Lines less assigned receipt discounts are counted.</p> }
       } @else { <p class="muted">Receipt total was not supplied; reconciliation is unchecked.</p> }
       <ul class="detail-lines">
         @for (line of record.lines; track line.id) {
@@ -56,6 +57,11 @@
           </li>
         }
       </ul>
+      @if (record.discounts?.length) {
+        <h3>Receipt discounts</h3><ul class="detail-lines">@for (discount of record.discounts; track discount.id) {
+          <li><strong>{{ discount.expenseCategoryName }} · −{{ money(discount.amount, record.currencyCode, record.currencyMinorUnits) }}</strong>@if (discount.description) { <p>{{ discount.description }}</p> }</li>
+        }</ul><p class="muted">Receipt discounts are assigned to categories. Item-level prices are shown before those separate discounts.</p>
+      }
       @if (record.externalReference) { <p>Receipt reference: {{ record.externalReference }}</p> }
       @if (record.notes) { <p class="notes">{{ record.notes }}</p> }
       @if (detailError()) { <p class="error" role="alert">{{ detailError() }}</p> }

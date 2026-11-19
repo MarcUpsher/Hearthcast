@@ -59,6 +59,13 @@
           </div>
           @if (line.itemId) {
             <p class="muted" role="status">{{ priceStates()[line.key] }}</p>
+            @if (lastPrices()[line.key]; as last) {
+              <p class="muted">Last recorded unit price: {{ last.currencyCode }} {{ last.unitPrice }} per {{ last.unitLabel }} · {{ date(last.spendingDate) }}.
+                @if (last.effectiveUnitPrice !== last.unitPrice) { Saved line-only effective price: {{ last.effectiveUnitPrice }} per unit. }
+                @if (last.hasReceiptDiscount) { A receipt discount was recorded in this category; the final item price was not allocated. }
+              </p>
+              <button mat-button type="button" [disabled]="locked()" (click)="useLastPrice(line.key)" [attr.aria-label]="'Use last recorded price for line ' + (index + 1)">Use this price</button>
+            } @else { <p class="muted">{{ lastPriceStates()[line.key] }}</p> }
             <div class="actions">
               <button mat-button type="button" [disabled]="locked()" (click)="lookupPrice(line.key)">Retry usual price</button>
               @if (!line.autoAmount && suggestion(line)) { <button mat-button type="button" [disabled]="locked()" (click)="useSuggestion(line.key)">Use calculated amount {{ suggestion(line) }}</button> }
@@ -80,13 +87,28 @@
         <button mat-stroked-button type="button" [disabled]="locked()" (click)="addLine('item')">Add item</button>
         <button mat-stroked-button type="button" [disabled]="locked()" (click)="addLine('category')">Add category amount</button>
       </div>
+      <section aria-labelledby="receipt-discounts-title"><h3 id="receipt-discounts-title">Receipt discounts</h3>
+        <p class="muted">Enter discounts printed separately from the items as positive amounts. Assign each to a category on this receipt. Item prices stay as recorded; discounts reduce the category's spending.</p>
+        @for (discount of draft().discounts; track discount.key; let index = $index) {
+          <fieldset class="purchase-line"><legend>Receipt discount {{ index + 1 }}</legend><div class="line-fields">
+            <mat-form-field><mat-label>Discount category</mat-label><mat-select required [name]="'discount-category-' + discount.key" [disabled]="locked()" [ngModel]="discount.categoryId" (ngModelChange)="changeDiscount(discount.key, 'categoryId', $event)">
+              @for (category of categories(); track category.id) { <mat-option [value]="category.id">{{ category.name }}{{ category.isRetired ? ' (retired)' : '' }}</mat-option> }
+            </mat-select></mat-form-field>
+            <mat-form-field><mat-label>Discount amount ({{ draft().currencyCode }})</mat-label><input matInput appMoney="text" inputmode="decimal" required [name]="'discount-amount-' + discount.key" [disabled]="locked()" [ngModel]="discount.amount" (ngModelChange)="changeDiscount(discount.key, 'amount', $event)"><mat-hint>Positive saving; it will be subtracted.</mat-hint></mat-form-field>
+            <mat-form-field><mat-label>Offer / receipt text (optional)</mat-label><input matInput [name]="'discount-description-' + discount.key" [disabled]="locked()" [ngModel]="discount.description" (ngModelChange)="changeDiscount(discount.key, 'description', $event)"></mat-form-field>
+          </div><button mat-button type="button" [disabled]="locked()" (click)="removeDiscount(discount.key)" [attr.aria-label]="'Remove receipt discount ' + (index + 1)">Remove discount</button></fieldset>
+        }
+        <button mat-stroked-button type="button" [disabled]="locked()" (click)="addDiscount()">Add receipt discount</button>
+        @if (discountError()) { <p class="error" role="alert">{{ discountError() }}</p> }
+      </section>
       <div class="header-fields receipt-fields">
         <mat-form-field><mat-label>Receipt total (optional)</mat-label><input matInput appMoney="text" inputmode="decimal" name="receiptTotal" [disabled]="locked()" [ngModel]="draft().receiptTotal" (ngModelChange)="set('receiptTotal', $event)" /></mat-form-field>
         <mat-form-field><mat-label>Receipt reference (optional)</mat-label><input matInput name="reference" [disabled]="locked()" [ngModel]="draft().reference" (ngModelChange)="set('reference', $event)" /></mat-form-field>
         <mat-form-field><mat-label>Notes (optional)</mat-label><textarea matInput name="notes" rows="1" class="receipt-notes" [disabled]="locked()" [ngModel]="draft().notes" (ngModelChange)="set('notes', $event)"></textarea></mat-form-field>
       </div>
+      @if (draft().discounts.length && gross() && discountTotal()) { <p>Entered lines: {{ draft().currencyCode }} {{ gross() }} · Receipt discounts: −{{ draft().currencyCode }} {{ discountTotal() }}</p> }
       @if (total(); as amount) { <p><strong>Entered total: {{ draft().currencyCode }} {{ amount }}</strong></p> }
-      @if (difference(); as difference) { <p [class.notice]="hasDifference()">Receipt total minus entered lines: {{ draft().currencyCode }} {{ difference }}. {{ hasDifference() ? 'Mismatch will be saved visibly; line amounts remain authoritative.' : 'Matches.' }}</p> }
+      @if (difference(); as difference) { <p [class.notice]="hasDifference()">Receipt total minus entered total: {{ draft().currencyCode }} {{ difference }}. {{ hasDifference() ? 'Mismatch will be saved visibly; lines less assigned receipt discounts are counted.' : 'Matches.' }}</p> }
       @if (!draft().receiptTotal) { <p class="muted">Receipt total not supplied; reconciliation will be unchecked.</p> }
       @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
       @if (frozen() && !busy()) { <p class="notice">A save may have succeeded. The submitted details are locked for an exact retry. Check the saved record or retry this same purchase before starting another.</p>

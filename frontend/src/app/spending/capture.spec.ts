@@ -11,7 +11,8 @@ import { Api } from "../core/api";
 import { Workspace } from "../core/workspace";
 import { Household } from "../setup/models";
 import { SpendingCapture } from "./capture";
-import { SpendingRecord, SpendingUsualPrice } from "./models";
+import { SpendingRecord, SpendingUsualPrice, SpendingLastPrice } from "./models";
+import { MatInputHarness } from "@angular/material/input/testing";
 import { deferred, spendingEntry, spendingItem, spendingPrice, spendingRecord } from "../../testing/spending";
 
 describe("Spending purchase capture", () => {
@@ -20,7 +21,7 @@ describe("Spending purchase capture", () => {
   let get: ReturnType<typeof vi.fn>, send: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     current = signal<Household | null>({ id: "first", name: "Home", people: [] });
-    get = vi.fn(async () => spendingPrice()); send = vi.fn(async () => spendingRecord());
+    get = vi.fn(async (path: string) => path.includes("/last-paid-price?") ? null : spendingPrice()); send = vi.fn(async () => spendingRecord());
     TestBed.configureTestingModule({ providers: [
       { provide: Workspace, useValue: { current } }, { provide: Api, useValue: { get, send } }] });
   });
@@ -69,7 +70,8 @@ describe("Spending purchase capture", () => {
     const key = c.draft().lines[0].key;
     c.selectItem(key, "eggs");
     await settle();
-    expect(get).toHaveBeenCalledExactlyOnceWith("households/first/spending/items/eggs/usual-price?merchantId=first-shop&currencyCode=GBP");
+    expect(get).toHaveBeenCalledWith("households/first/spending/items/eggs/usual-price?merchantId=first-shop&currencyCode=GBP");
+    expect(get.mock.calls.filter(([path]) => path.includes("/usual-price?"))).toHaveLength(1);
     expect(c.line(key)).toMatchObject({ categoryId: "first-food", quantity: "1", unitPrice: "3", amount: "3.00" });
     c.changeLine(key, "quantity", "2");
     expect(c.line(key)?.amount).toBe("6.00");
@@ -99,7 +101,8 @@ describe("Spending purchase capture", () => {
 
   it("clears old suggestions when merchant changes and ignores an older identity's result", async () => {
     const c = await page();
-    const first = deferred<SpendingUsualPrice>(); get.mockReturnValueOnce(first.promise).mockResolvedValueOnce(null);
+    const first = deferred<SpendingUsualPrice>(); let usual = true;
+    get.mockImplementation(async (path: string) => { if (path.includes("/last-paid-price?")) return null; if (usual) { usual = false; return first.promise; } return null; });
     c.set("merchantId", "first-shop"); c.setCurrency("GBP");
     const key = c.draft().lines[0].key; c.selectItem(key, "eggs");
     c.set("merchantId", "other-shop"); await settle();
@@ -225,12 +228,12 @@ describe("Spending purchase capture", () => {
     fixture.componentRef.setInput("record", record); await settle();
     return c;
   }
-  it("opens saved values without price lookups or recalculation and fixes currency", async () => {
+  it("opens saved values without applying suggestions or recalculation and fixes currency", async () => {
     const record = spendingRecord();
     record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", quantity: 2, unitPrice: 3, netAmount: 5, itemName: "Saved eggs", unitKey: "pack-6", unitLabel: "Old pack" };
     const c = await edit(record);
     expect(c.draft().lines[0]).toMatchObject({ quantity: "2", unitPrice: "3", amount: "5", autoAmount: false });
-    expect(c.hasUnsavedChanges()).toBe(false); expect(get).not.toHaveBeenCalled();
+    expect(c.hasUnsavedChanges()).toBe(false); expect(get).toHaveBeenCalledTimes(2);
     c.setCurrency("EUR"); expect(c.draft().currencyCode).toBe("GBP");
     const picker = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatSelectHarness.with({ selector: '[name="currency"]' }));
     expect(await picker.isDisabled()).toBe(true);
@@ -435,6 +438,89 @@ describe("Spending purchase capture", () => {
     expect(c.line(key)?.kind).toBe("item"); expect(c.itemText(c.line(key)!)).toBe("Chicken thighs");
     confirm.mockReturnValue(true); c.setLineKind(key, "category");
     expect(c.line(key)?.kind).toBe("category"); expect(c.itemText(c.line(key)!)).toBe("");
+  });
+
+  it("captures the printed Stir Fry deal as a Food receipt discount and reconciles the net total", async () => {
+    const c = await page(); quick(c, "21.95"); c.set("receiptTotal", "19.85"); c.addDiscount(); await settle();
+    const discount = c.draft().discounts[0]; expect(discount.categoryId).toBe("first-food");
+    const loader = TestbedHarnessEnvironment.loader(fixture);
+    await (await loader.getHarness(MatInputHarness.with({ selector: '[name="discount-amount-' + discount.key + '"]' }))).setValue("2.10");
+    await (await loader.getHarness(MatInputHarness.with({ selector: '[name="discount-description-' + discount.key + '"]' }))).setValue("£8 Stir Fry Dine In");
+    expect(c.gross()).toBe("21.95"); expect(c.discountTotal()).toBe("2.10"); expect(c.total()).toBe("19.85"); expect(c.difference()).toBe("0.00");
+    await c.save(); expect(send.mock.calls[0][2].discounts).toEqual([{ expenseCategoryId: "first-food", amount: 2.1, description: "£8 Stir Fry Dine In" }]);
+    expect(send.mock.calls[0][2].lines[0].netAmount).toBe(21.95); expect(send.mock.calls[0][2].rememberPrices).toBeUndefined();
+    expect(c.draft().discounts).toEqual([]); expect(c.hasUnsavedChanges()).toBe(false);
+  });
+  it.each(["0", "-1", "0.001", "22"])("rejects invalid or excessive receipt discount %s without crashing reconciliation", async amount => {
+    const c = await page(); quick(c, "21.95"); c.set("receiptTotal", "19.85"); c.addDiscount(); c.changeDiscount(c.draft().discounts[0].key, "amount", amount);
+    expect(c.valid()).toBe(false); expect(() => c.difference()).not.toThrow(); await c.save(); expect(send).not.toHaveBeenCalled();
+  });
+  it("limits discounts within each category rather than only the receipt total", async () => {
+    const c = await page(); quick(c, "10"); c.addLine("category"); const other = c.draft().lines[1]; c.changeLine(other.key, "categoryId", "cleaning"); c.changeLine(other.key, "amount", "20");
+    c.addDiscount(); c.changeDiscount(c.draft().discounts[0].key, "categoryId", "first-food"); c.changeDiscount(c.draft().discounts[0].key, "amount", "11");
+    expect(c.total()).toBe("19.00"); expect(c.valid()).toBe(false); c.changeDiscount(c.draft().discounts[0].key, "amount", "10"); expect(c.valid()).toBe(true);
+  });
+  it("edits or clears only discounts through the narrow revision-checked endpoint", async () => {
+    const c = await edit(); c.addDiscount(); c.changeDiscount(c.draft().discounts[0].key, "amount", "2.10");
+    expect(c.editOperation().kind).toBe("discounts"); await c.save(); expect(send).toHaveBeenCalledExactlyOnceWith("PUT", "households/first/spending/records/record/discounts", {
+      expectedRevision: "record-r1", discounts: [{ expenseCategoryId: "first-food", amount: 2.1, description: null }],
+    });
+  });
+  it("keeps discount metadata during a narrow line edit and explicitly clears it when removed", async () => {
+    const c = await page(); const record = spendingRecord("first", { discounts: [{ id: "discount", position: 1, expenseCategoryId: "first-food", expenseCategoryName: "Saved food", amount: 2, description: "Bundle" }], grossAmount: 10, discountAmount: 2, totalAmount: 8, countedAmount: 8 });
+    fixture.componentRef.setInput("record", record); await settle(); c.changeLine("saved-line", "amount", "11"); expect(c.editOperation().kind).toBe("line");
+    await c.save(); expect(send.mock.calls[0][1]).toContain("/lines/"); expect(send.mock.calls[0][2].discounts).toBeUndefined();
+    fixture.componentRef.setInput("record", { ...record, revision: "new-r" }); await settle(); c.removeDiscount("discount"); await c.save();
+    expect(send.mock.calls[1][2]).toEqual({ expectedRevision: "new-r", discounts: [] });
+  });
+  it("includes changed discounts in an atomic wider replacement and retains them after a rejected save", async () => {
+    const c = await edit(); c.addDiscount(); c.changeDiscount(c.draft().discounts[0].key, "amount", "2"); c.set("notes", "Header change");
+    expect(c.editOperation().kind).toBe("replace"); send.mockRejectedValueOnce(new HttpErrorResponse({ status: 400 })); await c.save();
+    expect(send.mock.calls[0][2].discounts).toHaveLength(1); expect(c.draft().discounts[0].amount).toBe("2"); expect(c.editNeedsReload()).toBe(false);
+  });
+  it("freezes receipt discounts into the identical create retry and guards unsaved discount edits", async () => {
+    const c = await page(); quick(c); c.addDiscount(); c.changeDiscount(c.draft().discounts[0].key, "amount", "1");
+    vi.spyOn(window, "confirm").mockReturnValue(false); expect(c.canLeave()).toBe(false);
+    send.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 })); await c.save(); const original = structuredClone(send.mock.calls[0][2]);
+    c.changeDiscount(c.draft().discounts[0].key, "amount", "5"); c.removeDiscount(c.draft().discounts[0].key); await c.save();
+    expect(send.mock.calls[1][2]).toEqual(original);
+  });
+  const lastPrice = (extra: Partial<SpendingLastPrice> = {}): SpendingLastPrice => ({ spendingRecordId: "past", spendingLineId: "past-line", spendingDate: "2026-11-17", currencyCode: "GBP", unitKey: "pack-6", unitLabel: "Six eggs", quantity: 1, unitPrice: 1.95, netAmount: 1.95, effectiveUnitPrice: 1.95, promotionStatus: "Unknown", hasReceiptDiscount: false, ...extra });
+  it("loads historical references immediately on editing and reloading without changing saved prices", async () => {
+    const c = await page(); const record = spendingRecord();
+    record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", itemName: "Eggs", unitKey: "pack-6", unitLabel: "Six eggs", quantity: 2, unitPrice: 5 };
+    get.mockImplementation(async path => path.includes("/last-paid-price?") ? lastPrice() : path.includes("/usual-price?") ? spendingPrice() : record);
+    fixture.componentRef.setInput("record", record); await settle();
+    expect(c.lastPrices()["saved-line"]?.unitPrice).toBe(1.95); expect(c.line("saved-line")?.unitPrice).toBe("5");
+    expect(c.hasUnsavedChanges()).toBe(false);
+    expect(get).toHaveBeenCalledWith(expect.stringContaining("excludeRecordId=record"));
+    get.mockClear(); await c.reloadEdit(); await settle();
+    expect(get).toHaveBeenCalledWith(expect.stringContaining("excludeRecordId=record"));
+    expect(c.lastPrices()["saved-line"]?.unitPrice).toBe(1.95); expect(c.line("saved-line")?.amount).toBe("10");
+    expect(c.hasUnsavedChanges()).toBe(false);
+  });
+  it("offers the last recorded price when there is no usual price, using it only after explicit selection", async () => {
+    const c = await page(); get.mockImplementation(async (path: string) => path.includes("/last-paid-price?") ? lastPrice() : null);
+    c.set("date", "2026-11-18"); c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs"); await settle();
+    expect(c.line(key)?.unitPrice).toBe(""); expect(c.lastPrices()[key]?.unitPrice).toBe(1.95);
+    expect(get).toHaveBeenCalledWith("households/first/spending/items/eggs/last-paid-price?merchantId=first-shop&currencyCode=GBP&onOrBefore=2026-11-18");
+    await (await button("Use this price")).click(); expect(c.line(key)).toMatchObject({ unitPrice: "1.95", amount: "1.95", priceTouched: true }); expect(send).not.toHaveBeenCalled();
+  });
+  it("does not let a late usual price overwrite an explicitly selected historical price", async () => {
+    const c = await page(), pending = deferred<SpendingUsualPrice>(); get.mockImplementation(async (path: string) => path.includes("/last-paid-price?") ? lastPrice() : pending.promise);
+    c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs"); await settle(); c.useLastPrice(key);
+    pending.resolve(spendingPrice()); await settle(); expect(c.line(key)?.unitPrice).toBe("1.95");
+  });
+  it("labels category receipt discounts on historical prices and clears them when merchant context is missing", async () => {
+    const c = await page(); get.mockImplementation(async path => path.includes("/last-paid-price?") ? lastPrice({ hasReceiptDiscount: true }) : null);
+    c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs"); await settle();
+    expect(fixture.nativeElement.textContent).toContain("final item price was not allocated"); c.set("merchantId", ""); expect(c.lastPrices()[key]).toBeNull();
+  });
+  it("excludes the edited record from last-price lookup and rejects late suggestions for an old date", async () => {
+    const c = await edit(), pending = deferred<SpendingLastPrice>(); get.mockImplementation(async path => path.includes("/last-paid-price?") ? pending.promise : null);
+    c.set("date", "2026-11-17"); const key = c.draft().lines[0].key; c.setLineKind(key, "item"); c.selectItem(key, "eggs"); c.set("date", "2026-11-16");
+    expect(get.mock.calls.some(([path]) => path.includes("onOrBefore=2026-11-17") && path.includes("excludeRecordId=record"))).toBe(true);
+    c.set("merchantId", ""); pending.resolve(lastPrice()); await settle(); expect(c.lastPrices()[key]).toBeNull();
   });
 
 });

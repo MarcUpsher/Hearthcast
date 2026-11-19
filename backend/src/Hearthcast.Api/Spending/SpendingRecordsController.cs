@@ -50,7 +50,14 @@ public sealed class SpendingRecordsController(SpendingRecordService records) : C
         ReplaceSpendingRecordRequest request, CancellationToken cancellationToken) =>
         await ResponseAsync(householdId, await records.ReplaceAsync(householdId, recordId, request.ExpectedRevision!.Value,
             request.MerchantId!.Value, request.SpendingDate!.Value, request.Lines!.Select(l => l!.ToValues()).ToArray(),
-            request.ReceiptTotal, request.ExternalReference, request.Notes, Prices(request.RememberPrices), cancellationToken), cancellationToken);
+            request.ReceiptTotal, request.ExternalReference, request.Notes, Prices(request.RememberPrices), cancellationToken,
+            request.Discounts?.Select(d => d!.ToValues()).ToArray()), cancellationToken);
+
+    [HttpPut("{recordId:guid}/discounts")]
+    public async Task<ActionResult<SpendingRecordResponse>> CorrectDiscounts(Guid householdId, Guid recordId,
+        CorrectSpendingDiscountsRequest request, CancellationToken cancellationToken) =>
+        await ResponseAsync(householdId, await records.CorrectDiscountsAsync(householdId, recordId, request.ExpectedRevision!.Value,
+            request.Discounts!.Select(d => d!.ToValues()).ToArray(), cancellationToken), cancellationToken);
 
     [HttpPost("{recordId:guid}/void")]
     public async Task<ActionResult<SpendingRecordResponse>> Void(Guid householdId, Guid recordId,

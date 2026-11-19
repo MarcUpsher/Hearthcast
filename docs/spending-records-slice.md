@@ -33,12 +33,14 @@ does not automatically update usual prices.
 
 NetAmount is authoritative. SuggestedAmount rounds quantity × unit price using
 midpoint-away-from-zero to the saved precision; it does not overwrite a discount.
-EffectiveUnitPrice divides NetAmount by Quantity when known. TotalAmount sums
-lines; CountedAmount negates refunds and excludes voided records. ReceiptTotal
+EffectiveUnitPrice divides NetAmount by Quantity when known. GrossAmount sums
+lines; DiscountAmount sums category-assigned receipt discounts. TotalAmount is
+gross minus discounts; CountedAmount negates refunds and excludes voided records.
+ReceiptTotal
 is a reconciliation input, not another counted amount. NotChecked, Reconciled
 and Unreconciled statuses are derived; mismatches can be saved.
-Aggregate totals require the full Lines collection to be loaded. There are no
-stored summary totals; later services may aggregate directly in SQL.
+Aggregate totals require the full Lines and Discounts collections to be loaded.
+There are no stored summary totals; later services may aggregate directly in SQL.
 
 ## Currency policy
 
@@ -130,3 +132,10 @@ were added.
 The [record services](spending-record-service-slice.md) and
 [HTTP endpoints](spending-record-api-slice.md) are implemented. Budget domain and
 persistence follow; UI remains deferred.
+
+## Receipt discount extension
+
+The [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+extends this contract with category deductions, net recorded totals and explicit
+historical price assistance. Earlier verification counts above describe their
+original checkpoints.

@@ -18,17 +18,20 @@ public sealed record CreateSpendingRecordRequest : IValidatableObject
     public string? ExternalReference { get; init; }
     public string? Notes { get; init; }
     public IReadOnlyList<RememberSpendingPriceRequest?>? RememberPrices { get; init; }
+    public IReadOnlyList<SpendingDiscountRequest?>? Discounts { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         foreach (var error in SpendingRequestValidation.Ids((Id, nameof(Id)), (MerchantId, nameof(MerchantId)), (OriginalPaymentId, nameof(OriginalPaymentId)))) yield return error;
         foreach (var error in SpendingRecordRequestValidation.Date(SpendingDate, nameof(SpendingDate))) yield return error;
         foreach (var error in SpendingRecordRequestValidation.Collections(Lines, RememberPrices)) yield return error;
+        foreach (var error in SpendingDiscountRequest.Collection(Discounts)) yield return error;
         foreach (var error in SpendingRequestValidation.Text((ExternalReference, nameof(ExternalReference)), (Notes, nameof(Notes)))) yield return error;
         if (OriginalPaymentId.HasValue && (Kind != SpendingRecordKind.Refund || OriginalPaymentId == Id))
             yield return new ValidationResult("Only a refund can reference a different original payment.", [nameof(OriginalPaymentId)]);
     }
 
     internal SpendingRecordValues ToValues() => new(MerchantId!.Value, SpendingDate!.Value, CurrencyCode!,
-        Lines!.Select(l => l!.ToValues()).ToArray(), Kind!.Value, OriginalPaymentId, ReceiptTotal, ExternalReference, Notes);
+        Lines!.Select(l => l!.ToValues()).ToArray(), Kind!.Value, OriginalPaymentId, ReceiptTotal, ExternalReference, Notes,
+        Discounts?.Select(d => d!.ToValues()).ToArray());
 }

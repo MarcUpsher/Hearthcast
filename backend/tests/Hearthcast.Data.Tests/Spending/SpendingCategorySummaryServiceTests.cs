@@ -332,7 +332,7 @@ public sealed class SpendingCategorySummaryServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task FullRangeExceedsHistoryPageAndUsesOneRecordQueryWithoutChangingSavedState()
+    public async Task FullRangeExceedsHistoryPageAndUsesBoundedSplitReadsWithoutChangingSavedState()
     {
         var data = await SeedAsync();
         var day = new DateOnly(2026, 1, 1);
@@ -350,8 +350,8 @@ public sealed class SpendingCategorySummaryServiceTests : IAsyncLifetime
 
         Assert.Equal(count * 0.10m, Assert.Single(report.Categories).NetAmount);
         Assert.Equal(count, report.ReconciliationRecordCounts["NotChecked"]);
-        Assert.Equal(2, interceptor.Commands.Count); // Household existence, then eligible records and lines together.
-        Assert.Single(interceptor.Commands, sql => sql.Contains("FROM \"SpendingRecords\"", StringComparison.Ordinal));
+        Assert.Equal(4, interceptor.Commands.Count); // Household, parents, lines, discounts.
+        Assert.Equal(3, interceptor.Commands.Count(sql => sql.Contains("FROM \"SpendingRecords\"", StringComparison.Ordinal)));
         await using var afterContext = _database.CreateDbContext();
         var after = await afterContext.SpendingRecords.AsNoTracking().ToDictionaryAsync(r => r.Id, r => r.Revision);
         Assert.Equal(before.OrderBy(p => p.Key), after.OrderBy(p => p.Key));

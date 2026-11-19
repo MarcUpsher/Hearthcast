@@ -50,12 +50,12 @@
         <div><dt>Receipt total differs</dt><dd>{{ report.reconciliationRecordCounts.unreconciled }}</dd></div>
       </dl>
       @if (report.warnings.length) {
-        <p class="notice">Saved line amounts are counted in the category totals. Receipt discrepancies are shown once per record and are not allocated to categories.</p>
+        <p class="notice">Saved line amounts less assigned receipt discounts are counted in the category totals. Remaining receipt discrepancies are shown once per record and are not automatically allocated.</p>
         <ul class="warnings" aria-label="Receipt discrepancies">
           @for (warning of report.warnings; track warning.spendingRecordId) {
             <li><strong>{{ warning.merchantName }} · {{ date(warning.spendingDate) }}</strong>
-              <p>Receipt: {{ warningMoney(warning, warning.receiptTotal) }} · Lines: {{ warningMoney(warning, warning.lineTotal) }}</p>
-              <p>Receipt minus lines: {{ warningMoney(warning, warning.difference) }}</p>
+              <p>Receipt: {{ warningMoney(warning, warning.receiptTotal) }} · Recorded total: {{ warningMoney(warning, warning.lineTotal) }}</p>
+              <p>Receipt minus recorded total: {{ warningMoney(warning, warning.difference) }}</p>
             </li>
           }
         </ul>

@@ -16,6 +16,7 @@ Paths start with `/api/households/{householdId}/spending`.
 | GET | `/records/{recordId}` | Read a full record, including retained voided history. |
 | PUT | `/records/{recordId}/header` | Correct date, receipt total, reference and notes. |
 | PUT | `/records/{recordId}/lines/{lineId}` | Correct actual values/promotion/notes, optionally remembering prices. |
+| PUT | `/records/{recordId}/discounts` | Replace category discounts using the current revision; retains item lines and price sources. |
 | PUT | `/records/{recordId}` | Deliberately replace merchant/header/lines, optionally remembering prices. |
 | POST | `/records/{recordId}/void` | Void using the current revision, retaining history. |
 | GET | `/items/{itemId}/last-paid-price` | Lookup using merchantId, currencyCode, onOrBefore and optional excludeRecordId. |
@@ -96,7 +97,8 @@ mapping a history page never fetches each original separately. The status read
 may be newer than the page's receipt read, rather than a frozen historical label.
 No completeness or mixed-currency conversion is inferred.
 Last-paid responses distinguish nominal unit price from effective price after
-discounts and never update usual prices. Setup API contracts remain unchanged.
+line-level discounts and never update usual prices. Receipt offers are flagged
+separately; they are not allocated to item prices. Setup API contracts remain unchanged.
 
 ## Bounded history contract
 
@@ -112,9 +114,9 @@ changed context and invalid page sizes return 400. Cursor data is opaque navigat
 state, not an authorisation token; all queries still apply household scope.
 
 PostgreSQL row comparison performs the keyset seek. EF applies LIMIT to parent
-records in a subquery before joining their lines, with at most one additional
-parent as bounded lookahead. Receipts are never split across pages. One SQL read
-keeps the selected receipt aggregates consistent; linked original-payment status
+records before fetching each collection, with at most one additional parent as
+bounded lookahead. Receipts are never split across pages. Split queries inside
+a repeatable-read transaction keep the selected receipt aggregates consistent; linked original-payment status
 is read separately as described above. Continuation is not a frozen multi-page snapshot.
 Intervening edits that move records in the ordering may change later page membership.
 
@@ -145,3 +147,9 @@ data/domain, 438 HTTP API), with no failures or skipped tests.
 The subsequent [budget domain/persistence slice](budget-domain-slice.md) is implemented.
 Next: budget services using the agreed dated replacement plans. UI remains deferred
 until backend workflows are established.
+
+## Receipt discount extension
+
+See the [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+for optional capture discounts, replacement omission/empty/null behaviour, net
+response amounts, discount-only correction and historical-price discount flags.

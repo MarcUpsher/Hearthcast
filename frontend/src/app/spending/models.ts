@@ -41,6 +41,12 @@ export interface SpendingItemDraft {
 
 export interface SpendingCurrency { code: string; minorUnits: number; }
 export type SpendingPromotion = "Unknown" | "Yes" | "No";
+export interface SpendingDiscountInput { expenseCategoryId: string; amount: number; description?: string | null; }
+export interface SpendingRecordedDiscount extends SpendingDiscountInput { id: string; position: number; expenseCategoryName: string; }
+export interface SpendingLastPrice {
+  spendingRecordId: string; spendingLineId: string; spendingDate: string; currencyCode: string; unitKey: string; unitLabel: string;
+  quantity: number; unitPrice: number; netAmount: number; effectiveUnitPrice: number; promotionStatus: SpendingPromotion; hasReceiptDiscount: boolean;
+}
 export interface SpendingCaptureLine {
   expenseCategoryId: string;
   netAmount: number;
@@ -62,6 +68,7 @@ export interface SpendingCaptureRequest {
   currencyCode: string;
   kind: "Payment";
   lines: SpendingCaptureLine[];
+  discounts?: SpendingDiscountInput[];
   receiptTotal: number | null;
   externalReference: string | null;
   notes: string | null;
@@ -71,6 +78,7 @@ export interface SpendingReplacementRequest {
   merchantId: string;
   spendingDate: string;
   lines: SpendingCaptureLine[];
+  discounts?: SpendingDiscountInput[];
   receiptTotal: number | null;
   externalReference: string | null;
   notes: string | null;
@@ -91,6 +99,7 @@ export interface SpendingRecord {
   totalAmount: number; countedAmount: number; receiptDifference: number | null;
   reconciliationStatus: "NotChecked" | "Reconciled" | "Unreconciled";
   lines: SpendingRecordedLine[];
+  discounts?: SpendingRecordedDiscount[]; grossAmount?: number; discountAmount?: number;
 }
 export interface SpendingHistoryPage { records: SpendingRecord[]; nextCursor: string | null; pageSize: number; }
 

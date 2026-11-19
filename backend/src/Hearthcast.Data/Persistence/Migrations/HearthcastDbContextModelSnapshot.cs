@@ -197,9 +197,9 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_BudgetItems_HouseholdId_Code");
 
-                    b.HasIndex("HouseholdId", "MerchantId");
-
                     b.HasIndex("HouseholdId", "ExpenseCategoryId");
+
+                    b.HasIndex("HouseholdId", "MerchantId");
 
                     b.HasIndex("HouseholdId", "ExpenseCategoryId", "CurrencyCode")
                         .IsUnique()
@@ -1222,6 +1222,66 @@ namespace Hearthcast.Data.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Spending.SpendingDiscount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int>("CurrencyMinorUnits")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ExpenseCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExpenseCategoryName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SpendingRecordId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId", "ExpenseCategoryId");
+
+                    b.HasIndex("SpendingRecordId", "Position")
+                        .IsUnique();
+
+                    b.HasIndex("HouseholdId", "SpendingRecordId", "CurrencyCode", "CurrencyMinorUnits");
+
+                    b.ToTable("SpendingDiscounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SpendingDiscounts_Amount", "\"Amount\" > 0 AND \"Amount\" < 1000000000000 AND \"Amount\" = round(\"Amount\", \"CurrencyMinorUnits\")");
+
+                            t.HasCheckConstraint("CK_SpendingDiscounts_CategoryName", "length(\"ExpenseCategoryName\") > 0 AND \"ExpenseCategoryName\" = btrim(\"ExpenseCategoryName\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
+
+                            t.HasCheckConstraint("CK_SpendingDiscounts_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$' AND \"CurrencyMinorUnits\" BETWEEN 0 AND 6");
+
+                            t.HasCheckConstraint("CK_SpendingDiscounts_Description", "\"Description\" IS NULL OR (length(\"Description\") > 0 AND \"Description\" = btrim(\"Description\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000'))");
+
+                            t.HasCheckConstraint("CK_SpendingDiscounts_Id", "\"Id\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_SpendingDiscounts_Position", "\"Position\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Spending.SpendingItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2111,6 +2171,23 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Hearthcast.Data.Spending.SpendingDiscount", b =>
+                {
+                    b.HasOne("Hearthcast.Data.Spending.ExpenseCategory", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId", "ExpenseCategoryId")
+                        .HasPrincipalKey("HouseholdId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Hearthcast.Data.Spending.SpendingRecord", null)
+                        .WithMany("Discounts")
+                        .HasForeignKey("HouseholdId", "SpendingRecordId", "CurrencyCode", "CurrencyMinorUnits")
+                        .HasPrincipalKey("HouseholdId", "Id", "CurrencyCode", "CurrencyMinorUnits")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Hearthcast.Data.Spending.SpendingItem", b =>
                 {
                     b.HasOne("Hearthcast.Data.Spending.ExpenseCategory", null)
@@ -2280,6 +2357,8 @@ namespace Hearthcast.Data.Persistence.Migrations
 
             modelBuilder.Entity("Hearthcast.Data.Spending.SpendingRecord", b =>
                 {
+                    b.Navigation("Discounts");
+
                     b.Navigation("Lines");
                 });
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Hearthcast.Data.Validation;
 
 namespace Hearthcast.Data.Spending;
@@ -22,9 +23,12 @@ internal static class SpendingCreateRequest
             Description = SpendingSetupRules.Notes(l.Description), ReceiptDescription = SpendingSetupRules.Notes(l.ReceiptDescription),
             MerchantItemReference = SpendingSetupRules.Notes(l.MerchantItemReference), Notes = SpendingSetupRules.Notes(l.Notes)
         }).ToArray();
+        var discounts = (values.Discounts ?? []).Select(d => d is null
+            ? throw new InvalidValueException("Discounts cannot contain null entries.")
+            : d with { Description = SpendingSetupRules.Notes(d.Description) }).ToArray();
         var copy = values with
         {
-            CurrencyCode = RequiredAlphabeticCode.Normalize(values.CurrencyCode, 3), Lines = lines,
+            CurrencyCode = RequiredAlphabeticCode.Normalize(values.CurrencyCode, 3), Lines = lines, Discounts = discounts,
             ExternalReference = SpendingSetupRules.Notes(values.ExternalReference), Notes = SpendingSetupRules.Notes(values.Notes)
         };
         var choices = (prices ?? []).ToArray();
@@ -45,7 +49,14 @@ internal static class SpendingCreateRequest
             }).ToArray(),
             Prices = choices.Select(p => new { p.LinePosition, Amount = Number(p.ChosenUnitPrice), p.ExpectedRevision }).ToArray()
         };
-        return (copy, choices, Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(canonical))));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(canonical);
+        if (discounts.Length > 0)
+        {
+            var versionTwo = JsonNode.Parse(bytes)!; versionTwo["Version"] = 2;
+            versionTwo["Discounts"] = JsonSerializer.SerializeToNode(discounts.Select(d => new { d.ExpenseCategoryId, Amount = Number(d.Amount), d.Description }).ToArray());
+            bytes = JsonSerializer.SerializeToUtf8Bytes(versionTwo);
+        }
+        return (copy, choices, Convert.ToHexStringLower(SHA256.HashData(bytes)));
     }
 
     private static string? Number(decimal? value) => value?.ToString("G29", CultureInfo.InvariantCulture);

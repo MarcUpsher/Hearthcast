@@ -88,8 +88,8 @@ describe("Recorded spending category report", () => {
     await c.load(); await settle();
     expect([...fixture.nativeElement.querySelectorAll("dd")].map((e: HTMLElement) => e.textContent)).toEqual(["2", "3", "1"]);
     const warning = fixture.nativeElement.querySelector(".warnings").textContent;
-    expect(warning).toContain("Saved shop · 1 Jun 2026"); expect(warning).toContain("Receipt: GBP 9.00 · Lines: GBP 10.00");
-    expect(warning).toContain("Receipt minus lines: GBP -1.00");
+    expect(warning).toContain("Saved shop · 1 Jun 2026"); expect(warning).toContain("Receipt: GBP 9.00 · Recorded total: GBP 10.00");
+    expect(warning).toContain("Receipt minus recorded total: GBP -1.00");
     expect(fixture.nativeElement.querySelector("tbody").textContent).toContain("GBP 12.50");
     expect(fixture.nativeElement.querySelectorAll(".warnings li")).toHaveLength(1);
   });

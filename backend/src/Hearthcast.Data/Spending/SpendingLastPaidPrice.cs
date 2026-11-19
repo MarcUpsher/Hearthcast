@@ -2,7 +2,7 @@ namespace Hearthcast.Data.Spending;
 
 public sealed record SpendingLastPaidPrice(Guid SpendingRecordId, Guid SpendingLineId, DateOnly SpendingDate,
     string CurrencyCode, string UnitKey, string UnitLabel, decimal Quantity, decimal UnitPrice,
-    decimal NetAmount, PromotionStatus PromotionStatus)
+    decimal NetAmount, PromotionStatus PromotionStatus, bool HasReceiptDiscount = false)
 {
     public decimal EffectiveUnitPrice => NetAmount / Quantity;
 }

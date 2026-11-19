@@ -107,6 +107,7 @@ historical records save their own copies.
 | SpendingItemMerchantPrice | Id, HouseholdId, SpendingItemId, MerchantId, CurrencyCode, UnitKey, UnitLabel, UsualUnitPrice, SourceSpendingLineId?, UpdatedAtUtc, Revision | Explicitly remembered usual price for this item at this merchant in this currency and unit. |
 | SpendingRecord | Id, HouseholdId, Kind, SpendingDate, MerchantId, MerchantName, CurrencyCode, CurrencyMinorUnits, ExternalReference?, Notes?, ReceiptTotal?, OriginalSpendingRecordId?, OriginalSpendingRecordKind?, CreatedAtUtc, UpdatedAtUtc, Revision, CreationRequestHash, VoidedAtUtc? | One purchase/payment or refund. Saved precision protects history; companion original kind enforces a Payment FK. Client-generated Id supports later service-level retries. |
 | SpendingLine | Id, HouseholdId, SpendingRecordId, Position, CurrencyCode, CurrencyMinorUnits, SpendingItemId?, ItemCode?, ItemName?, Description?, ExpenseCategoryId, ExpenseCategoryName, UnitKey?, UnitLabel?, ReceiptDescription?, MerchantItemReference?, Quantity?, UnitPrice?, NetAmount, PromotionStatus, Notes? | Categorised amount, optionally linked to a catalogue item. A composite FK matches parent currency/precision. PromotionStatus is Unknown, Yes or No. |
+| SpendingDiscount | Id, HouseholdId, SpendingRecordId, Position, ExpenseCategoryId, ExpenseCategoryName, CurrencyCode, CurrencyMinorUnits, Amount, Description? | Positive receipt-level deduction assigned to an existing line category; never allocated to item prices. |
 | BudgetItem | Id, HouseholdId, Code, Name, ExpenseCategoryId, MerchantId?, CurrencyCode, Frequency, IntervalCount, Notes?, IsRetired | Reusable outgoing or allowance. No stored cost or required fixed/variable classification on the base item. |
 | BudgetSnapshot | Id, HouseholdId, EffectiveFrom, Notes?, CreatedAtUtc, UpdatedAtUtc, Revision, CreationRequestHash, CopiedFromBudgetSnapshotId? | Complete plan, effective until the next plan begins. |
 | BudgetEntry | Id, HouseholdId, BudgetSnapshotId, BudgetItemId, ItemCode, ItemName, ExpenseCategoryId, ExpenseCategoryName, MerchantId?, MerchantName?, PlannedAmount?, CurrencyCode, Frequency, IntervalCount, Notes?, ValueOrigin, LastConfirmedDate?, CarriedFromBudgetEntryId? | Planned amount and copied metadata for an outgoing/allowance at this plan date. |
@@ -165,9 +166,11 @@ for Coffee £7 and Food £5.50, or detailed product lines optionally linked to t
 catalogue. Mixed detail within a record is supported. All saved records require
 at least one categorised line, with a nonnegative NetAmount on each line.
 
-The record total is always the sum of its line NetAmounts. ReceiptTotal remains
-an optional reconciliation input, not a second counted amount. Replacing a quick
-entry with itemised lines removes the original summary line in the same atomic
+The record total is the sum of line NetAmounts less explicit receipt discounts.
+Discounts have positive amounts, a category and optional offer description; their
+combined amount cannot exceed the entered lines in that category. Printed item
+prices remain unchanged. ReceiptTotal remains an optional reconciliation input,
+not a second counted amount. Replacing a quick entry with itemised lines removes the original summary line in the same atomic
 revision-checked save; never retain it as another counted line. The editor can
 show an explicit categorised remainder when some of a receipt is still unsplit.
 
@@ -179,7 +182,8 @@ linked lines with quantity and unit price participate in last-unit-price lookup
 or supply a source for a remembered usual price. Category overrides on individual
 lines are permitted without changing catalogue defaults.
 
-Merchant, category and date reports aggregate all lines regardless of detail.
+Merchant, category and date reports aggregate all lines less their assigned
+receipt discounts, regardless of detail.
 Product-level reports cover only linked item lines and must communicate that
 scope; do not infer coffee/scone splits from a quick Eating out entry. Refining a
 record later may change its category breakdown, but must not duplicate spending.
@@ -197,14 +201,16 @@ record later may change its category breakdown, but must not duplicate spending.
 4. Prefill NetAmount from quantity × unit price using the receipt currency's
    rounding rule. Allow the actual discounted/rounded line amount to override it.
    Preserve both inputs and NetAmount; reports sum NetAmount, not both values.
-5. Optionally enter ReceiptTotal and reconcile it against the line total. Surface
+5. Optionally add category-assigned receipt discounts and enter ReceiptTotal,
+   reconciling it against the line total less those explicit discounts. Surface
    differences rather than silently allocating a discrepancy. Saving a mismatch
    is allowed so entry can be completed later; show Unreconciled and the difference
-   in entry/history views. Reports still sum lines only. A missing ReceiptTotal
-   means Not checked, not Reconciled; matching totals mean Reconciled. Derive this
+   in entry/history views. Reports sum lines less assigned receipt discounts. A
+   missing ReceiptTotal means Not checked, not Reconciled; matching totals mean Reconciled. Derive this
    status rather than storing an independently editable flag.
    Delivery, fees and other charges can be explicitly categorised lines.
-6. Save the header and all lines atomically with revision checking for corrections.
+6. Save the header, lines and discounts atomically with revision checking for
+   corrections.
 
 ### Usual price versus last price paid — agreed behaviour
 
@@ -223,7 +229,8 @@ unknown specials without making the user identify every promotion correctly.
 Use a unique (HouseholdId, SpendingItemId, MerchantId, CurrencyCode, UnitKey)
 price record. Never reuse a different merchant's, currency's or unit's price
 silently. If there is no matching usual price, require entry and offer to remember
-it; do not silently adopt a possibly promotional last-paid price. Keep pack sizes
+it, or explicitly use the displayed last recorded price for this purchase;
+do not silently adopt a possibly promotional last-paid price. Keep pack sizes
 as distinct items where appropriate rather than mutating their meaning.
 
 Last paid is read from saved item-linked Payment lines with quantity/unit price
@@ -365,7 +372,8 @@ that a payment occurred.
 ## Linking actual and planned spending
 
 ExpenseCategory is the primary comparison key. Actual Food is the sum of recorded
-food lines (less refunds); planned Food is the sum of active food BudgetEntries.
+food lines less Food receipt discounts (with refunds subtracted); planned Food
+is the sum of active food BudgetEntries.
 Entries are explicitly additive, within each category/currency and after any
 display-frequency normalisation. Show the category total while editing. If the
 user wants £500 Food overall, including a £50 subscription, enter £450 general
@@ -600,3 +608,10 @@ schema. Extracted prices or item matches should be reviewed before saving actual
 
 The review's issues are resolved above as explicit v1 planning rules; deferred
 reporting choices should not block the first capture/schema slices.
+
+## Receipt discounts and historical price assistance
+
+The [receipt discount and last-price slice](receipt-discounts-and-last-price-slice.md)
+adds explicit category-level deductions while preserving printed item prices,
+legacy create retries and usual-price defaults. Last recorded prices are now
+visible with an explicit Use this price action in purchase capture.

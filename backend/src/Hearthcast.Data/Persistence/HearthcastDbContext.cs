@@ -22,6 +22,7 @@ public sealed class HearthcastDbContext(DbContextOptions<HearthcastDbContext> op
     public DbSet<SpendingItemMerchantPrice> SpendingItemMerchantPrices => Set<SpendingItemMerchantPrice>();
     public DbSet<SpendingRecord> SpendingRecords => Set<SpendingRecord>();
     public DbSet<SpendingLine> SpendingLines => Set<SpendingLine>();
+    public DbSet<SpendingDiscount> SpendingDiscounts => Set<SpendingDiscount>();
     public DbSet<BudgetItem> BudgetItems => Set<BudgetItem>();
     public DbSet<BudgetSnapshot> BudgetSnapshots => Set<BudgetSnapshot>();
     public DbSet<BudgetEntry> BudgetEntries => Set<BudgetEntry>();

@@ -5,8 +5,8 @@ known household and an inclusive `DateOnly` range. Both dates are required; an
 invalid/default date or reversed range raises `InvalidValueException`, while an
 unknown household raises `ResourceNotFoundException`.
 
-Totals group authoritative saved line net amounts by saved category ID and
-currency, irrespective of historical differences in saved currency precision.
+Totals group authoritative saved line net amounts less assigned receipt discounts
+by saved category ID and currency, irrespective of historical differences in saved currency precision.
 Each group's display precision is the maximum saved `CurrencyMinorUnits` among
 its contributing lines; the exact decimal sum is not rounded. Refund lines
 subtract from their own spending date. Historical category
@@ -19,20 +19,21 @@ summary-service overflow convention. Zero and negative net groups are retained.
 
 The report includes counts of eligible records in `NotChecked`, `Reconciled` and
 `Unreconciled` states. Receipt warnings are emitted once per included record when
-the saved receipt total differs from the unsigned sum of saved lines; difference
-is receipt total minus line total, including refunds. Receipt discrepancies do
+the saved receipt total differs from the unsigned recorded total after receipt discounts; difference
+is receipt total minus recorded total, including refunds. Receipt discrepancies do
 not change category totals. An empty report describes recorded spending only and
 does not assert that every purchase was captured.
 
-The read uses one no-tracking EF query with included lines, so totals and
-reconciliation use the same selected record set. This service does not write
+The read uses no-tracking split queries inside a repeatable-read transaction, so
+parents, lines and discounts share one snapshot without multiplying sibling rows.
+Totals and reconciliation use that same selected record set. This service does not write
 spending, price, revision or budget state. The subsequent
 [summary API slice](spending-category-summary-api-slice.md) exposes this service
 without changing its calculation rules.
 
 The three report records live in matching feature-owned files:
 `SpendingCategorySummary`, `SpendingCategoryTotal` and `SpendingReceiptWarning`.
-Warnings retain the existing unsigned receipt-minus-lines difference even for
+Warnings retain the existing unsigned receipt-minus-recorded-total difference even for
 refunds; the signed category total is a separate calculation.
 
 ## Verification
@@ -74,3 +75,10 @@ Loading full aggregates remains acceptable for the initial range-based report.
 Projecting only required fields or aggregating in SQL is a future optimisation
 if data volume warrants it; preserve consistent totals/warnings and full-range
 coverage rather than silently limiting records.
+
+## Receipt discount extension
+
+The [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+extends this contract with category deductions, net recorded totals and explicit
+historical price assistance. Earlier verification counts above describe their
+original checkpoints.

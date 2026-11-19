@@ -1,3 +1,4 @@
+using System.Data;
 using Hearthcast.Data.Persistence;
 using Hearthcast.Data.Persistence.Configurations;
 using Hearthcast.Data.Validation;
@@ -36,6 +37,8 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
             throw new InvalidValueException("Supply an ordered date range and page size from 1 to 100.");
         var after = cursor is null ? null : SpendingHistoryCursor.Decode(cursor, householdId, from, to, includeVoided, pageSize);
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // Split collection reads share one PostgreSQL snapshot, including concurrent corrections.
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         await RequireHouseholdAsync(context, householdId, cancellationToken);
         var parents = context.SpendingRecords.AsNoTracking().Where(r => r.HouseholdId == householdId
             && (includeVoided || r.VoidedAtUtc == null) && (!from.HasValue || r.SpendingDate >= from.Value)
@@ -43,9 +46,9 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
         if (after is not null)
             parents = parents.Where(r => EF.Functions.LessThan(ValueTuple.Create(r.SpendingDate, r.CreatedAtUtc, r.Id),
                 ValueTuple.Create(after.Date, after.CreatedAtUtc, after.Id)));
-        // EF places the parent LIMIT in a subquery before joining lines. One extra parent is bounded lookahead.
+        // Each split collection query applies the same bounded parent selection. One extra parent is lookahead.
         var found = await parents.OrderByDescending(r => r.SpendingDate).ThenByDescending(r => r.CreatedAtUtc).ThenByDescending(r => r.Id)
-            .Take(pageSize + 1).Include(r => r.Lines.OrderBy(l => l.Position)).AsSingleQuery().ToArrayAsync(cancellationToken);
+            .Take(pageSize + 1).Include(r => r.Lines.OrderBy(l => l.Position)).Include(r => r.Discounts.OrderBy(d => d.Position)).AsSplitQuery().ToArrayAsync(cancellationToken);
         var records = found.Take(pageSize).ToArray();
         var next = found.Length > pageSize
             ? new SpendingHistoryCursor(1, householdId, from, to, includeVoided, pageSize,
@@ -77,11 +80,12 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
             if (await context.SpendingRecords.AnyAsync(r => r.Id == recordId, token)) throw CreateConflict();
             var merchant = await FindMerchantAsync(context, householdId, request.Values.MerchantId, token);
             var lines = await ResolveLinesAsync(context, householdId, request.Values.Lines, token);
+            var discounts = await ResolveDiscountsAsync(context, householdId, request.Values.Discounts ?? [], token);
             var original = request.Values.OriginalPaymentId.HasValue
                 ? await FindAsync(context, householdId, request.Values.OriginalPaymentId.Value, token) : null;
             var record = new SpendingRecord(recordId, merchant, request.Values.SpendingDate, request.Values.CurrencyCode,
                 lines, request.Hash, request.Values.Kind, original, request.Values.ReceiptTotal,
-                request.Values.ExternalReference, request.Values.Notes);
+                request.Values.ExternalReference, request.Values.Notes, discounts);
             context.SpendingRecords.Add(record);
             await RememberAsync(context, record, request.Prices, null, token);
             return new SpendingRecordCaptureResult(record, true);
@@ -91,6 +95,8 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
     public async Task<SpendingRecord> GetAsync(Guid householdId, Guid recordId, CancellationToken cancellationToken = default)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // Split collection reads share one PostgreSQL snapshot, including concurrent corrections.
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         return await FindAsync(context, householdId, recordId, cancellationToken);
     }
 
@@ -99,6 +105,8 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
     {
         if (from > to) throw new InvalidValueException("The start date cannot be after the end date.");
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // Split collection reads share one PostgreSQL snapshot, including concurrent corrections.
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         await RequireHouseholdAsync(context, householdId, cancellationToken);
         return await Graph(context).AsNoTracking().Where(r => r.HouseholdId == householdId
             && (includeVoided || r.VoidedAtUtc == null) && (!from.HasValue || r.SpendingDate >= from.Value)
@@ -139,10 +147,11 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
     public Task<SpendingRecord> ReplaceAsync(Guid householdId, Guid recordId, Guid expectedRevision,
         Guid merchantId, DateOnly spendingDate, IReadOnlyList<SpendingLineValues> lines, decimal? receiptTotal,
         string? externalReference, string? notes, IReadOnlyList<RememberSpendingPrice>? rememberPrices = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IReadOnlyList<SpendingDiscountValues>? discounts = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var copy = lines.ToArray();
+        var discountCopy = discounts?.ToArray();
         var prices = FreezePrices(rememberPrices);
         return WriteAsync(async (context, token) =>
         {
@@ -150,15 +159,41 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
             RequireRevision(record, expectedRevision);
             var merchant = await FindMerchantAsync(context, householdId, merchantId, token);
             var resolved = await ResolveLinesAsync(context, householdId, copy, token);
+            var resolvedDiscounts = discountCopy is null ? null : await ResolveDiscountsAsync(context, householdId, discountCopy, token);
+            var oldDiscounts = record.Discounts.ToArray();
             // Restrictive source FKs must be cleared before the old line rows are removed.
             var detached = await DetachSourcesAsync(context, householdId, record.Lines.Select(l => l.Id).ToArray(), token);
-            var old = record.Replace(expectedRevision, merchant, spendingDate, resolved, receiptTotal, externalReference, notes);
+            var old = record.Replace(expectedRevision, merchant, spendingDate, resolved, receiptTotal, externalReference, notes, resolvedDiscounts);
             context.SpendingLines.RemoveRange(old);
             // Explicit tracking makes the ownership of newly generated replacement rows unambiguous.
             context.SpendingLines.AddRange(record.Lines);
+            if (resolvedDiscounts is not null) { context.SpendingDiscounts.RemoveRange(oldDiscounts); context.SpendingDiscounts.AddRange(record.Discounts); }
             await RememberAsync(context, record, prices, detached, token);
             return record;
         }, cancellationToken);
+    }
+
+    public Task<SpendingRecord> CorrectDiscountsAsync(Guid householdId, Guid recordId, Guid expectedRevision,
+        IReadOnlyList<SpendingDiscountValues> discounts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(discounts); var copy = discounts.ToArray();
+        return WriteAsync(async (context, token) =>
+        {
+            var record = await FindAsync(context, householdId, recordId, token); RequireRevision(record, expectedRevision);
+            var resolved = await ResolveDiscountsAsync(context, householdId, copy, token);
+            context.SpendingDiscounts.RemoveRange(record.CorrectDiscounts(expectedRevision, resolved));
+            context.SpendingDiscounts.AddRange(record.Discounts); return record;
+        }, cancellationToken);
+    }
+
+    private static async Task<SpendingDiscountInput[]> ResolveDiscountsAsync(HearthcastDbContext context, Guid householdId,
+        IReadOnlyList<SpendingDiscountValues> values, CancellationToken token)
+    {
+        if (values.Any(d => d is null)) throw new InvalidValueException("Discounts cannot contain null entries.");
+        var ids = values.Select(d => d.ExpenseCategoryId).Distinct().ToArray();
+        var categories = await context.ExpenseCategories.Where(c => c.HouseholdId == householdId && ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, token);
+        if (categories.Count != ids.Length) throw new ResourceNotFoundException("A discount category does not belong to this household.");
+        return values.Select(d => new SpendingDiscountInput(categories[d.ExpenseCategoryId], d.Amount, d.Description)).ToArray();
     }
 
     public Task<SpendingRecord> VoidAsync(Guid householdId, Guid recordId, Guid expectedRevision,
@@ -193,7 +228,8 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
             .OrderByDescending(x => x.Record.SpendingDate).ThenByDescending(x => x.Record.CreatedAtUtc)
             .ThenByDescending(x => x.Record.Id).ThenByDescending(x => x.Line.Position).ThenByDescending(x => x.Line.Id)
             .Select(x => new SpendingLastPaidPrice(x.Record.Id, x.Line.Id, x.Record.SpendingDate, x.Record.CurrencyCode,
-                x.Line.UnitKey!, x.Line.UnitLabel!, x.Line.Quantity!.Value, x.Line.UnitPrice!.Value, x.Line.NetAmount, x.Line.PromotionStatus))
+                x.Line.UnitKey!, x.Line.UnitLabel!, x.Line.Quantity!.Value, x.Line.UnitPrice!.Value, x.Line.NetAmount, x.Line.PromotionStatus,
+                x.Record.Discounts.Any(d => d.ExpenseCategoryId == x.Line.ExpenseCategoryId)))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -297,7 +333,7 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
     }
 
     private static IQueryable<SpendingRecord> Graph(HearthcastDbContext context) =>
-        context.SpendingRecords.Include(r => r.Lines.OrderBy(l => l.Position)).AsSingleQuery();
+        context.SpendingRecords.Include(r => r.Lines.OrderBy(l => l.Position)).Include(r => r.Discounts.OrderBy(d => d.Position)).AsSplitQuery();
 
     private static async Task<SpendingRecord> FindAsync(HearthcastDbContext context, Guid householdId, Guid id, CancellationToken token) =>
         await Graph(context).SingleOrDefaultAsync(r => r.HouseholdId == householdId && r.Id == id, token)

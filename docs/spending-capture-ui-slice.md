@@ -16,7 +16,8 @@ actual unit price; quick lines need neither. Notes, receipt reference/total,
 line description, receipt item reference and promotion status are optional.
 
 Usual-price lookup is exact for the item/merchant/currency. Missing or failed
-lookups permit manual price entry; there is no last-paid or cross-currency fallback.
+lookups permit manual price entry. Last recorded prices are shown separately with
+an explicit Use this price action; no cross-currency fallback is performed.
 Late lookups cannot overwrite manual unit prices or actual line-amount overrides.
 Selecting another merchant clears an unedited suggestion and fetches the new exact
 identity. Currency changes require confirmation when numbers are present, perform
@@ -101,3 +102,10 @@ The subsequent [form usability update](spending-form-usability-plan.md) introduc
 explicit item/category line types, searchable name-first item selection with
 linked category filtering/locking, and one-row resizable receipt notes. Saved
 classification and amount-only historical item lines remain supported.
+
+## Receipt discount extension
+
+The [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+extends this contract with category deductions, net recorded totals and explicit
+historical price assistance. Earlier verification counts above describe their
+original checkpoints.

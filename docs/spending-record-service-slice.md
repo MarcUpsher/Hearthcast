@@ -30,7 +30,10 @@ explicit amount and an optional expected usual-price revision.
 | VoidAsync | Revision-checked exclusion from spending without deleting header, lines, create identity or linked refunds. |
 | FindLastPaidAsync | Exact item/merchant/currency/unit payment history at or before an explicit date, with optional excluded record. |
 
-Reads/edits load complete aggregates with lines ordered by Position. History sorts
+Reads/edits load complete aggregates with lines and discounts ordered by Position.
+Separate collection queries avoid multiplying line and discount rows. Read-only
+aggregate queries use a repeatable-read transaction; mutations retain their
+existing serializable transaction, so each aggregate has one consistent snapshot. History sorts
 by spending date, creation time and UUID descending. Empty inventories are valid;
 missing households/records and foreign IDs are ResourceNotFoundException. Date
 ranges cannot be inverted. Item/category/merchant/original-payment references are
@@ -151,3 +154,10 @@ required amount contracts. The unbounded ListAsync remains an internal inventory
 convenience and is not wired to a general history route.
 
 Next: budget domain/persistence. UI remains deferred.
+
+## Receipt discount extension
+
+The [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+extends this contract with category deductions, net recorded totals and explicit
+historical price assistance. Earlier verification counts above describe their
+original checkpoints.

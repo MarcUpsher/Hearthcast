@@ -16,8 +16,8 @@ by currency with saved display precision. Zero and negative totals remain visibl
 refunds subtract on their own dates and voids are excluded by the backend. The page
 never derives totals from bounded history or mixes currencies. Receipt counts are
 per record across currencies, not per category. Mismatched receipts appear once,
-with their saved merchant/date, unsigned receipt and line totals, and signed
-receipt-minus-lines discrepancy. These warnings do not alter category totals.
+with their saved merchant/date, unsigned receipt and net recorded totals, and signed
+receipt-minus-recorded-total discrepancy. These warnings do not alter category totals.
 The summary response is read as text and numeric JSON tokens are preserved as
 decimal strings before decoding; only integer count/precision metadata becomes
 JavaScript numbers. Exact decimal formatting avoids losing small fractions in
@@ -45,3 +45,10 @@ messages and date-preserving output rather than live browser screenshots.
 After the review fix, **340 frontend tests** across 22 files pass under
 `TZ=Europe/London`; `npm run build` and whitespace checks pass. No backend tests
 were rerun because backend code/contracts/schema did not change.
+
+## Receipt discount extension
+
+The [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+extends this contract with category deductions, net recorded totals and explicit
+historical price assistance. Earlier verification counts above describe their
+original checkpoints.

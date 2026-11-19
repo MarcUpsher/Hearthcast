@@ -10,8 +10,8 @@ import { Api } from "../core/api";
 import { message } from "../core/api-errors";
 import { MoneyInput } from "../core/money";
 import { Workspace } from "../core/workspace";
-import { SpendingCaptureRequest, SpendingCurrency, SpendingItem, SpendingPromotion, SpendingRecord, SpendingReplacementRequest, SpendingSetupEntry, SpendingUsualPrice } from "./models";
-import { decimalAmount, localToday, minorAmount, safeAmount, suggestedAmount, validSpendingDate } from "./amounts";
+import { SpendingCaptureRequest, SpendingCurrency, SpendingItem, SpendingPromotion, SpendingRecord, SpendingReplacementRequest, SpendingLastPrice, SpendingSetupEntry, SpendingUsualPrice } from "./models";
+import { decimalAmount, localToday, minorAmount, safeAmount, suggestedAmount, spendingDate, validSpendingDate } from "./amounts";
 import { SpendingItemCreate, SpendingItemCreateData } from "./item-create";
 
 export interface CaptureLineDraft {
@@ -24,7 +24,8 @@ export interface CaptureLineDraft {
 const newLine = (kind: CaptureLineDraft["kind"] = "item"): CaptureLineDraft => ({ kind, key: crypto.randomUUID(), itemId: "", categoryId: "", quantity: "", unitPrice: "", amount: "",
   description: "", reference: "", promotion: "Unknown", autoAmount: true, priceTouched: false,
   receiptDescription: "", notes: "", unitKey: "", unitLabel: "" });
-const blankDraft = () => ({ date: localToday(), merchantId: "", currencyCode: "GBP", receiptTotal: "", reference: "", notes: "", lines: [newLine()] });
+export interface CaptureDiscountDraft { key: string; categoryId: string; amount: string; description: string; }
+const blankDraft = () => ({ date: localToday(), merchantId: "", currencyCode: "GBP", receiptTotal: "", reference: "", notes: "", discounts: [] as CaptureDiscountDraft[], lines: [newLine()] });
 type CaptureDraft = ReturnType<typeof blankDraft>;
 
 @Component({
@@ -61,6 +62,9 @@ export class SpendingCapture {
   readonly checking = signal(false);
   readonly frozen = signal<SpendingCaptureRequest | null>(null);
   readonly error = signal("");
+  readonly lastPrices = signal<Record<string, SpendingLastPrice | null>>({});
+  readonly lastPriceStates = signal<Record<string, string>>({});
+  readonly date = spendingDate;
   readonly priceStates = signal<Record<string, string>>({});
   readonly editing = signal<SpendingRecord | null>(null);
   readonly editNeedsReload = signal(false);
@@ -86,15 +90,15 @@ export class SpendingCapture {
   locked() { return this.saving() || this.checking() || !!this.frozen() || this.editNeedsReload() || !!this.itemEditor() || this.disabled(); }
   busy() { return this.saving() || this.checking() || (this.itemEditor()?.componentInstance?.saving() ?? false); }
   minorUnits() { return this.editing()?.currencyMinorUnits ?? this.currencies().find(row => row.code === this.draft().currencyCode)?.minorUnits ?? null; }
-  set(field: Exclude<keyof CaptureDraft, "lines">, value: string) {
+  set(field: Exclude<keyof CaptureDraft, "lines" | "discounts">, value: string) {
     if (this.locked()) return;
     this.draft.update(draft => ({ ...draft, [field]: value })); this.error.set("");
-    if (field === "merchantId") this.refreshPrices();
+    if (field === "merchantId" || field === "date") this.refreshPrices();
   }
   setCurrency(value: string, picker?: MatSelect) {
     if (this.locked() || this.editing()) { if (picker) picker.value = this.draft().currencyCode; return; }
     if (value === this.draft().currencyCode) return;
-    if (this.draft().currencyCode && (!!this.draft().receiptTotal || this.draft().lines.some(line => !!line.amount || !!line.unitPrice)) &&
+    if (this.draft().currencyCode && (!!this.draft().receiptTotal || this.draft().discounts.some(discount => !!discount.amount) || this.draft().lines.some(line => !!line.amount || !!line.unitPrice)) &&
       !window.confirm("Changing currency keeps entered numbers without converting them. Continue?")) {
       if (picker) picker.value = this.draft().currencyCode;
       return;
@@ -223,13 +227,17 @@ export class SpendingCapture {
     const home = this.home, generation = this.generation, line = this.line(key), draft = this.draft();
     const version = (this.priceVersions.get(key) ?? 0) + 1;
     this.priceVersions.set(key, version);
+    this.lastPrices.update(prices => ({ ...prices, [key]: null }));
+    this.lastPriceStates.update(states => ({ ...states, [key]: "" }));
     if (!home || !line?.itemId || !draft.merchantId || !draft.currencyCode) { this.priceState(key, "Choose merchant and currency for a usual-price suggestion."); return; }
     const current = () => this.current(generation, home) && this.priceVersions.get(key) === version &&
-      this.line(key)?.itemId === line.itemId && this.draft().merchantId === draft.merchantId && this.draft().currencyCode === draft.currencyCode;
+      this.line(key)?.itemId === line.itemId && this.draft().merchantId === draft.merchantId && this.draft().currencyCode === draft.currencyCode && this.draft().date === draft.date;
     this.priceState(key, "Loading usual price…");
     try {
       const query = new URLSearchParams({ merchantId: draft.merchantId, currencyCode: draft.currencyCode });
-      const price = await this.api.get<SpendingUsualPrice | null>(`households/${home}/spending/items/${line.itemId}/usual-price?${query}`);
+      const pendingUsual = this.api.get<SpendingUsualPrice | null>(`households/${home}/spending/items/${line.itemId}/usual-price?${query}`);
+      void this.lookupLastPrice(key, home, line.itemId, draft, current);
+      const price = await pendingUsual;
       if (!current()) return;
       if (!price) { this.priceState(key, "No usual price. Enter the actual unit price."); return; }
       this.priceState(key, `Usual price: ${price.currencyCode} ${price.usualUnitPrice} per ${price.unitLabel}.`);
@@ -238,12 +246,62 @@ export class SpendingCapture {
       if (current()) this.priceState(key, "Usual price unavailable. Enter an actual price or retry the lookup.");
     }
   }
-  total() {
-    const places = this.minorUnits();
-    if (places === null) return "";
+  private async lookupLastPrice(key: string, home: string, itemId: string, draft: CaptureDraft, current: () => boolean) {
+    if (!validSpendingDate(draft.date)) return;
+    this.lastPriceStates.update(states => ({ ...states, [key]: "Loading last recorded price…" }));
+    try {
+      const query = new URLSearchParams({ merchantId: draft.merchantId, currencyCode: draft.currencyCode, onOrBefore: draft.date });
+      if (this.editing()) query.set("excludeRecordId", this.editing()!.id);
+      const price = await this.api.get<SpendingLastPrice | null>(`households/${home}/spending/items/${itemId}/last-paid-price?${query}`);
+      if (!current()) return;
+      const valid = price && typeof price.unitPrice === "number" && typeof price.spendingDate === "string" && price.currencyCode === draft.currencyCode;
+      this.lastPrices.update(prices => ({ ...prices, [key]: valid ? price : null }));
+      this.lastPriceStates.update(states => ({ ...states, [key]: valid ? "" : "No earlier recorded price for this merchant and currency." }));
+    } catch { if (current()) this.lastPriceStates.update(states => ({ ...states, [key]: "Last recorded price unavailable; the usual-price lookup is separate." })); }
+  }
+  useLastPrice(key: string) {
+    const price = this.lastPrices()[key];
+    if (price && !this.locked()) this.changeLine(key, "unitPrice", String(price.unitPrice));
+  }
+  addDiscount() {
+    if (this.locked()) return;
+    const categories = [...new Set(this.draft().lines.map(line => line.categoryId).filter(Boolean))];
+    this.draft.update(draft => ({ ...draft, discounts: [...draft.discounts, { key: crypto.randomUUID(), categoryId: categories.length === 1 ? categories[0] : "", amount: "", description: "" }] }));
+  }
+  changeDiscount(key: string, field: "categoryId" | "amount" | "description", value: string) {
+    if (!this.locked()) { this.draft.update(draft => ({ ...draft, discounts: draft.discounts.map(discount => discount.key === key ? { ...discount, [field]: value } : discount) })); this.error.set(""); }
+  }
+  removeDiscount(key: string) { if (!this.locked()) this.draft.update(draft => ({ ...draft, discounts: draft.discounts.filter(discount => discount.key !== key) })); }
+  gross() {
+    const places = this.minorUnits(); if (places === null) return "";
     let total = 0n;
     for (const line of this.draft().lines) { const value = minorAmount(line.amount, places); if (value === null) return ""; total += value; }
     return decimalAmount(total, places);
+  }
+  discountTotal() {
+    const places = this.minorUnits(); if (places === null) return "";
+    let total = 0n;
+    for (const discount of this.draft().discounts) { const value = minorAmount(discount.amount, places); if (value === null) return ""; total += value; }
+    return decimalAmount(total, places);
+  }
+  total() {
+    const places = this.minorUnits(), gross = this.gross(), discounts = this.discountTotal();
+    if (places === null || !gross || !discounts) return "";
+    const net = minorAmount(gross, places)! - minorAmount(discounts, places)!;
+    return net < 0n ? "" : decimalAmount(net, places);
+  }
+  discountError() { return this.draft().discounts.length && this.draft().discounts.every(discount => discount.categoryId && discount.amount) && !this.discountsValid()
+    ? "Use positive discounts in the receipt currency. Discounts cannot exceed the entered lines in their assigned category." : ""; }
+  discountsValid() {
+    const places = this.minorUnits(); if (places === null) return false;
+    const remaining = new Map<string, bigint>();
+    for (const line of this.draft().lines) remaining.set(line.categoryId, (remaining.get(line.categoryId) ?? 0n) + (minorAmount(line.amount, places) ?? 0n));
+    for (const discount of this.draft().discounts) {
+      const value = safeAmount(discount.amount, places, 1e12), amount = minorAmount(discount.amount, places);
+      if (value === null || value <= 0 || amount === null || !discount.categoryId || !remaining.has(discount.categoryId)) return false;
+      remaining.set(discount.categoryId, remaining.get(discount.categoryId)! - amount);
+    }
+    return [...remaining.values()].every(value => value >= 0n);
   }
   difference() {
     const places = this.minorUnits(), total = this.total();
@@ -256,7 +314,7 @@ export class SpendingCapture {
     const draft = this.draft(), places = this.minorUnits();
     if (!this.home || this.w.current()?.id !== this.home || places === null || !draft.merchantId || !validSpendingDate(draft.date) || !draft.lines.length) return false;
     if (draft.receiptTotal && safeAmount(draft.receiptTotal, places, 1e12) === null) return false;
-    return draft.lines.every(line => (line.kind !== "item" || !!line.itemId) && !!line.categoryId && safeAmount(line.amount, places, 1e12) !== null &&
+    return this.discountsValid() && draft.lines.every(line => (line.kind !== "item" || !!line.itemId) && !!line.categoryId && safeAmount(line.amount, places, 1e12) !== null &&
       (!(line.quantity || line.unitPrice || (line.kind === "item" && !this.historicalAmountOnly(line))) ||
         (Number(line.quantity) > 0 && safeAmount(line.quantity, 6, 1e6) !== null && safeAmount(line.unitPrice, 6, 1e9) !== null)));
   }
@@ -270,6 +328,8 @@ export class SpendingCapture {
     return { id: this.id, merchantId: draft.merchantId, spendingDate: draft.date, currencyCode: draft.currencyCode, kind: "Payment",
       receiptTotal: draft.receiptTotal ? safeAmount(draft.receiptTotal, places, 1e12)! : null,
       externalReference: draft.reference.trim() || null, notes: draft.notes.trim() || null,
+      ...(draft.discounts.length ? { discounts: draft.discounts.map(discount => ({ expenseCategoryId: discount.categoryId,
+        amount: safeAmount(discount.amount, places, 1e12)!, description: discount.description.trim() || null })) } : {}),
       lines: draft.lines.map(line => ({ expenseCategoryId: line.categoryId, netAmount: safeAmount(line.amount, places, 1e12)!,
         ...(line.itemId ? { spendingItemId: line.itemId } : {}),
         ...(line.quantity || line.unitPrice ? { quantity: safeAmount(line.quantity, 6, 1e6)!, unitPrice: safeAmount(line.unitPrice, 6, 1e9)! } : {}),
@@ -292,14 +352,18 @@ export class SpendingCapture {
   }
   private persistedValues(draft: CaptureDraft) {
     return { ...draft, receiptTotal: this.canonical(draft.receiptTotal), reference: draft.reference.trim(), notes: draft.notes.trim(),
-      lines: draft.lines.map(line => this.persistedLine(line)) };
+      lines: draft.lines.map(line => this.persistedLine(line)),
+      discounts: draft.discounts.map(discount => ({ categoryId: discount.categoryId, amount: this.canonical(discount.amount), description: discount.description.trim() })) };
   }
   private persisted(draft: CaptureDraft) { return JSON.stringify(this.persistedValues(draft)); }
-  editOperation(): { kind: "header" | "line" | "replace"; line?: CaptureLineDraft } {
+  editOperation(): { kind: "header" | "line" | "discounts" | "replace"; line?: CaptureLineDraft } {
     const original = this.originalDraft, draft = this.draft();
     if (!original) return { kind: "replace" };
     const oldValues = this.persistedValues(original), newValues = this.persistedValues(draft);
-    if (draft.merchantId === original.merchantId && JSON.stringify(newValues.lines) === JSON.stringify(oldValues.lines)) return { kind: "header" };
+    const { discounts: oldDiscounts, ...oldRest } = oldValues, { discounts: newDiscounts, ...newRest } = newValues;
+    const sameDiscounts = JSON.stringify(oldDiscounts) === JSON.stringify(newDiscounts);
+    if (!sameDiscounts && JSON.stringify(oldRest) === JSON.stringify(newRest)) return { kind: "discounts" };
+    if (sameDiscounts && draft.merchantId === original.merchantId && JSON.stringify(newValues.lines) === JSON.stringify(oldValues.lines)) return { kind: "header" };
     const { lines: _old, ...oldHeader } = oldValues, { lines: _new, ...newHeader } = newValues;
     if (JSON.stringify(oldHeader) === JSON.stringify(newHeader) && draft.lines.length === original.lines.length) {
       const changed = draft.lines.filter((line, index) => JSON.stringify(this.persistedLine(line)) !== JSON.stringify(this.persistedLine(original.lines[index])));
@@ -319,7 +383,8 @@ export class SpendingCapture {
       externalReference: request.externalReference, notes: request.notes };
     let path = `households/${home}/spending/records/${record.id}`;
     let body: unknown;
-    if (operation.kind === "header") { path += "/header"; body = header; }
+    if (operation.kind === "discounts") { path += "/discounts"; body = { expectedRevision: record.revision, discounts: request.discounts ?? [] }; }
+    else if (operation.kind === "header") { path += "/header"; body = header; }
     else if (operation.kind === "line") {
       const line = operation.line!;
       path += `/lines/${line.key}`;
@@ -327,7 +392,9 @@ export class SpendingCapture {
         quantity: line.quantity ? safeAmount(line.quantity, 6, 1e6)! : null, unitPrice: line.unitPrice ? safeAmount(line.unitPrice, 6, 1e9)! : null,
         promotionStatus: line.promotion, notes: line.notes.trim() || null };
     } else {
-      const replacement: SpendingReplacementRequest = { ...header, merchantId: request.merchantId, lines: request.lines };
+      const sameDiscounts = JSON.stringify(this.persistedValues(this.originalDraft!).discounts) === JSON.stringify(this.persistedValues(this.draft()).discounts);
+      const replacement: SpendingReplacementRequest = { ...header, merchantId: request.merchantId, lines: request.lines,
+        ...(!sameDiscounts ? { discounts: request.discounts ?? [] } : {}) };
       body = replacement;
     }
     this.saving.set(true); this.error.set("");
@@ -397,6 +464,7 @@ export class SpendingCapture {
     this.itemEditor()?.close(); this.itemEditor.set(null);
     const draft: CaptureDraft = record ? { date: record.spendingDate, merchantId: record.merchantId, currencyCode: record.currencyCode,
       receiptTotal: record.receiptTotal === null ? "" : String(record.receiptTotal), reference: record.externalReference ?? "", notes: record.notes ?? "",
+      discounts: (record.discounts ?? []).map(discount => ({ key: discount.id, categoryId: discount.expenseCategoryId, amount: String(discount.amount), description: discount.description ?? "" })),
       lines: record.lines.map(line => ({ ...newLine(line.spendingItemId ? "item" : "category"), key: line.id, itemId: line.spendingItemId ?? "", categoryId: line.expenseCategoryId,
         quantity: line.quantity === null ? "" : String(line.quantity), unitPrice: line.unitPrice === null ? "" : String(line.unitPrice), amount: String(line.netAmount),
         description: line.description ?? "", reference: line.merchantItemReference ?? "", promotion: line.promotionStatus,
@@ -404,8 +472,9 @@ export class SpendingCapture {
         autoAmount: false, priceTouched: true })) } : blankDraft();
     this.editing.set(record); this.editNeedsReload.set(false); this.originalDraft = record ? structuredClone(draft) : null;
     this.draft.set(draft); this.baseline = this.persisted(draft);
-    this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({}); this.itemSearches.set({});
+    this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({}); this.lastPrices.set({}); this.lastPriceStates.set({}); this.itemSearches.set({});
     this.formVersion.update(version => version + 1);
+    if (record) for (const line of draft.lines) if (line.itemId) void this.lookupPrice(line.key);
   }
   hasUnsavedChanges() { return !!this.frozen() || this.editNeedsReload() || (this.itemEditor()?.componentInstance?.dirty() ?? false) ||
     this.draft().lines.some(line => !line.itemId && !!this.itemSearches()[line.key]?.trim()) || this.persisted(this.draft()) !== this.baseline; }

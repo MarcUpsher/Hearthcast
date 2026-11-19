@@ -44,8 +44,11 @@ public sealed class SpendingRecordConfiguration : IEntityTypeConfiguration<Spend
             .HasPrincipalKey(r => new { r.HouseholdId, r.Id, r.Kind }).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(r => new { r.HouseholdId, r.SpendingDate });
         builder.Navigation(r => r.Lines).HasField("_lines").UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(r => r.Discounts).HasField("_discounts").UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Ignore(r => r.IsVoided);
         builder.Ignore(r => r.TotalAmount);
+        builder.Ignore(r => r.GrossAmount);
+        builder.Ignore(r => r.DiscountAmount);
         builder.Ignore(r => r.CountedAmount);
         builder.Ignore(r => r.ReceiptDifference);
         builder.Ignore(r => r.ReconciliationStatus);

@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Hearthcast.Api.Tests.Spending;
 
-public sealed class SpendingRecordApiTests : IAsyncLifetime
+public sealed partial class SpendingRecordApiTests : IAsyncLifetime
 {
     private readonly PostgresTestDatabase _database = new();
     private ApiTestFactory _factory = null!;
@@ -450,7 +450,7 @@ public sealed class SpendingRecordApiTests : IAsyncLifetime
         using var client = alternate.CreateClient(new() { HandleCookies = false });
         var page = (await client.GetFromJsonAsync<SpendingHistoryPageResponse>(d.Records))!;
         Assert.Equal(1, capture.StateQueries);
-        Assert.InRange(capture.TotalQueries, 2, 4); // No per-refund GET/lookup queries.
+        Assert.Equal(6, capture.TotalQueries); // Two scope checks, parents/lines/discounts, one batched status read; no per-refund queries.
         foreach (var refund in refunds)
         {
             var saved = page.Records.Single(r => r.Id == refund.Id);

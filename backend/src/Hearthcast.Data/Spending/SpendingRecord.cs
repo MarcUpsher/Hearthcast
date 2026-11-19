@@ -5,12 +5,14 @@ namespace Hearthcast.Data.Spending;
 public sealed class SpendingRecord
 {
     private readonly List<SpendingLine> _lines = [];
+    private readonly List<SpendingDiscount> _discounts = [];
     private SpendingRecord() { }
 
     internal SpendingRecord(Guid id, Merchant merchant, DateOnly spendingDate, string currencyCode,
         IReadOnlyList<SpendingLineInput> lines, string creationRequestHash,
         SpendingRecordKind kind = SpendingRecordKind.Payment, SpendingRecord? originalPayment = null,
-        decimal? receiptTotal = null, string? externalReference = null, string? notes = null)
+        decimal? receiptTotal = null, string? externalReference = null, string? notes = null,
+        IReadOnlyList<SpendingDiscountInput>? discounts = null)
     {
         if (id == Guid.Empty) throw new InvalidValueException("Supply the client-generated record identifier.");
         if (!Enum.IsDefined(kind)) throw new InvalidValueException("Select Payment or Refund.");
@@ -31,6 +33,8 @@ public sealed class SpendingRecord
         CreationRequestHash = creationRequestHash;
         SetHeader(spendingDate, receiptTotal, externalReference, notes);
         _lines.AddRange(BuildLines(lines));
+        _discounts.AddRange(BuildDiscounts(discounts ?? []));
+        ValidateDiscounts(_lines, _discounts);
         CreatedAtUtc = SpendingValueRules.Now();
         UpdatedAtUtc = CreatedAtUtc;
         Revision = Guid.NewGuid();
@@ -56,7 +60,10 @@ public sealed class SpendingRecord
     public DateTimeOffset? VoidedAtUtc { get; private set; }
     public bool IsVoided => VoidedAtUtc.HasValue;
     public IReadOnlyList<SpendingLine> Lines => _lines.AsReadOnly();
-    public decimal TotalAmount => _lines.Sum(l => l.NetAmount);
+    public IReadOnlyList<SpendingDiscount> Discounts => _discounts.AsReadOnly();
+    public decimal GrossAmount => _lines.Sum(l => l.NetAmount);
+    public decimal DiscountAmount => _discounts.Sum(d => d.Amount);
+    public decimal TotalAmount => GrossAmount - DiscountAmount;
     public decimal CountedAmount => IsVoided ? 0 : Kind == SpendingRecordKind.Refund ? -TotalAmount : TotalAmount;
     public decimal? ReceiptDifference => ReceiptTotal - TotalAmount;
     public string ReconciliationStatus => ReceiptTotal is null ? "NotChecked" : ReceiptDifference == 0 ? "Reconciled" : "Unreconciled";
@@ -75,6 +82,7 @@ public sealed class SpendingRecord
         RequireEditable(expectedRevision);
         var line = _lines.SingleOrDefault(l => l.Id == lineId)
             ?? throw new InvalidValueException("The line does not belong to this record.");
+        ValidateDiscounts(_lines, _discounts, line.Id, netAmount);
         line.CorrectValues(netAmount, quantity, unitPrice, promotionStatus, notes);
         Touch();
     }
@@ -84,6 +92,7 @@ public sealed class SpendingRecord
     {
         RequireEditable(expectedRevision);
         var replacements = BuildLines(lines);
+        ValidateDiscounts(replacements, _discounts);
         var removed = _lines.ToArray();
         _lines.Clear();
         _lines.AddRange(replacements);
@@ -95,7 +104,7 @@ public sealed class SpendingRecord
     // Currency/kind identify this record; a mistake in those is voided and recreated.
     internal IReadOnlyList<SpendingLine> Replace(Guid expectedRevision, Merchant merchant, DateOnly spendingDate,
         IReadOnlyList<SpendingLineInput> lines, decimal? receiptTotal,
-        string? externalReference, string? notes)
+        string? externalReference, string? notes, IReadOnlyList<SpendingDiscountInput>? discounts = null)
     {
         RequireEditable(expectedRevision);
         if (merchant.HouseholdId != HouseholdId) throw new InvalidValueException("The merchant must belong to this household.");
@@ -106,6 +115,8 @@ public sealed class SpendingRecord
         };
         candidate.SetHeader(spendingDate, receiptTotal, externalReference, notes);
         var replacements = candidate.BuildLines(lines);
+        var replacementDiscounts = discounts is null ? _discounts.ToArray() : candidate.BuildDiscounts(discounts);
+        ValidateDiscounts(replacements, replacementDiscounts);
         var removed = _lines.ToArray();
         MerchantId = merchant.Id;
         MerchantName = merchant.Name;
@@ -117,8 +128,32 @@ public sealed class SpendingRecord
         Notes = candidate.Notes;
         _lines.Clear();
         _lines.AddRange(replacements);
+        if (discounts is not null) { _discounts.Clear(); _discounts.AddRange(replacementDiscounts); }
         Touch();
         return removed;
+    }
+
+    internal IReadOnlyList<SpendingDiscount> CorrectDiscounts(Guid expectedRevision, IReadOnlyList<SpendingDiscountInput> discounts)
+    {
+        RequireEditable(expectedRevision);
+        var replacements = BuildDiscounts(discounts); ValidateDiscounts(_lines, replacements);
+        var removed = _discounts.ToArray(); _discounts.Clear(); _discounts.AddRange(replacements); Touch(); return removed;
+    }
+
+    private SpendingDiscount[] BuildDiscounts(IReadOnlyList<SpendingDiscountInput> discounts)
+    {
+        ArgumentNullException.ThrowIfNull(discounts);
+        if (discounts.Any(d => d is null)) throw new InvalidValueException("Discounts cannot contain null entries.");
+        return discounts.Select((discount, index) => new SpendingDiscount(this, index + 1, discount)).ToArray();
+    }
+
+    private static void ValidateDiscounts(IReadOnlyList<SpendingLine> lines, IReadOnlyList<SpendingDiscount> discounts, Guid? changedLine = null, decimal? changedAmount = null)
+    {
+        foreach (var category in discounts.GroupBy(d => d.ExpenseCategoryId))
+        {
+            var gross = lines.Where(l => l.ExpenseCategoryId == category.Key).Sum(l => l.Id == changedLine ? changedAmount!.Value : l.NetAmount);
+            if (category.Sum(d => d.Amount) > gross) throw new InvalidValueException("Receipt discounts cannot exceed the entered lines in their category.");
+        }
     }
 
     internal void Void(Guid expectedRevision)

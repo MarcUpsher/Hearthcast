@@ -52,7 +52,7 @@ For one reconciled GBP Food purchase of 12.50:
 ```
 
 Amounts are JSON numbers produced from exact decimals. Category rows retain their
-saved category ID and copied name. One row combines all included lines for a
+saved category ID and copied name. One row combines all included lines less receipt discounts for a
 category/currency even if historical saved precisions differ. `currencyMinorUnits`
 is the maximum saved precision among those lines; the exact `netAmount` is not
 rounded. There is no cross-currency
@@ -64,12 +64,13 @@ rewrite older records.
 Each warning contains `spendingRecordId`, `spendingDate`, saved `merchantName`,
 `currencyCode`, `receiptTotal`, `lineTotal` and `difference`. It appears once per
 included mismatched receipt, even if that receipt spans multiple categories.
-`difference` is receipt total minus unsigned line total, including for refunds.
+`lineTotal` retains its name but represents the net recorded total after receipt
+discounts. `difference` is receipt total minus that unsigned total, including refunds.
 Warnings do not change category totals.
 
 The fixed count fields count **records**, not lines or categories, across all
 included currencies. `notChecked` means no receipt total was supplied;
-`reconciled` means the supplied receipt total matches the lines; `unreconciled`
+`reconciled` means the supplied receipt total matches the recorded net total; `unreconciled`
 means it differs. All three fields are present even when zero. They describe
 receipt reconciliation, not whether every purchase has been captured.
 
@@ -123,3 +124,10 @@ preceding full-suite run.
 The subsequent [backend completion checkpoint](spending-and-budget-schema-plan.md#backend-completion-checkpoint)
 records the final full solution run after all review fixes: 990 Data tests and
 655 API tests passed, with no failures or skips.
+
+## Receipt discount extension
+
+The [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
+extends this contract with category deductions, net recorded totals and explicit
+historical price assistance. Earlier verification counts above describe their
+original checkpoints.
