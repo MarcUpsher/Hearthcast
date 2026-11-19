@@ -47,6 +47,7 @@ original single-currency projection and initial screen notes are superseded.
 | Expected outgoing payment dates and recurring calendar timing | [Payment dates](budget-payment-date-slice.md) |
 | Dated outgoing amounts, carry-forward plans and saved corrections | [Outgoing plans UI](budget-plans-ui-slice.md) |
 | Current planned outgoings and payment schedules in one screen | [Outgoings overview](outgoings-overview-ui-slice.md) |
+| Commitment/allowance distinction and category allowance entry | [Budget allowances](budget-allowances-slice.md), [approved plan](budget-allowances-slice-plan.md) |
 | Budget capture, retries, corrections and as-of reads | [Budget snapshot services](budget-snapshot-service-slice.md) |
 | Budget snapshot HTTP contracts, history and effective reads | [Budget snapshot API](budget-snapshot-api-slice.md) |
 | Growth attribution | [Growth breakdown](projection-growth-breakdown-slice.md) |

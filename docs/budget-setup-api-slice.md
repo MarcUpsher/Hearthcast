@@ -4,8 +4,8 @@
 through household-scoped controllers and explicit request/response contracts under
 Hearthcast.Api/Budgets. [Snapshot capture/correction, history and current-outgoing
 HTTP endpoints](budget-snapshot-api-slice.md) are now implemented. The subsequent
-[regular outgoings setup UI](budget-setup-ui-slice.md) is also implemented; dated
-plan UI remains a following slice.
+[regular outgoings setup UI](budget-setup-ui-slice.md), [dated plans](budget-plans-ui-slice.md)
+and [category allowances](budget-allowances-slice.md) are implemented.
 
 ## Routes
 
@@ -26,9 +26,17 @@ registered in DI. Existing spending and financial snapshot contracts are unchang
 
 ## Input contracts
 
-Create requires expenseCategoryId, code, name, currencyCode and frequency.
+Commitment creation requires expenseCategoryId, code, name, currencyCode and frequency.
 intervalCount is optional and defaults to one; explicit null is invalid. merchantId
 and notes are optional and default to null.
+
+kind is optional and defaults to Commitment. The Allowance variant requires
+expenseCategoryId, currencyCode and frequency; the service generates code/name.
+Code, name, nonnull merchantId or paymentAnchorDate are rejected for an allowance.
+Kind uses strict named enum strings and is immutable; it is not a details-update
+field. Setup and all saved-entry responses expose kind. One active allowance per
+household/category/currency is enforced, including restore/update races, with 409
+on duplicate. See [allowance rules](budget-allowances-slice.md) for plan invariants.
 
 ```json
 {

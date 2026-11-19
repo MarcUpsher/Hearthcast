@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Hearthcast.Data.Spending;
 using Hearthcast.Data.Validation;
 
@@ -38,7 +39,17 @@ internal static class BudgetCreateRequest
                 }
             }).ToArray()
         };
-        return (copy, Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(canonical))));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(canonical);
+        // Leave legacy canonical bytes untouched, including explicit default-kind metadata.
+        if (entries.Any(e => e.Metadata?.Kind == BudgetItemKind.Allowance))
+        {
+            var versionTwo = JsonNode.Parse(bytes)!;
+            versionTwo["Version"] = 2;
+            for (var i = 0; i < entries.Length; i++)
+                if (entries[i].Metadata is { } metadata) versionTwo["Entries"]![i]!["Metadata"]!["Kind"] = (int)metadata.Kind;
+            bytes = JsonSerializer.SerializeToUtf8Bytes(versionTwo);
+        }
+        return (copy, Convert.ToHexStringLower(SHA256.HashData(bytes)));
     }
 
     internal static BudgetEntryValues Entry(BudgetEntryValues value)
@@ -68,6 +79,8 @@ internal static class BudgetCreateRequest
         if (value.ExpenseCategoryId == Guid.Empty || value.MerchantId == Guid.Empty
             || value.MerchantId.HasValue != (value.MerchantName is not null))
             throw new InvalidValueException("Supply a category and paired optional merchant identity/name.");
+        if (!Enum.IsDefined(value.Kind) || (value.Kind == BudgetItemKind.Allowance && (value.MerchantId.HasValue || value.MerchantName is not null)))
+            throw new InvalidValueException("Supply a defined budget kind; allowances do not have merchants.");
         BudgetRules.Recurrence(value.Frequency, value.IntervalCount);
         return value with
         {

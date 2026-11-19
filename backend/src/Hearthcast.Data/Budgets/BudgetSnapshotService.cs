@@ -259,8 +259,12 @@ public sealed class BudgetSnapshotService(IDbContextFactory<HearthcastDbContext>
             await FindCategoryAsync(context, householdId, value.ExpenseCategoryId, token);
             if (value.MerchantId.HasValue) await FindMerchantAsync(context, householdId, value.MerchantId.Value, token);
         }
+        var item = references is null
+            ? await context.BudgetItems.SingleAsync(i => i.Id == itemId && i.HouseholdId == householdId, token)
+            : references.Items[itemId];
+        if (value.Kind != item.Kind) throw new InvalidValueException("Saved kind must match the budget item's immutable kind.");
         return new(householdId, itemId, value.ItemCode, value.ItemName, value.ExpenseCategoryId, value.ExpenseCategoryName,
-            value.CurrencyCode, value.Frequency, value.IntervalCount, value.MerchantId, value.MerchantName, value.Notes);
+            value.CurrencyCode, value.Frequency, value.IntervalCount, value.MerchantId, value.MerchantName, value.Notes, value.Kind);
     }
 
     // The dictionaries never escape this serializable attempt. Missing/foreign IDs are rejected
@@ -326,8 +330,7 @@ public sealed class BudgetSnapshotService(IDbContextFactory<HearthcastDbContext>
 
     private static bool Compatible(BudgetSnapshot source, BudgetEntry original, BudgetSnapshot receiver, BudgetEntry entry, DateOnly receivingDate) =>
         source.Id != receiver.Id && source.HouseholdId == receiver.HouseholdId && source.EffectiveFrom < receivingDate
-        && original.BudgetItemId == entry.BudgetItemId && original.CurrencyCode == entry.CurrencyCode
-        && original.Frequency == entry.Frequency && original.IntervalCount == entry.IntervalCount;
+        && BudgetEntry.SameMeaning(original, entry);
 
     private static async Task<BudgetEffectivePlan?> EffectiveAsync(HearthcastDbContext context, Guid householdId, DateOnly asOf, CancellationToken token)
     {
@@ -352,6 +355,9 @@ public sealed class BudgetSnapshotService(IDbContextFactory<HearthcastDbContext>
                     return await operation(context, observed, cancellation);
                 }, token, retryCreate ? "PK_BudgetSnapshots" : null);
         }
+        catch (DbUpdateException error) when (error.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: BudgetEntryConfiguration.AllowanceIndexName })
+        { throw new BusinessRuleViolationException("Include only one allowance per category and currency in a plan."); }
         catch (DbUpdateConcurrencyException error) { throw new BudgetSnapshotConflictException(error); }
         catch (DbUpdateException error) when (IsDateConflict(error) && !retryCreate) { throw DateConflict(); }
         catch (DbUpdateException error) when (error.InnerException is PostgresException

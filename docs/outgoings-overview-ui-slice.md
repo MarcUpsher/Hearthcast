@@ -48,7 +48,9 @@ carried forward, their period/frequency, and how they coexist with recurring
 commitments without double-counting. Actuals already come from recorded spending
 by saved category/currency over an explicit inclusive range. Mapping targets into
 arbitrary report ranges and comparison/allocation rules remains a separate
-decision. No target schema or automatic comparison policy is decided here.
+decision. This overview slice did not decide a target schema or automatic
+comparison policy. The subsequent [commitments and allowances plan](budget-allowances-slice-plan.md)
+now specifies the next extension, keeping category amounts additive.
 
 ## Verification
 

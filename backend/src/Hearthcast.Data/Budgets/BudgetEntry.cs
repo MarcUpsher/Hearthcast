@@ -40,6 +40,7 @@ public sealed class BudgetEntry
     public Guid HouseholdId { get; private set; }
     public Guid BudgetSnapshotId { get; private set; }
     public Guid BudgetItemId { get; private set; }
+    public BudgetItemKind Kind { get; private set; }
     public string ItemCode { get; private set; } = string.Empty;
     public string ItemName { get; private set; } = string.Empty;
     public Guid ExpenseCategoryId { get; private set; }
@@ -63,13 +64,13 @@ public sealed class BudgetEntry
     }
 
     // No source lookup: even a detached carry keeps its independent saved value/provenance.
-    internal void CorrectMetadata(BudgetEntryMetadata metadata)
+    internal void CorrectMetadata(BudgetEntryMetadata metadata, Action<BudgetEntry>? validate = null)
     {
         var candidate = new BudgetEntry { HouseholdId = HouseholdId };
         candidate.SetMetadata(metadata, CurrencyCode);
-        if (candidate.BudgetItemId != BudgetItemId || candidate.CurrencyCode != CurrencyCode
-            || candidate.Frequency != Frequency || candidate.IntervalCount != IntervalCount)
+        if (!SameMeaning(candidate, this))
             throw new InvalidValueException("Changing the item, currency or recurrence requires an explicit value correction.");
+        validate?.Invoke(candidate);
         ApplyMetadata(candidate);
     }
 
@@ -85,6 +86,7 @@ public sealed class BudgetEntry
     private void ApplyMetadata(BudgetEntry candidate)
     {
         BudgetItemId = candidate.BudgetItemId;
+        Kind = candidate.Kind;
         ItemCode = candidate.ItemCode;
         ItemName = candidate.ItemName;
         ExpenseCategoryId = candidate.ExpenseCategoryId;
@@ -103,9 +105,13 @@ public sealed class BudgetEntry
     {
         if (source.Id == receivingSnapshotId || source.HouseholdId != HouseholdId || source.EffectiveFrom >= effectiveFrom
             || entry.BudgetSnapshotId != source.Id || entry.HouseholdId != HouseholdId || entry.BudgetItemId != BudgetItemId
-            || entry.CurrencyCode != CurrencyCode || entry.Frequency != Frequency || entry.IntervalCount != IntervalCount)
+            || !SameMeaning(entry, this))
             throw new InvalidValueException("Carry from a strictly earlier plan with the same household, item, currency and recurrence.");
     }
+
+    internal static bool SameMeaning(BudgetEntry a, BudgetEntry b) => a.BudgetItemId == b.BudgetItemId
+        && a.Kind == b.Kind && a.CurrencyCode == b.CurrencyCode && a.Frequency == b.Frequency && a.IntervalCount == b.IntervalCount
+        && (a.Kind != BudgetItemKind.Allowance || a.ExpenseCategoryId == b.ExpenseCategoryId);
 
     private void SetAmount(decimal? amount, DateOnly? confirmedOn)
     {
@@ -122,10 +128,13 @@ public sealed class BudgetEntry
     private void SetMetadata(BudgetEntryMetadata metadata, string? savedCurrency = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
+        if (!Enum.IsDefined(metadata.Kind) || (metadata.Kind == BudgetItemKind.Allowance && (metadata.MerchantId.HasValue || metadata.MerchantName is not null)))
+            throw new InvalidValueException("Supply a defined budget kind; allowances do not have merchants.");
         if (metadata.HouseholdId != HouseholdId || metadata.BudgetItemId == Guid.Empty || metadata.ExpenseCategoryId == Guid.Empty
             || metadata.MerchantId == Guid.Empty || metadata.MerchantId.HasValue != (metadata.MerchantName is not null))
             throw new InvalidValueException("Supply household-scoped item/category identities and paired merchant identity/name.");
         BudgetItemId = metadata.BudgetItemId;
+        Kind = metadata.Kind;
         ItemCode = SpendingSetupRules.Code(metadata.ItemCode);
         ItemName = SpendingSetupRules.Text(metadata.ItemName);
         ExpenseCategoryId = metadata.ExpenseCategoryId;

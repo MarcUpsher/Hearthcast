@@ -9,9 +9,10 @@ public sealed record BudgetEntryResponse(Guid Id, Guid BudgetItemId, string Item
     [property: JsonConverter(typeof(BudgetFrequencyJsonConverter))] BudgetFrequency Frequency,
     int IntervalCount, string? Notes,
     [property: JsonConverter(typeof(BudgetValueOriginJsonConverter))] BudgetValueOrigin ValueOrigin,
-    DateOnly? LastConfirmedDate, Guid? CarriedFromBudgetEntryId)
+    DateOnly? LastConfirmedDate, Guid? CarriedFromBudgetEntryId,
+    [property: JsonConverter(typeof(BudgetItemKindJsonConverter))] BudgetItemKind Kind = BudgetItemKind.Commitment)
 {
     internal static BudgetEntryResponse From(BudgetEntry entry) => new(entry.Id, entry.BudgetItemId, entry.ItemCode, entry.ItemName,
         entry.ExpenseCategoryId, entry.ExpenseCategoryName, entry.MerchantId, entry.MerchantName, entry.PlannedAmount,
-        entry.CurrencyCode, entry.Frequency, entry.IntervalCount, entry.Notes, entry.ValueOrigin, entry.LastConfirmedDate, entry.CarriedFromBudgetEntryId);
+        entry.CurrencyCode, entry.Frequency, entry.IntervalCount, entry.Notes, entry.ValueOrigin, entry.LastConfirmedDate, entry.CarriedFromBudgetEntryId, entry.Kind);
 }

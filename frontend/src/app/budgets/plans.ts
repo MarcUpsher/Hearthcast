@@ -10,18 +10,21 @@ import { Api } from "../core/api";
 import { message } from "../core/api-errors";
 import { Workspace } from "../core/workspace";
 import { localToday, spendingDate } from "../spending/amounts";
-import { SpendingSetupEntry } from "../spending/models";
+import { SpendingSetupEntry, SpendingCurrency } from "../spending/models";
 import { SpendingNavigation } from "../spending/navigation";
 import { BudgetPaymentDate } from "./payment-date";
 import { validPaymentAnchor } from "./payment-schedule";
-import { BudgetEffective, BudgetEntry, BudgetHistory, BudgetItem, BudgetMode, BudgetPlan, PlanRow, budgetRecurrence } from "./models";
+import { BudgetEffective, BudgetEntry, BudgetItemKind, BudgetHistory, BudgetItem, BudgetMode, BudgetPlan, PlanRow, budgetRecurrence } from "./models";
 import { budgetJson, parseBudget, planAmount, planMoney, planTotals } from "./plan-data";
+
+import { AllowanceSetup } from "./allowance-setup";
+import { BudgetTotals } from "./totals";
 
 const validDate = (date: string) => !!date && validPaymentAnchor(date);
 interface CreatePayload { id: string; effectiveFrom: string; notes: string | null; copiedFromBudgetSnapshotId: string | null; entries: object[]; }
 
 @Component({
-  imports: [FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetPaymentDate],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetPaymentDate, AllowanceSetup, BudgetTotals],
   templateUrl: "plans.html", styleUrl: "plans.scss",
 })
 export class OutgoingPlans {
@@ -35,6 +38,9 @@ export class OutgoingPlans {
   private initialDate = "";
   private pending: CreatePayload | null = null;
   private readonly correctionInput = viewChild<ElementRef<HTMLInputElement>>("correctionAmount");
+  readonly allowanceSetup = viewChild(AllowanceSetup);
+  readonly kinds: BudgetItemKind[] = ["Commitment", "Allowance"];
+  readonly currencies = signal<SpendingCurrency[]>([]);
   readonly items = signal<BudgetItem[]>([]);
   readonly categories = signal<SpendingSetupEntry[]>([]);
   readonly merchants = signal<SpendingSetupEntry[]>([]);
@@ -74,7 +80,7 @@ export class OutgoingPlans {
       untracked(() => {
         if (home === this.home) return;
         this.home = home; this.generation++; this.version++;
-        this.items.set([]); this.categories.set([]); this.merchants.set([]); this.history.set([]); this.nextBefore.set(null);
+        this.items.set([]); this.currencies.set([]); this.categories.set([]); this.merchants.set([]); this.history.set([]); this.nextBefore.set(null);
         this.effective.set(null); this.selected.set(null); this.loading.set(false); this.saving.set(false);
         this.error.set(""); this.writeError.set(""); this.notice.set(""); this.resetDraft(); this.revisionNeedsReload.set(false);
         this.asOf.set(localToday()); this.loadedAsOf.set("");
@@ -87,24 +93,25 @@ export class OutgoingPlans {
     return !this.destroyed && this.w.current()?.id === home && this.generation === generation && (version === undefined || version === this.version);
   }
   private path(home: string) { return `households/${home}/budgets/snapshots`; }
-  canWrite() { return !!this.home && this.w.current()?.id === this.home && !this.loading() && !this.saving() && !this.error() && !this.revisionNeedsReload(); }
+  canWrite() { return !!this.home && this.w.current()?.id === this.home && !this.loading() && !this.saving() && !this.error() && !this.revisionNeedsReload() && !this.allowanceSetup()?.saving(); }
   private async read<T>(path: string): Promise<T | null> { const text = await this.api.getText(path); return text ? parseBudget<T>(text) : null; }
   async load() {
     const home = this.home, generation = this.generation, asOf = this.asOf();
-    if (!home || this.saving() || !this.current(home, generation) || !validDate(asOf) || !this.discardAllowed()) return;
+    if (!home || this.saving() || this.allowanceSetup()?.saving() || !this.current(home, generation) || !validDate(asOf) || !this.discardAllowed()) return;
     this.resetDraft(); const version = ++this.version, selectedId = this.loadedAsOf() === asOf ? this.selected()?.id : undefined;
     this.loading.set(true); this.error.set("");
     try {
-      const [items, categories, merchants, page, effective, selected] = await Promise.all([
+      const [items, categories, merchants, page, effective, selected, currencies] = await Promise.all([
         this.api.get<BudgetItem[]>(`households/${home}/budgets/items?includeRetired=true`),
         this.api.get<SpendingSetupEntry[]>(`households/${home}/spending/categories?includeRetired=true`),
         this.api.get<SpendingSetupEntry[]>(`households/${home}/spending/merchants?includeRetired=true`),
         this.read<BudgetHistory>(this.path(home) + "?pageSize=25"),
         this.read<BudgetEffective>(this.path(home) + `/effective?asOf=${asOf}`),
         selectedId ? this.read<BudgetPlan>(this.path(home) + "/" + selectedId) : Promise.resolve(null),
+        this.api.get<SpendingCurrency[]>(`households/${home}/spending/currencies`),
       ]);
       if (!this.current(home, generation, version)) return;
-      this.items.set(items); this.categories.set(categories); this.merchants.set(merchants);
+      this.items.set(items); this.categories.set(categories); this.merchants.set(merchants); this.currencies.set(currencies);
       this.history.set(page!.records); this.nextBefore.set(page!.nextBefore); this.effective.set(effective);
       this.selected.set(selected ?? effective?.snapshot ?? null); this.loadedAsOf.set(asOf); this.revisionNeedsReload.set(false);
     } catch (error) { if (this.current(home, generation, version)) this.error.set(message(error)); }
@@ -156,18 +163,63 @@ export class OutgoingPlans {
         throw new Error("Outgoing definitions changed while preparing this plan. Reload previous amounts before saving.");
       this.items.set(items); this.categories.set(categories); this.merchants.set(merchants);
       this.source.set(source); this.sourceDate.set(date); this.draftEnd.set(end);
-      this.rows.set(items.filter(item => !item.isRetired || source?.entries.some(entry => entry.budgetItemId === item.id)).map<PlanRow>(item => {
-        const previous = source?.entries.find(entry => entry.budgetItemId === item.id) ?? null;
-        const context: BudgetEntry = previous ?? { id: "", budgetItemId: item.id, itemCode: item.code, itemName: item.name,
-          expenseCategoryId: item.expenseCategoryId, expenseCategoryName: categories.find(row => row.id === item.expenseCategoryId)?.name ?? "Category unavailable",
-          merchantId: item.merchantId, merchantName: merchants.find(row => row.id === item.merchantId)?.name ?? null,
-          plannedAmount: null, currencyCode: item.currencyCode, frequency: item.frequency, intervalCount: item.intervalCount, notes: item.notes,
-          valueOrigin: "Unrecorded", lastConfirmedDate: null, carriedFromBudgetEntryId: null };
-        return { item, context, source: previous, included: true, mode: previous ? "Carry" : "Confirm", amount: previous?.plannedAmount ?? "", confirmedOn: localToday(), refreshFromSetup: false };
-      }).sort((a, b) => a.context.itemName.localeCompare(b.context.itemName)));
+      this.rows.set(items.filter(item => !item.isRetired || source?.entries.some(entry => entry.budgetItemId === item.id))
+        .map(item => this.makeRow(item)).sort((a, b) => this.title(a.context).localeCompare(this.title(b.context))));
       this.baseline = this.fingerprint();
     } catch (error) { if (this.current(home, generation, version)) this.writeError.set(message(error)); }
     finally { if (this.current(home, generation, version)) this.loading.set(false); }
+  }
+  title(entry: BudgetEntry) { return entry.kind === "Allowance" ? entry.expenseCategoryName : entry.itemName; }
+  draftRows(kind: BudgetItemKind) { return this.rows().filter(row => row.context.kind === kind); }
+  savedEntries(kind: BudgetItemKind) { return this.selected()?.entries.filter(entry => entry.kind === kind) ?? []; }
+  private setupContext(item: BudgetItem): BudgetEntry {
+    return { id: "", budgetItemId: item.id, kind: item.kind, itemCode: item.code, itemName: item.name,
+      expenseCategoryId: item.expenseCategoryId, expenseCategoryName: this.categories().find(row => row.id === item.expenseCategoryId)?.name ?? "Category unavailable",
+      merchantId: item.merchantId, merchantName: this.merchants().find(row => row.id === item.merchantId)?.name ?? null,
+      plannedAmount: null, currencyCode: item.currencyCode, frequency: item.frequency, intervalCount: item.intervalCount, notes: item.notes,
+      valueOrigin: "Unrecorded", lastConfirmedDate: null, carriedFromBudgetEntryId: null };
+  }
+  private makeRow(item: BudgetItem): PlanRow {
+    const previous = this.source()?.entries.find(entry => entry.budgetItemId === item.id) ?? null;
+    return { item, context: previous ?? this.setupContext(item), source: previous, included: true, mode: previous ? "Carry" : "Confirm",
+      amount: previous?.plannedAmount ?? "", confirmedOn: localToday(), refreshFromSetup: false };
+  }
+  definitionChanged(item: BudgetItem) {
+    if (!this.home || this.destroyed || item.householdId !== this.home || this.w.current()?.id !== this.home) return;
+    this.items.update(items => [...items.filter(value => value.id !== item.id), item]);
+    this.rows.update(rows => rows.map(row => {
+      if (row.item.id !== item.id) return row;
+      if (row.source && !row.refreshFromSetup) return { ...row, item };
+      const context = this.setupContext(item), meaningChanged = !this.sameMeaning(context, row.context);
+      return { ...row, item, context, ...(meaningChanged ? { mode: "Confirm" as BudgetMode, amount: "" } : {}) };
+    }));
+  }
+  definitionsReloaded(items: BudgetItem[]) {
+    if (!this.home || this.destroyed || this.w.current()?.id !== this.home || items.some(item => item.householdId !== this.home)) return;
+    for (const item of items) this.definitionChanged(item); this.items.set(items);
+  }
+  includeAllowance(item: BudgetItem) {
+    if (!this.creating() || this.locked() || this.saving() || this.loading()) return;
+    const present = this.rows().some(row => row.item.id === item.id);
+    if (present) this.rows.update(rows => rows.map(row => row.item.id === item.id ? { ...row, included: true } : row));
+    else this.rows.update(rows => [...rows, this.makeRow(item)]);
+  }
+  enterAllowance(row: PlanRow, amount: string) { this.changeRow(row.item.id, { amount, mode: "Confirm", confirmedOn: localToday() }); }
+  duplicateAllowances() {
+    const keys = new Set<string>();
+    for (const row of this.rows()) if (row.included && row.context.kind === "Allowance") {
+      const key = row.context.expenseCategoryId + "/" + row.context.currencyCode;
+      if (keys.has(key)) return true; keys.add(key);
+    }
+    return false;
+  }
+  private sameMeaning(a: BudgetEntry, b: BudgetEntry) {
+    return a.kind === b.kind && a.currencyCode === b.currencyCode && a.frequency === b.frequency && a.intervalCount === b.intervalCount &&
+      (a.kind !== "Allowance" || a.expenseCategoryId === b.expenseCategoryId);
+  }
+  draftEntries() {
+    return this.rows().filter(row => row.included).map(row => ({ ...row.context,
+      plannedAmount: row.mode === "Carry" ? row.source!.plannedAmount : row.mode === "Confirm" && this.amountValid(row.amount) ? row.amount : null }));
   }
   changeDate(date: string) { if (!this.locked() && !this.saving() && !this.loading()) this.effectiveFrom.set(date); }
   changeRow(id: string, change: Partial<Pick<PlanRow, "included" | "mode" | "amount" | "confirmedOn">>) {
@@ -177,32 +229,33 @@ export class OutgoingPlans {
   useSetup(row: PlanRow, use: boolean) {
     if (!row.source || !this.canWrite() || this.locked()) return;
     const item = row.item, saved = row.source;
-    const context: BudgetEntry = use ? { ...saved, itemCode: item.code, itemName: item.name,
+    const context: BudgetEntry = use ? { ...saved, kind: item.kind, itemCode: item.code, itemName: item.name,
       expenseCategoryId: item.expenseCategoryId, expenseCategoryName: this.categories().find(category => category.id === item.expenseCategoryId)?.name ?? "Category unavailable",
       merchantId: item.merchantId, merchantName: this.merchants().find(merchant => merchant.id === item.merchantId)?.name ?? null,
       currencyCode: item.currencyCode, frequency: item.frequency, intervalCount: item.intervalCount, notes: item.notes } : saved;
-    const compatible = context.currencyCode === row.context.currencyCode && context.frequency === row.context.frequency && context.intervalCount === row.context.intervalCount;
+    const compatible = this.sameMeaning(context, row.context);
     this.rows.update(rows => rows.map(value => value.item.id === item.id ? { ...value, context, refreshFromSetup: use,
       ...(compatible ? {} : { mode: "Confirm" as BudgetMode, amount: "" }) } : value));
   }
   canCarry(row: PlanRow) {
-    return !!row.source && row.source.currencyCode === row.context.currencyCode && row.source.frequency === row.context.frequency && row.source.intervalCount === row.context.intervalCount;
+    return !!row.source && this.sameMeaning(row.source, row.context);
   }
   draftTotals() {
     return planTotals(this.rows().filter(row => row.included).map(row => ({ ...row.context,
       plannedAmount: row.mode === "Carry" ? row.source!.plannedAmount : row.mode === "Confirm" && this.amountValid(row.amount) ? row.amount : null })));
   }
   validDraft() {
-    return validDate(this.effectiveFrom()) && this.sourceDate() === this.effectiveFrom() && this.rows().every(row => !row.included ||
+    return !this.duplicateAllowances() && validDate(this.effectiveFrom()) && this.sourceDate() === this.effectiveFrom() && this.rows().every(row => !row.included ||
       (row.mode === "Carry" ? this.canCarry(row) : row.mode === "Unrecorded" || (row.mode === "Confirm" && this.amountValid(row.amount) && validDate(row.confirmedOn))));
   }
   private fingerprint() { return JSON.stringify({ date: this.effectiveFrom(), notes: this.notes(), rows: this.rows() }); }
   private draftDirty() { return this.creating() && (!!this.notes() || this.effectiveFrom() !== this.initialDate || (!!this.baseline && this.baseline !== this.fingerprint())); }
   private resetDraft() {
+    this.allowanceSetup()?.reset();
     this.creating.set(false); this.source.set(null); this.sourceDate.set(""); this.draftEnd.set(null); this.rows.set([]); this.notes.set("");
     this.baseline = ""; this.initialDate = ""; this.pending = null; this.locked.set(false); this.correcting.set(null); this.correctionUncertain.set(false); this.writeError.set("");
   }
-  cancel() { if (!this.saving() && !this.loading() && this.discardAllowed()) this.resetDraft(); }
+  cancel() { if (!this.saving() && !this.loading() && !this.allowanceSetup()?.saving() && this.discardAllowed()) this.resetDraft(); }
   private async nextPlanDate(home: string, date: string) {
     let before: string | null = null, end: string | null = null;
     do {
@@ -215,7 +268,7 @@ export class OutgoingPlans {
   }
   async savePlan(form?: NgForm) {
     const home = this.home, generation = this.generation;
-    if (!home || !this.canWrite() || !this.creating() || form?.invalid || (!this.pending && !this.validDraft())) return;
+    if (!home || !this.canWrite() || !this.creating() || this.allowanceSetup()?.hasUnsavedChanges() || form?.invalid || (!this.pending && !this.validDraft())) return;
     if (!this.pending) {
       if (this.rows().every(row => !row.included) && !window.confirm("Save an empty plan? It replaces all earlier outgoing amounts from its effective date.")) return;
       if (this.effectiveFrom() < localToday() && !window.confirm(`Save this backdated plan from ${this.date(this.effectiveFrom())}? It replaces the previous plan for this interval${this.draftEnd() ? ", ending before " + this.date(this.draftEnd()!) : " until a later plan takes effect"}.`)) return;
@@ -249,7 +302,7 @@ export class OutgoingPlans {
   }
   async saveCorrection(form?: NgForm) {
     const home = this.home, generation = this.generation, plan = this.selected(), entry = this.correcting(), draft = this.correction();
-    if (!home || !plan || !entry || !this.canWrite() || this.correctionUncertain() || !this.correctionValid() || form?.invalid) return;
+    if (!home || !plan || !entry || !this.canWrite() || this.allowanceSetup()?.hasUnsavedChanges() || this.correctionUncertain() || !this.correctionValid() || form?.invalid) return;
     this.saving.set(true); this.writeError.set(""); this.notice.set("");
     try {
       const updated = parseBudget<BudgetPlan>(await this.api.sendText("PUT", this.path(home) + `/${plan.id}/entries/${entry.id}/amount`, budgetJson({
@@ -267,11 +320,11 @@ export class OutgoingPlans {
       this.writeError.set(message(error) + (uncertain ? " Reload the saved plan before editing again. Your entered correction is shown below." : ""));
     } finally { if (this.current(home, generation)) this.saving.set(false); }
   }
-  hasUnsavedChanges() { return this.locked() || this.draftDirty() || !!this.correcting(); }
+  hasUnsavedChanges() { return this.locked() || this.draftDirty() || !!this.correcting() || !!this.allowanceSetup()?.hasUnsavedChanges(); }
   private discardAllowed() {
     return !this.hasUnsavedChanges() || window.confirm(this.locked() ? "The save may already exist. Discard this retry and reload saved plans to check?" : "Discard unsaved outgoing plan changes?");
   }
-  canLeave() { return !this.saving() && this.discardAllowed(); }
+  canLeave() { return !this.saving() && !this.allowanceSetup()?.saving() && this.discardAllowed(); }
   @HostListener("window:beforeunload", ["$event"])
-  beforeUnload(event: BeforeUnloadEvent) { if (this.saving() || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ""; } }
+  beforeUnload(event: BeforeUnloadEvent) { if (this.saving() || this.allowanceSetup()?.saving() || this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ""; } }
 }

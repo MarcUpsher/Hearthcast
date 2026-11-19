@@ -100,7 +100,7 @@ export class RegularOutgoings {
         this.api.get<SpendingSetupEntry[]>(`households/${home}/spending/merchants?includeRetired=true`),
         this.api.get<SpendingCurrency[]>(`households/${home}/spending/currencies`),
       ]);
-      if (current()) { this.rows.set(rows); this.categories.set(categories); this.merchants.set(merchants); this.currencies.set(currencies); }
+      if (current()) { this.rows.set(rows.filter(row => row.kind !== "Allowance")); this.categories.set(categories); this.merchants.set(merchants); this.currencies.set(currencies); }
     } catch (error) { if (current()) this.error.set(message(error)); }
     finally { if (current()) this.loading.set(false); }
   }

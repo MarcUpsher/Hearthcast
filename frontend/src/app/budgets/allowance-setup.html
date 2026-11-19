@@ -1,0 +1,25 @@
+<details [open]="expanded()" (toggle)="expanded.set($any($event.target).open)"><summary>Manage spending allowances</summary>
+  <p class="muted">Add a reusable category allowance, then enter its amount in your budget plan. Creating the definition saves it immediately; discarding a plan keeps the definition.</p>
+  <form #allowanceForm="ngForm" (ngSubmit)="save(allowanceForm)" aria-label="Allowance definition">
+    <h3>{{ editing() ? 'Edit allowance defaults' : 'Add spending allowance' }}</h3>
+    <div class="fields">
+      <mat-form-field subscriptSizing="dynamic"><mat-label>Spending category</mat-label><mat-select name="allowanceCategory" required [ngModel]="draft().category" (ngModelChange)="change('category', $event)" [disabled]="!canWrite() || !!editing()">@for (category of categories(); track category.id) { <mat-option [value]="category.id">{{ category.name }}{{ category.isRetired ? ' (retired)' : '' }}</mat-option> }</mat-select></mat-form-field>
+    </div>
+    <details><summary>Currency, period &amp; notes</summary><div class="fields">
+      <mat-form-field subscriptSizing="dynamic"><mat-label>Allowance currency</mat-label><mat-select name="allowanceCurrency" required [ngModel]="draft().currency" (ngModelChange)="change('currency', $event)" [disabled]="!canWrite()">@if (historicalCurrency(); as currency) { <mat-option [value]="currency">{{ currency }} (saved currency)</mat-option> }@for (currency of currencies(); track currency.code) { <mat-option [value]="currency.code">{{ currency.code }}</mat-option> }</mat-select></mat-form-field>
+      <mat-form-field subscriptSizing="dynamic"><mat-label>Every</mat-label><input matInput name="allowanceInterval" required appBudgetInterval inputmode="numeric" [ngModel]="draft().interval" (ngModelChange)="change('interval', $event)" [disabled]="!canWrite()"><mat-error>Use a whole number from 1 to 2147483647.</mat-error></mat-form-field>
+      <mat-form-field subscriptSizing="dynamic"><mat-label>Period</mat-label><mat-select name="allowanceFrequency" required [ngModel]="draft().frequency" (ngModelChange)="change('frequency', $event)" [disabled]="!canWrite()"><mat-option value="Week">Weeks</mat-option><mat-option value="Month">Months</mat-option><mat-option value="Year">Years</mat-option></mat-select></mat-form-field>
+      <mat-form-field subscriptSizing="dynamic"><mat-label>Allowance notes (optional)</mat-label><textarea matInput rows="1" name="allowanceNotes" maxlength="2000" [ngModel]="draft().notes" (ngModelChange)="change('notes', $event)" [disabled]="!canWrite()"></textarea></mat-form-field>
+    </div></details>
+    <p class="muted">{{ draft().currency }} · {{ recurrence(draft().frequency, +draft().interval) }}</p>
+    <div class="actions"><button mat-flat-button type="submit" [disabled]="!canWrite() || !valid() || allowanceForm.invalid">{{ editing() ? 'Save allowance defaults' : 'Add / select allowance' }}</button><button mat-button type="button" (click)="cancel(allowanceForm)" [disabled]="saving() || disabled()">Clear allowance form</button></div>
+  </form>
+  @if (saving()) { <p role="status">Saving or loading allowance definitions…</p> }
+  @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+  @if (notice()) { <p role="status">{{ notice() }}</p> }
+  @if (needsReload()) { <p>Reload definitions to check the saved state before another change.</p><button mat-button type="button" (click)="reload()" [disabled]="saving() || disabled()">Reload allowance definitions</button> }
+  @if (match()) { <button mat-button type="button" (click)="useMatch(allowanceForm)" [disabled]="!canWrite()">Use existing allowance</button> }
+  <ul>@for (item of rows(); track item.id) { <li><strong>{{ categoryName(item.expenseCategoryId) }}</strong> · {{ item.currencyCode }} · {{ recurrence(item.frequency, item.intervalCount) }}{{ item.isRetired ? ' · Retired' : '' }}
+    <div class="actions">@if (inDraft()) { <button mat-button type="button" (click)="selected.emit(item)" [disabled]="!canWrite()">Include {{ categoryName(item.expenseCategoryId) }}</button> }<button mat-button type="button" (click)="edit(item, allowanceForm)" [disabled]="!canWrite()">Edit {{ categoryName(item.expenseCategoryId) }} defaults</button><button mat-button type="button" (click)="retire(item)" [disabled]="!canWrite()">{{ item.isRetired ? 'Restore' : 'Retire' }} {{ categoryName(item.expenseCategoryId) }}</button></div>
+  </li> }</ul>
+</details>

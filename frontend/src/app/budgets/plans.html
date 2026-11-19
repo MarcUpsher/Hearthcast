@@ -1,17 +1,18 @@
 <app-spending-navigation />
-<section class="page-heading"><div><h1>Outgoing plans</h1><p class="muted">Expected costs from a date, effective until the next plan. Later plans can carry forward your previous amounts.</p></div></section>
+<section class="page-heading"><div><h1>Budget plans</h1><p class="muted">Expected costs from a date, effective until the next plan. Later plans can carry forward your previous amounts.</p></div></section>
 @if (w.current(); as household) {
   <p class="muted">For {{ household.name }}. These are planned costs per recurrence; totals keep different currencies and payment frequencies separate.</p>
   <div class="toolbar">
     <mat-form-field subscriptSizing="dynamic"><mat-label>As of</mat-label><input matInput type="date" name="asOf" required appBudgetPaymentDate min="0001-01-02" max="9999-12-30" [ngModel]="asOf()" (ngModelChange)="asOf.set($event)" #asOfField="ngModel" [disabled]="saving() || loading()"><mat-error>Choose a supported date.</mat-error></mat-form-field>
     <button mat-button type="button" (click)="load()" [disabled]="saving() || loading() || asOfField.invalid">Show / reload plans</button>
-    <button mat-flat-button type="button" (click)="startNew()" [disabled]="!canWrite()">New outgoing plan</button>
+    <button mat-flat-button type="button" (click)="startNew()" [disabled]="!canWrite()">New budget plan</button>
     <a mat-button routerLink="/spending/outgoings">Manage outgoing definitions</a>
   </div>
   @if (loading()) { <p role="status">Loading outgoing plans…</p> }
   @if (error()) { <p class="error" role="alert">{{ error() }}</p><button mat-button (click)="load()" [disabled]="loading() || saving()">Retry loading</button> }
   @if (notice()) { <p role="status">{{ notice() }}</p> }
   @if (writeError()) { <p class="error" role="alert">{{ writeError() }}</p> }
+  @if (allowanceSetup()?.hasUnsavedChanges()) { <p role="status">Save or clear your allowance defaults, and resolve any definition reload, before saving plan amounts.</p> }
   @if (revisionNeedsReload()) { <p role="status">Reload plans to obtain the saved state before making another change.</p> }
   @if (!error() && loadedAsOf()) {
     @if (effective(); as current) {
@@ -19,10 +20,16 @@
         <button mat-button type="button" (click)="view(current.snapshot)" [disabled]="!canWrite()">View effective plan</button></p>
     } @else { <p>No plan effective on {{ date(loadedAsOf()) }}.</p> }
   }
+  <section class="panel" id="allowance-setup"><h2>Spending allowances</h2>
+    <p class="muted">Allowances are additional to listed commitments: GBP 400 Food plus a GBP 50 Food subscription earmarks GBP 450. Use GBP 350 allowance if GBP 400 is your overall target.</p>
+    <app-allowance-setup [household]="household.id" [items]="items()" [categories]="categories()" [currencies]="currencies()"
+      [disabled]="saving() || loading() || locked() || !!error() || revisionNeedsReload()" [inDraft]="creating()"
+      (changed)="definitionChanged($event)" (selected)="includeAllowance($event)" (inventory)="definitionsReloaded($event)" />
+  </section>
   @if (creating()) {
     <section class="panel" aria-labelledby="create-plan-title">
-      <h2 id="create-plan-title">New outgoing plan</h2>
-      <form #planForm="ngForm" (ngSubmit)="savePlan(planForm)" aria-label="New outgoing plan">
+      <h2 id="create-plan-title">New budget plan</h2>
+      <form #planForm="ngForm" (ngSubmit)="savePlan(planForm)" aria-label="New budget plan">
         <div class="plan-fields">
           <mat-form-field subscriptSizing="dynamic"><mat-label>Effective from</mat-label><input matInput type="date" name="effectiveFrom" required appBudgetPaymentDate min="0001-01-02" max="9999-12-30" [ngModel]="effectiveFrom()" (ngModelChange)="changeDate($event)" [disabled]="saving() || loading() || locked()"><mat-error>Choose a supported effective date.</mat-error></mat-form-field>
           <mat-form-field subscriptSizing="dynamic"><mat-label>Plan notes (optional)</mat-label><textarea matInput rows="1" maxlength="2000" name="notes" [ngModel]="notes()" (ngModelChange)="notes.set($event)" [disabled]="saving() || loading() || locked()"></textarea></mat-form-field>
@@ -36,14 +43,28 @@
         } @else if (sourceDate()) { <p class="muted">Your first plan for this date. Enter amounts below, or explicitly select Unknown.</p> }
         <p class="muted">Uncheck an outgoing to leave it out of this complete replacement plan. Blank or unknown amounts do not mean zero. Retired outgoings from the previous plan remain included until you uncheck them.</p>
         @if (!rows().length && !loading()) { <p>No outgoing definitions available. Add them in Regular outgoings, then start a new plan.</p> }
+        @if (duplicateAllowances()) { <p class="error" role="alert">Only one allowance per category and currency may be included. Uncheck the retired or replacement duplicate.</p> }
+        @for (kind of kinds; track kind) {
+        <h3>{{ kind === 'Commitment' ? 'Regular commitments' : 'Spending allowances' }}</h3>
+        @if (kind === 'Allowance') { <button mat-button type="button" (click)="allowanceSetup()?.show()" [disabled]="!canWrite() || locked()">Add spending allowance</button> }
         <ul class="plan-rows">
-          @for (row of rows(); track row.item.id) {
+          @for (row of draftRows(kind); track row.item.id) {
             <li>
-              <div class="entry-heading"><mat-checkbox [ngModel]="row.included" (ngModelChange)="changeRow(row.item.id, { included: $event })" [name]="'include-' + row.item.id" [disabled]="saving() || loading() || locked()">{{ row.context.itemName }}</mat-checkbox>
-                <span class="muted">{{ row.context.itemCode }} @if (row.item.isRetired) { · Retired }</span></div>
+              <div class="entry-heading"><mat-checkbox [ngModel]="row.included" (ngModelChange)="changeRow(row.item.id, { included: $event })" [name]="'include-' + row.item.id" [disabled]="saving() || loading() || locked()">{{ title(row.context) }}</mat-checkbox>
+                <span class="muted">@if (kind === 'Commitment') { {{ row.context.itemCode }} } @if (row.item.isRetired) { · Retired }</span></div>
               <p class="entry-context muted">{{ row.context.expenseCategoryName }} · {{ row.context.currencyCode }} · {{ recurrence(row.context.frequency, row.context.intervalCount) }}@if (row.context.merchantName) { · {{ row.context.merchantName }}}</p>
               @if (row.included) {
-                @if (row.source) { <details class="definition-details"><summary>Definition options</summary><mat-checkbox [name]="'refresh-' + row.item.id" [ngModel]="row.refreshFromSetup" (ngModelChange)="useSetup(row, $event)" [disabled]="saving() || loading() || locked()">Use current outgoing definition for {{ row.context.itemName }}</mat-checkbox><p class="muted">Updates its saved description and recurrence for this plan. Changed currency or recurrence requires an entered amount or Unknown.</p></details> }
+                @if (row.source) { <details class="definition-details"><summary>Definition options</summary><mat-checkbox [name]="'refresh-' + row.item.id" [ngModel]="row.refreshFromSetup" (ngModelChange)="useSetup(row, $event)" [disabled]="saving() || loading() || locked()">Use current outgoing definition for {{ title(row.context) }}</mat-checkbox><p class="muted">Updates its saved description and recurrence for this plan. Changed currency or recurrence requires an entered amount or Unknown.</p></details> }
+                @if (kind === 'Allowance') {
+                  <div class="entry-fields">
+                    <mat-form-field subscriptSizing="dynamic"><mat-label>Amount ({{ row.context.currencyCode }})</mat-label><input matInput inputmode="decimal" [required]="row.mode === 'Confirm'" [name]="'amount-' + row.item.id" [ngModel]="row.mode === 'Carry' ? (row.source!.plannedAmount ?? '') : row.mode === 'Unrecorded' ? '' : row.amount" (ngModelChange)="enterAllowance(row, $event)" [disabled]="saving() || loading() || locked()"><mat-hint>{{ recurrence(row.context.frequency, row.context.intervalCount) }} · {{ row.mode === 'Carry' ? 'Keeping previous amount' : row.mode === 'Unrecorded' ? 'Unknown' : 'Entered amount' }}</mat-hint></mat-form-field>
+                  </div>
+                  <details class="definition-details"><summary>Amount details</summary><div class="entry-fields">
+                    <mat-form-field subscriptSizing="dynamic"><mat-label>Amount choice</mat-label><mat-select [name]="'mode-' + row.item.id" [ngModel]="row.mode" (ngModelChange)="changeRow(row.item.id, { mode: $event })" [disabled]="saving() || loading() || locked()">@if (canCarry(row)) { <mat-option value="Carry">Keep previous</mat-option> }<mat-option value="Confirm">Enter / confirm amount</mat-option><mat-option value="Unrecorded">Unknown</mat-option></mat-select></mat-form-field>
+                    @if (row.mode === 'Confirm') { <mat-form-field subscriptSizing="dynamic"><mat-label>Confirmed on</mat-label><input matInput type="date" required appBudgetPaymentDate min="0001-01-02" max="9999-12-30" [name]="'confirmed-' + row.item.id" [ngModel]="row.confirmedOn" (ngModelChange)="changeRow(row.item.id, { confirmedOn: $event })" [disabled]="saving() || loading() || locked()"><mat-error>Choose a supported confirmation date.</mat-error></mat-form-field> }
+                    @if (row.mode === 'Carry') { <p class="muted">{{ row.source!.lastConfirmedDate ? 'Last confirmed ' + date(row.source!.lastConfirmedDate!) : 'Never confirmed' }}</p> }
+                  </div></details>
+                } @else {
                 <div class="entry-fields">
                   <mat-form-field subscriptSizing="dynamic"><mat-label>Amount choice</mat-label><mat-select [name]="'mode-' + row.item.id" [ngModel]="row.mode" (ngModelChange)="changeRow(row.item.id, { mode: $event })" [disabled]="saving() || loading() || locked()">
                     @if (canCarry(row)) { <mat-option value="Carry">Keep previous</mat-option> }
@@ -56,18 +77,18 @@
                     <p>{{ row.source!.plannedAmount === null ? 'Unknown amount' : money(row.source!.plannedAmount!, row.context.currencyCode) }}<br><span class="muted">{{ row.source!.lastConfirmedDate ? 'Last confirmed ' + date(row.source!.lastConfirmedDate!) : 'Never confirmed' }}</span></p>
                   } @else { <p class="muted">Amount not yet recorded.</p> }
                 </div>
+                }
                 @if (row.mode === 'Confirm' && row.amount && !amountValid(row.amount)) { <p class="error" role="alert">Enter a nonnegative amount below one trillion, with up to six decimal places.</p> }
               }
             </li>
           }
         </ul>
+        }
         <div class="totals" aria-label="Draft totals">
-          @for (total of draftTotals(); track total.currency + total.frequency + total.interval) {
-            <p><strong>{{ total.unknown ? 'Known subtotal: ' : 'Total: ' }}{{ money(total.amount, total.currency) }}</strong> · {{ recurrence(total.frequency, total.interval) }}@if (total.unknown) { · {{ total.unknown }} unknown amount(s) }</p>
-          }
+          <app-budget-totals [entries]="draftEntries()" [byCategory]="true" />
         </div>
         <p class="muted">This plan takes effect {{ date(effectiveFrom()) }}@if (draftEnd()) { until before {{ date(draftEnd()!) }}}@else { until a later plan replaces it}. Newly saved plans replace the whole outgoing list for their interval.</p>
-        <div class="actions"><button mat-flat-button type="submit" [disabled]="!canWrite() || (!locked() && (planForm.invalid || !validDraft()))">{{ locked() ? 'Retry unchanged save' : 'Save outgoing plan' }}</button><button mat-button type="button" (click)="cancel()" [disabled]="saving() || loading()">Discard draft</button></div>
+        <div class="actions"><button mat-flat-button type="submit" [disabled]="!canWrite() || allowanceSetup()?.hasUnsavedChanges() || (!locked() && (planForm.invalid || !validDraft()))">{{ locked() ? 'Retry unchanged save' : 'Save budget plan' }}</button><button mat-button type="button" (click)="cancel()" [disabled]="saving() || loading()">Discard draft</button></div>
       </form>
     </section>
   }
@@ -77,31 +98,32 @@
       <p class="muted">{{ plan.isComplete ? 'All included amounts recorded.' : 'Contains unknown amounts; totals are partial.' }} Saved descriptions and amounts are shown as recorded.</p>
       @if (plan.notes) { <p class="notes">{{ plan.notes }}</p> }
       @if (!plan.entries.length) { <p>This is an empty plan: no outgoings included.</p> }
+      @for (kind of kinds; track kind) {
+      <h3>{{ kind === 'Commitment' ? 'Regular commitments' : 'Spending allowances' }}</h3>
       <ul class="plan-rows saved-rows">
-        @for (entry of plan.entries; track entry.id) {
-          <li><div><strong>{{ entry.itemName }}</strong> <span class="muted">{{ entry.itemCode }}</span>
+        @for (entry of savedEntries(kind); track entry.id) {
+          <li><div><strong>{{ title(entry) }}</strong> @if (kind === 'Commitment') { <span class="muted">{{ entry.itemCode }}</span> }
             <p>{{ entry.expenseCategoryName }} · {{ recurrence(entry.frequency, entry.intervalCount) }}@if (entry.merchantName) { · {{ entry.merchantName }}}</p>
             <p><strong>{{ entry.plannedAmount === null ? 'Unknown amount (' + entry.currencyCode + ')' : money(entry.plannedAmount, entry.currencyCode) }}</strong>
               · {{ entry.valueOrigin === 'CarriedForward' ? 'Carried forward' : entry.valueOrigin === 'Confirmed' ? 'Confirmed' : 'Unrecorded' }}@if (entry.lastConfirmedDate) { · Last confirmed {{ date(entry.lastConfirmedDate) }}}</p>
             @if (entry.notes) { <p class="muted notes">{{ entry.notes }}</p> }
-          </div><button mat-button type="button" (click)="beginCorrection(entry)" [disabled]="!canWrite()">Correct amount for {{ entry.itemName }}</button></li>
+          </div><button mat-button type="button" (click)="beginCorrection(entry)" [disabled]="!canWrite()">Correct amount for {{ title(entry) }}</button></li>
         }
       </ul>
+      }
       <div class="totals" aria-label="Saved totals">
-        @for (total of totals(plan.entries); track total.currency + total.frequency + total.interval) {
-          <p><strong>{{ total.unknown ? 'Known subtotal: ' : 'Total: ' }}{{ money(total.amount, total.currency) }}</strong> · {{ recurrence(total.frequency, total.interval) }}@if (total.unknown) { · {{ total.unknown }} unknown amount(s) }</p>
-        }
+        <app-budget-totals [entries]="plan.entries" />
       </div>
       @if (correcting(); as entry) {
         <form #correctionForm="ngForm" aria-label="Correct saved amount" (ngSubmit)="saveCorrection(correctionForm)">
-          <h3>Correct {{ entry.itemName }}</h3><p class="muted">Corrects this saved plan. To record a price change from a new date, create a new plan. Later plans keep their saved amounts.</p>
+          <h3>Correct {{ title(entry) }}</h3><p class="muted">Corrects this saved plan. To record a price change from a new date, create a new plan. Later plans keep their saved amounts.</p>
           <div class="plan-fields">
             <mat-form-field subscriptSizing="dynamic"><mat-label>Corrected amount ({{ entry.currencyCode }})</mat-label><input #correctionAmount matInput inputmode="decimal" name="correctedAmount" [ngModel]="correction().amount" (ngModelChange)="changeCorrection('amount', $event)" [disabled]="saving() || correctionUncertain()"><mat-hint>Leave blank to mark unknown. Zero is a known amount.</mat-hint></mat-form-field>
             <mat-form-field subscriptSizing="dynamic"><mat-label>Confirmed on</mat-label><input matInput type="date" name="correctedOn" appBudgetPaymentDate min="0001-01-02" max="9999-12-30" [required]="!!correction().amount" [ngModel]="correction().confirmedOn" (ngModelChange)="changeCorrection('confirmedOn', $event)" [disabled]="saving() || correctionUncertain() || !correction().amount"><mat-error>Choose a supported confirmation date.</mat-error></mat-form-field>
             <mat-form-field subscriptSizing="dynamic"><mat-label>Outgoing notes (optional)</mat-label><textarea matInput rows="1" name="correctedNotes" maxlength="2000" [ngModel]="correction().notes" (ngModelChange)="changeCorrection('notes', $event)" [disabled]="saving() || correctionUncertain()"></textarea></mat-form-field>
           </div>
           @if (!correctionValid()) { <p class="error" role="alert">Enter a valid nonnegative amount (up to six decimal places, below one trillion) and confirmation date, or leave the amount blank for unknown.</p> }
-          <div class="actions"><button mat-flat-button type="submit" [disabled]="!canWrite() || correctionUncertain() || correctionForm.invalid || !correctionValid()">Save correction</button><button mat-button type="button" (click)="cancel()" [disabled]="saving()">Cancel correction</button></div>
+          <div class="actions"><button mat-flat-button type="submit" [disabled]="!canWrite() || allowanceSetup()?.hasUnsavedChanges() || correctionUncertain() || correctionForm.invalid || !correctionValid()">Save correction</button><button mat-button type="button" (click)="cancel()" [disabled]="saving()">Cancel correction</button></div>
         </form>
       }
     </section>

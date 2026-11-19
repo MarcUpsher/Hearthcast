@@ -3,8 +3,18 @@
 18 November 2026. Exposes [BudgetSnapshotService](budget-snapshot-service-slice.md)
 through household-scoped controllers and explicit contracts under Api/Budgets.
 [Setup endpoints](budget-setup-api-slice.md) continue to edit reusable defaults.
-This completes the planned budget capture/read HTTP layer; period reporting,
-allocation rules, projection import and UI remain separate work.
+This completes the planned budget capture/read HTTP layer. Dated plan UI and
+[category allowances](budget-allowances-slice.md) are now implemented; period
+reporting, allocation rules and projection import remain separate work.
+
+The allowance extension exposes saved kind (Commitment/Allowance) on entries and
+current kind on setup. Explicit metadata defaults omitted kind to legacy Commitment;
+allowance metadata must state Allowance and cannot include a merchant. Saved kind
+must agree with the item's immutable kind. Allowance category changes are meaning
+changes requiring explicit values; plans permit one allowance per saved
+category/currency. These rules apply to entry additions/corrections as well as
+capture. Create hashes preserve the old canonical form for legacy/default-kind
+requests and version explicit allowance metadata without rewriting saved hashes.
 
 ## Routes
 

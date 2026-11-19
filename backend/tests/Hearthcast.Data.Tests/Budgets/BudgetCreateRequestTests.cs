@@ -34,6 +34,19 @@ public sealed class BudgetCreateRequestTests
     }
 
     [Fact]
+    public void AllowanceMetadataHasVersionedHashWithoutChangingExplicitDefaultKindHash()
+    {
+        var values = Values(); var original = values.Entries[0];
+        Assert.Equal(BudgetCreateRequest.Freeze(Household, Snapshot, values).Hash, BudgetCreateRequest.Freeze(Household, Snapshot,
+            values with { Entries = [original with { Metadata = original.Metadata! with { Kind = BudgetItemKind.Commitment } }] }).Hash);
+        var allowance = original with { Metadata = original.Metadata! with { Kind = BudgetItemKind.Allowance, MerchantId = null, MerchantName = null } };
+        var request = values with { Entries = [allowance] };
+        Assert.NotEqual(BudgetCreateRequest.Freeze(Household, Snapshot, values with { Entries = [allowance with { Metadata = allowance.Metadata! with { Kind = BudgetItemKind.Commitment } }] }).Hash,
+            BudgetCreateRequest.Freeze(Household, Snapshot, request).Hash);
+        Assert.Equal(BudgetCreateRequest.Freeze(Household, Snapshot, request).Hash, BudgetCreateRequest.Freeze(Household, Snapshot, request).Hash);
+    }
+
+    [Fact]
     public void OrderWhitespaceCaseAndDecimalScaleCanonicaliseButExplicitIntentRemainsPartOfTheHash()
     {
         var values = Values();

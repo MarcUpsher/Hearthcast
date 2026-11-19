@@ -66,6 +66,11 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("Kind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<DateOnly?>("LastConfirmedDate")
                         .HasColumnType("date");
 
@@ -99,8 +104,15 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.HasIndex("HouseholdId", "MerchantId");
 
+                    b.HasIndex("BudgetSnapshotId", "ExpenseCategoryId", "CurrencyCode")
+                        .IsUnique()
+                        .HasDatabaseName("UX_BudgetEntries_Allowance")
+                        .HasFilter("\"Kind\" = 2");
+
                     b.ToTable("BudgetEntries", null, t =>
                         {
+                            t.HasCheckConstraint("CK_BudgetEntries_Allowance", "\"Kind\" <> 2 OR (\"MerchantId\" IS NULL AND \"MerchantName\" IS NULL)");
+
                             t.HasCheckConstraint("CK_BudgetEntries_Amount", "\"PlannedAmount\" IS NULL OR (\"PlannedAmount\" >= 0 AND \"PlannedAmount\" < 1000000000000 AND \"PlannedAmount\" = round(\"PlannedAmount\", 6))");
 
                             t.HasCheckConstraint("CK_BudgetEntries_ConfirmationDate", "\"LastConfirmedDate\" IS NULL OR (\"LastConfirmedDate\" > DATE '0001-01-01' AND \"LastConfirmedDate\" < DATE '9999-12-31')");
@@ -114,6 +126,8 @@ namespace Hearthcast.Data.Persistence.Migrations
                             t.HasCheckConstraint("CK_BudgetEntries_ItemCode", "\"ItemCode\" ~ '^[A-Z0-9][A-Z0-9._-]*$'");
 
                             t.HasCheckConstraint("CK_BudgetEntries_ItemName", "length(\"ItemName\") > 0 AND \"ItemName\" = btrim(\"ItemName\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
+
+                            t.HasCheckConstraint("CK_BudgetEntries_Kind", "\"Kind\" IN (1, 2)");
 
                             t.HasCheckConstraint("CK_BudgetEntries_Merchant", "(\"MerchantId\" IS NULL AND \"MerchantName\" IS NULL) OR (\"MerchantId\" IS NOT NULL AND \"MerchantName\" IS NOT NULL)");
 
@@ -159,6 +173,11 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<bool>("IsRetired")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Kind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid?>("MerchantId")
                         .HasColumnType("uuid");
 
@@ -178,17 +197,26 @@ namespace Hearthcast.Data.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_BudgetItems_HouseholdId_Code");
 
+                    b.HasIndex("HouseholdId", "MerchantId");
+
                     b.HasIndex("HouseholdId", "ExpenseCategoryId");
 
-                    b.HasIndex("HouseholdId", "MerchantId");
+                    b.HasIndex("HouseholdId", "ExpenseCategoryId", "CurrencyCode")
+                        .IsUnique()
+                        .HasDatabaseName("UX_BudgetItems_ActiveAllowance")
+                        .HasFilter("\"Kind\" = 2 AND NOT \"IsRetired\"");
 
                     b.ToTable("BudgetItems", null, t =>
                         {
+                            t.HasCheckConstraint("CK_BudgetItems_Allowance", "\"Kind\" <> 2 OR (\"MerchantId\" IS NULL AND \"PaymentAnchorDate\" IS NULL)");
+
                             t.HasCheckConstraint("CK_BudgetItems_Code", "\"Code\" ~ '^[A-Z0-9][A-Z0-9._-]*$'");
 
                             t.HasCheckConstraint("CK_BudgetItems_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$'");
 
                             t.HasCheckConstraint("CK_BudgetItems_Id", "\"Id\" <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("CK_BudgetItems_Kind", "\"Kind\" IN (1, 2)");
 
                             t.HasCheckConstraint("CK_BudgetItems_Name", "length(\"Name\") > 0 AND \"Name\" = btrim(\"Name\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
 

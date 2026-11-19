@@ -15,7 +15,7 @@ import { deferred, spendingEntry } from "../../testing/spending";
 import { BudgetEntry, BudgetPlan } from "./models";
 import { OutgoingPlans } from "./plans";
 
-const entry = (extra: Partial<BudgetEntry> = {}): BudgetEntry => ({ id: "entry", budgetItemId: "internet", itemCode: "OLD-INTERNET", itemName: "Saved Internet",
+const entry = (extra: Partial<BudgetEntry> = {}): BudgetEntry => ({ id: "entry", budgetItemId: "internet", kind: "Commitment", itemCode: "OLD-INTERNET", itemName: "Saved Internet",
   expenseCategoryId: "first-food", expenseCategoryName: "Saved category", merchantId: null, merchantName: null, plannedAmount: "30.123456",
   currencyCode: "GBP", frequency: "Month", intervalCount: 1, notes: "Saved notes", valueOrigin: "Confirmed", lastConfirmedDate: "2026-01-01", carriedFromBudgetEntryId: null, ...extra });
 const plan = (extra: Partial<BudgetPlan> = {}): BudgetPlan => ({ id: "plan", householdId: "first", effectiveFrom: "2026-01-01", notes: null,
@@ -25,13 +25,14 @@ const plan = (extra: Partial<BudgetPlan> = {}): BudgetPlan => ({ id: "plan", hou
 describe("Outgoing plans", () => {
   let fixture: ComponentFixture<OutgoingPlans>;
   let current: ReturnType<typeof signal<Household | null>>;
-  let get: ReturnType<typeof vi.fn>, text: ReturnType<typeof vi.fn>, sendText: ReturnType<typeof vi.fn>;
+  let get: ReturnType<typeof vi.fn>, text: ReturnType<typeof vi.fn>, sendText: ReturnType<typeof vi.fn>, send: ReturnType<typeof vi.fn>;
   let source: BudgetPlan | null;
   const home = (id: string): Household => ({ id, name: id, people: [] });
   beforeEach(() => {
     source = plan(); current = signal<Household | null>(home("first"));
     get = vi.fn(async (path: string) => {
       const id = path.split("/")[1];
+      if (path.endsWith("/currencies")) return [{ code: "GBP", minorUnits: 2 }, { code: "EUR", minorUnits: 2 }];
       if (path.includes("/items?")) return [budgetItem(id)];
       if (path.includes("/categories?")) return [spendingEntry("food", id)];
       return [spendingEntry("shop", id)];
@@ -43,8 +44,8 @@ describe("Outgoing plans", () => {
       if (path.includes("?pageSize=")) return JSON.stringify({ records: [plan({ householdId: id })], nextBefore: null, pageSize: 25 });
       return JSON.stringify(plan({ householdId: id }));
     });
-    sendText = vi.fn(async () => JSON.stringify(plan()));
-    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: Workspace, useValue: { current } }, { provide: Api, useValue: { get, getText: text, sendText } }] });
+    sendText = vi.fn(async () => JSON.stringify(plan())); send = vi.fn();
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: Workspace, useValue: { current } }, { provide: Api, useValue: { get, getText: text, sendText, send } }] });
   });
   afterEach(() => { fixture?.destroy(); vi.restoreAllMocks(); });
   async function settle() { fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges(); }
@@ -73,9 +74,9 @@ describe("Outgoing plans", () => {
   it("connects rendered amount input and save button without resetting validation to red", async () => {
     const c = await initial(); const loader = TestbedHarnessEnvironment.loader(fixture);
     await (await loader.getHarness(MatInputHarness.with({ selector: '[name="amount-internet"]' }))).setValue("42.50");
-    expect(c.rows()[0].amount).toBe("42.50"); await (await button("Save outgoing plan")).click();
+    expect(c.rows()[0].amount).toBe("42.50"); await (await button("Save budget plan")).click();
     expect(payload().entries[0].plannedAmount).toBe(42.5); await settle();
-    expect(fixture.nativeElement.querySelector('form[aria-label="New outgoing plan"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('form[aria-label="New budget plan"]')).toBeNull();
   });
   it("submits the entire supported six-decimal amount exactly for create and correction", async () => {
     const c = await initial(); c.changeRow("internet", { amount: "999999999999.123456" }); await c.savePlan();
@@ -243,4 +244,84 @@ describe("Outgoing plans", () => {
     current.set(null); const c = await page(); expect(get).not.toHaveBeenCalled(); expect(text).not.toHaveBeenCalled(); expect(c.canWrite()).toBe(false);
     expect(fixture.nativeElement.textContent).toContain("Select or create a household");
   });
+  it("edits an allowance while carrying commitments in the same saved plan", async () => {
+    const a = budgetItem("first", { id: "allowance", kind: "Allowance", name: "Internal name", code: "ALW_INTERNAL", merchantId: null });
+    source = plan({ entries: [entry({ plannedAmount: "50" }), entry({ id: "allowance-entry", budgetItemId: "allowance", kind: "Allowance", itemCode: a.code, itemName: a.name, expenseCategoryName: "Food", plannedAmount: "400", lastConfirmedDate: "2026-01-01" })] });
+    const normalGet = get.getMockImplementation()! as (path: string) => Promise<unknown>; get.mockImplementation(async path => path.includes("/items?") ? [budgetItem(), a] : normalGet(path));
+    const c = await page(); await c.startNew(); await settle(); const allowanceRow = c.rows().find(row => row.item.id === a.id)!;
+    expect(allowanceRow.mode).toBe("Carry"); expect(allowanceRow.source?.lastConfirmedDate).toBe("2026-01-01");
+    const body = fixture.nativeElement.querySelector('form[aria-label="New budget plan"]').textContent;
+    expect(body).toContain("Spending allowances"); expect(body).not.toContain("ALW_INTERNAL"); expect(body).toContain("GBP 450.00");
+    c.enterAllowance(allowanceRow, "425.123456"); await c.savePlan();
+    expect(payload().entries).toEqual([{ budgetItemId: a.id, mode: "Confirm", refreshFromSetup: false, plannedAmount: 425.123456, confirmedOn: localToday() },
+      { budgetItemId: "internet", mode: "Carry", refreshFromSetup: false }]);
+  });
+  it("adds a new allowance definition without losing or prematurely saving the plan draft", async () => {
+    const c = await page(); await c.startNew(); c.notes.set("Keep this plan");
+    const setup = c.allowanceSetup()!; setup.change("category", "first-food");
+    const item = budgetItem("first", { id: "allowance", kind: "Allowance", merchantId: null }); send.mockResolvedValueOnce(item); await setup.save();
+    expect(c.rows()).toHaveLength(2); expect(c.notes()).toBe("Keep this plan"); expect(sendText).not.toHaveBeenCalled();
+    expect(c.rows().find(row => row.item.id === item.id)).toMatchObject({ included: true, mode: "Confirm", amount: "", context: { kind: "Allowance" } });
+    expect(c.validDraft()).toBe(false); c.enterAllowance(c.rows().find(row => row.item.id === item.id)!, "0"); expect(c.validDraft()).toBe(true);
+  });
+  it("prevents two included allowance identities from claiming the same category/currency", async () => {
+    const first = budgetItem("first", { id: "old", kind: "Allowance", isRetired: true, merchantId: null });
+    const next = budgetItem("first", { id: "next", kind: "Allowance", merchantId: null });
+    source = plan({ entries: [entry({ id: "old-entry", budgetItemId: first.id, kind: "Allowance", expenseCategoryId: first.expenseCategoryId })] });
+    get.mockImplementation(async path => path.includes("/items?") ? [first, next] : path.endsWith("/currencies") ? [{ code: "GBP", minorUnits: 2 }] : [spendingEntry("food")]);
+    const c = await page(); await c.startNew(); c.enterAllowance(c.rows().find(row => row.item.id === "next")!, "400");
+    expect(c.duplicateAllowances()).toBe(true); await c.savePlan(); expect(sendText).not.toHaveBeenCalled();
+    c.changeRow("old", { included: false }); expect(c.validDraft()).toBe(true); await c.savePlan(); expect(payload().entries).toHaveLength(1);
+  });
+  it("requires fresh confirmation when an allowance changes category in either direction", async () => {
+    const a = budgetItem("first", { kind: "Allowance", merchantId: null, expenseCategoryId: "pharmacy" });
+    source = plan({ entries: [entry({ kind: "Allowance", expenseCategoryId: "food" })] });
+    get.mockImplementation(async path => path.includes("/items?") ? [a] : path.endsWith("/currencies") ? [{ code: "GBP", minorUnits: 2 }] : [spendingEntry("food")]);
+    const c = await page(); await c.startNew(); c.useSetup(c.rows()[0], true);
+    expect(c.canCarry(c.rows()[0])).toBe(false); expect(c.rows()[0].amount).toBe(""); c.enterAllowance(c.rows()[0], "400"); c.useSetup(c.rows()[0], false);
+    expect(c.rows()[0].amount).toBe(""); expect(c.validDraft()).toBe(false);
+  });
+  it("clears a new row's amount after its definition changes meaning while preserving saved-source rows", async () => {
+    const c = await initial(); c.changeRow("internet", { amount: "20" }); c.definitionChanged(budgetItem("first", { currencyCode: "EUR" }));
+    expect(c.rows()[0].amount).toBe(""); expect(c.rows()[0].context.currencyCode).toBe("EUR");
+    source = plan(); vi.spyOn(window, "confirm").mockReturnValue(true); await c.loadSource(); c.definitionChanged(budgetItem("first", { currencyCode: "USD" }));
+    expect(c.rows()[0].context.currencyCode).toBe("GBP"); expect(c.rows()[0].amount).toBe("30.123456");
+  });
+  it("guards unsaved allowance defaults and blocks plan actions during their write", async () => {
+    const c = await page(); await c.startNew(); const setup = c.allowanceSetup()!; setup.change("category", "first-food");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false); expect(c.canLeave()).toBe(false); await c.load(); expect(setup.draft().category).toBe("first-food");
+    const pending = deferred<ReturnType<typeof budgetItem>>(); send.mockReturnValueOnce(pending.promise); const writing = setup.save(); confirm.mockClear();
+    expect(c.canLeave()).toBe(false); await c.savePlan(); expect(sendText).not.toHaveBeenCalled(); expect(confirm).not.toHaveBeenCalled();
+    pending.resolve(budgetItem("first", { id: "allowance", kind: "Allowance", merchantId: null })); await writing;
+  });
+
+  it("rebuilds refreshed source context and clears the amount after an allowance default changes meaning", async () => {
+    const a = budgetItem("first", { kind: "Allowance", merchantId: null });
+    source = plan({ entries: [entry({ kind: "Allowance", expenseCategoryId: a.expenseCategoryId })] });
+    get.mockImplementation(async path => path.includes("/items?") ? [a] : path.endsWith("/currencies") ? [{ code: "GBP", minorUnits: 2 }] : [spendingEntry("food")]);
+    const c = await page(); await c.startNew(); c.useSetup(c.rows()[0], true); c.enterAllowance(c.rows()[0], "400");
+    const setup = c.allowanceSetup()!; setup.edit(a); setup.change("frequency", "Week"); send.mockResolvedValueOnce({ ...a, frequency: "Week" }); await setup.save();
+    expect(c.rows()[0]).toMatchObject({ refreshFromSetup: true, context: { frequency: "Week" }, mode: "Confirm", amount: "" });
+    await c.savePlan(); expect(sendText).not.toHaveBeenCalled(); c.enterAllowance(c.rows()[0], "100"); await c.savePlan();
+    expect(payload().entries[0]).toMatchObject({ plannedAmount: 100, mode: "Confirm", refreshFromSetup: true });
+  });
+  it("blocks plan and correction saves until unfinished or uncertain allowance setup is resolved", async () => {
+    const c = await page(); await c.startNew(); const setup = c.allowanceSetup()!; setup.change("category", "first-food");
+    await c.savePlan(); expect(sendText).not.toHaveBeenCalled(); expect(setup.draft().category).toBe("first-food");
+    send.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 })); await setup.save(); expect(setup.needsReload()).toBe(true);
+    await c.savePlan(); expect(sendText).not.toHaveBeenCalled(); expect(setup.needsReload()).toBe(true);
+    vi.spyOn(window, "confirm").mockReturnValue(true); setup.cancel(); await c.savePlan(); expect(sendText).toHaveBeenCalledTimes(1);
+    c.beginCorrection(c.selected()!.entries[0]); setup.change("category", "first-food"); await c.saveCorrection(); expect(sendText).toHaveBeenCalledTimes(1);
+    expect(setup.draft().category).toBe("first-food");
+  });
+  it.each(["400", null])("Keep previous displays the saved allowance value (%s) rather than the edited draft", async amount => {
+    const a = budgetItem("first", { kind: "Allowance", merchantId: null });
+    source = plan({ entries: [entry({ kind: "Allowance", plannedAmount: amount })] });
+    get.mockImplementation(async path => path.includes("/items?") ? [a] : path.endsWith("/currencies") ? [{ code: "GBP", minorUnits: 2 }] : [spendingEntry("food")]);
+    const c = await page(); await c.startNew(); c.enterAllowance(c.rows()[0], "450"); c.changeRow("internet", { mode: "Carry" }); await settle();
+    const input = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatInputHarness.with({ selector: '[name="amount-internet"]' }));
+    expect(await input.getValue()).toBe(amount ?? ""); expect(c.draftEntries()[0].plannedAmount).toBe(amount); await c.savePlan();
+    expect(payload().entries[0]).toEqual({ budgetItemId: "internet", mode: "Carry", refreshFromSetup: false });
+  });
+
 });

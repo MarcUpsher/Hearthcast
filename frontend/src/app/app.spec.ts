@@ -324,6 +324,16 @@ it("opens the outgoing overview from feature navigation and switches households 
   expect(await TestBed.inject(Router).navigateByUrl("/spending/plans")).toBe(true);
 });
 
+it("protects unsaved inline allowance defaults when leaving budget plans or switching household", async () => {
+  const { page, choose, workspace } = await setup("/spending/plans");
+  const plans = page as OutgoingPlans; plans.allowanceSetup()!.change("category", "first-food");
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false); await choose("second");
+  expect(workspace.current()?.id).toBe("first"); expect(plans.allowanceSetup()!.draft().category).toBe("first-food");
+  expect(await TestBed.inject(Router).navigateByUrl("/spending/overview")).toBe(false);
+  confirm.mockReturnValue(true); await choose("second"); expect(workspace.current()?.id).toBe("second");
+  expect(plans.allowanceSetup()!.hasUnsavedChanges()).toBe(false);
+});
+
 it("guards an item creation dialog on browser Back and household changes without losing the purchase", async () => {
   const { fixture, workspace, choose } = await setup("/setup", true);
   const router = TestBed.inject(Router); router.initialNavigation(); await router.navigateByUrl("/spending/records");

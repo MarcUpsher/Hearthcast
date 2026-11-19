@@ -1,5 +1,5 @@
 <app-spending-navigation />
-<section class="page-heading"><div><h1>Outgoings overview</h1><p class="muted">Planned costs and current payment schedules together.</p></div></section>
+<section class="page-heading"><div><h1>Budget overview</h1><p class="muted">Planned costs and current payment schedules together.</p></div></section>
 @if (w.current(); as household) {
   <p class="muted">For {{ household.name }}. Amounts and descriptions come from the plan effective on your chosen date. Payment schedules use current outgoing definitions, including when viewing an earlier date.</p>
   <form class="toolbar" #dateForm="ngForm" (ngSubmit)="load(dateForm)" aria-label="Outgoing overview date">
@@ -22,9 +22,7 @@
         } @else { <p>No effective plan on this date. Create a dated plan to record expected amounts.</p> }
         <p class="muted">{{ unknown() }} unknown amount(s) · {{ missing() }} outgoing(s) {{ result.snapshotId ? 'not included in plan' : 'without an effective plan' }}. An omitted outgoing never falls back to an older amount.</p>
         <div class="totals" aria-label="All included plan totals">
-          @for (total of totals(); track total.currency + total.frequency + total.interval) {
-            <p><strong>{{ total.unknown ? 'Known subtotal: ' : 'Total: ' }}{{ money(total.amount, total.currency) }}</strong> · {{ recurrence(total.frequency, total.interval) }}@if (total.unknown) { · {{ total.unknown }} unknown amount(s) }</p>
-          }
+          <app-budget-totals [entries]="entries()" />
           @if (result.snapshotId && !totals().length) { <p>This plan includes no outgoings.</p> }
         </div>
         <p class="muted">Totals cover all included plan entries, including retired definitions, and stay unchanged by the list filters. Currencies and recurrences remain separate. These are expected costs per recurrence, with no monthly conversion or payment-date allocation.</p>
@@ -37,17 +35,19 @@
           <mat-form-field subscriptSizing="dynamic"><mat-label>Definition status</mat-label><mat-select name="status" [ngModel]="status()" (ngModelChange)="status.set($event)"><mat-option value="all">All</mat-option><mat-option value="active">Active</mat-option><mat-option value="retired">Retired</mat-option></mat-select></mat-form-field>
         </div>
         <p class="muted">Showing {{ visible().length }} of {{ result.items.length }} outgoing(s). Expected dates are calendar dates, without weekend or bank holiday adjustments.</p>
+        @for (kind of kinds; track kind) {
+        <h3>{{ kind === 'Commitment' ? 'Regular commitments' : 'Spending allowances' }}</h3>
         <ul class="overview-list">
-          @for (row of visible(); track row.item.id) {
-            <li><div class="outgoing-context"><h3>{{ name(row) }} <span class="muted">{{ code(row) }}@if (row.item.isRetired) { · Retired definition }</span></h3>
+          @for (row of visibleKind(kind); track row.item.id) {
+            <li><div class="outgoing-context"><h3>{{ name(row) }} <span class="muted">@if (kind === 'Commitment') { {{ code(row) }} }@if (row.item.isRetired) { · Retired definition }</span></h3>
               <p>{{ categoryName(row) }}@if (merchantName(row); as merchant) { · {{ merchant }}}</p>
               @if (row.entry; as entry) {
                 <p><strong>{{ entry.plannedAmount === null ? 'Unknown amount (' + entry.currencyCode + ')' : money(entry.plannedAmount, entry.currencyCode) }}</strong> · {{ recurrence(entry.frequency, entry.intervalCount) }}</p>
                 <p class="muted">{{ entry.valueOrigin === 'CarriedForward' ? 'Carried forward' : entry.valueOrigin === 'Confirmed' ? 'Confirmed' : 'Unrecorded' }} · {{ entry.lastConfirmedDate ? 'Last confirmed ' + date(entry.lastConfirmedDate) : 'Never confirmed' }}</p>
                 @if (entry.notes) { <p class="muted notes">{{ entry.notes }}</p> }
               } @else { <p><strong>{{ state(row) }}</strong></p><p class="muted">Current definition: {{ row.item.currencyCode }} · {{ recurrence(row.item.frequency, row.item.intervalCount) }}</p>@if (row.item.notes) { <p class="muted notes">{{ row.item.notes }}</p> } }
-              @if (row.entry && (row.entry.itemName !== row.item.name || row.entry.itemCode !== row.item.code)) { <p class="muted">Current definition: {{ row.item.name }} · {{ row.item.code }}</p> }
-            </div><div class="payment-schedule"><strong>Current payment schedule</strong>
+              @if (kind === 'Commitment' && row.entry && (row.entry.itemName !== row.item.name || row.entry.itemCode !== row.item.code)) { <p class="muted">Current definition: {{ row.item.name }} · {{ row.item.code }}</p> }
+            </div>@if (kind === 'Commitment') { <div class="payment-schedule"><strong>Current payment schedule</strong>
               @if (row.item.isRetired) { <p class="muted">Retired; no upcoming date shown.@if (row.entry) { Saved amounts remain in this plan.}</p> }
               @else {
                 <p class="muted">{{ recurrence(row.item.frequency, row.item.intervalCount) }}</p>
@@ -59,9 +59,10 @@
                 @if (afterPlan(row)) { <p class="muted">This date falls after this plan ends; its amount may differ.</p> }
                 @if (!row.entry) { <p class="muted">No planned amount is associated with this date.</p> }
               }
-            </div></li>
-          } @empty { <li>{{ result.items.length ? 'No outgoings match these filters.' : 'No outgoing definitions yet. Add your regular commitments to get started.' }}</li> }
+            </div> }</li>
+          } @empty { <li>{{ result.items.length ? 'No entries in this section match these filters.' : 'No outgoing definitions yet. Add your regular commitments or spending allowances to get started.' }}</li> }
         </ul>
+        }
       </section>
     }
   }

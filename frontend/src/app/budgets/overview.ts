@@ -12,11 +12,12 @@ import { SpendingSetupEntry } from "../spending/models";
 import { SpendingNavigation } from "../spending/navigation";
 import { BudgetPaymentDate } from "./payment-date";
 import { nextPaymentDate, validPaymentAnchor } from "./payment-schedule";
-import { CurrentOutgoing, CurrentOutgoings, budgetRecurrence } from "./models";
+import { BudgetItemKind, CurrentOutgoing, CurrentOutgoings, budgetRecurrence } from "./models";
+import { BudgetTotals } from "./totals";
 import { parseBudget, planMoney, planTotals } from "./plan-data";
 
 @Component({
-  imports: [FormsModule, RouterLink, MatButtonModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetPaymentDate],
+  imports: [FormsModule, RouterLink, MatButtonModule, MatInputModule, MatSelectModule, SpendingNavigation, BudgetPaymentDate, BudgetTotals],
   templateUrl: "overview.html", styleUrl: "overview.scss",
 })
 export class OutgoingOverview {
@@ -38,6 +39,10 @@ export class OutgoingOverview {
   readonly date = spendingDate;
   readonly money = planMoney;
   readonly recurrence = budgetRecurrence;
+  readonly kinds: BudgetItemKind[] = ["Commitment", "Allowance"];
+  readonly entries = computed(() => this.report()?.items.flatMap(row => row.entry ? [row.entry] : []) ?? []);
+  kind(row: CurrentOutgoing) { return row.entry?.kind ?? row.item.kind; }
+  visibleKind(kind: BudgetItemKind) { return this.visible().filter(row => this.kind(row) === kind); }
   readonly totals = computed(() => planTotals(this.report()?.items.flatMap(row => row.entry ? [row.entry] : []) ?? []));
   readonly missing = computed(() => this.report()?.items.filter(row => !row.entry).length ?? 0);
   readonly unknown = computed(() => this.report()?.items.filter(row => row.entry?.plannedAmount === null).length ?? 0);
@@ -50,7 +55,8 @@ export class OutgoingOverview {
     const search = this.search().trim().toLocaleLowerCase();
     return (this.report()?.items ?? []).filter(row => (this.status() === "all" || row.item.isRetired === (this.status() === "retired")) &&
       (!this.category() || this.categoryId(row) === this.category()) &&
-      [row.item.name, row.item.code, this.name(row), this.code(row), this.categoryName(row), this.merchantName(row) ?? "",
+      [this.kind(row) === "Commitment" ? row.item.name : "", this.kind(row) === "Commitment" ? row.item.code : "",
+        this.name(row), this.kind(row) === "Commitment" ? this.code(row) : "", this.categoryName(row), this.merchantName(row) ?? "",
         (row.entry ? row.entry.notes : row.item.notes) ?? "", row.entry?.currencyCode ?? row.item.currencyCode, this.state(row)]
         .some(value => value.toLocaleLowerCase().includes(search)))
       .sort((a, b) => this.name(a).localeCompare(this.name(b)) || this.code(a).localeCompare(this.code(b)) || a.item.id.localeCompare(b.item.id));
@@ -90,7 +96,7 @@ export class OutgoingOverview {
     finally { if (this.current(home, generation, version)) this.loading.set(false); }
   }
   async today() { this.asOf.set(localToday()); await this.load(); }
-  name(row: CurrentOutgoing) { return row.entry?.itemName ?? row.item.name; }
+  name(row: CurrentOutgoing) { return this.kind(row) === "Allowance" ? this.categoryName(row) : row.entry?.itemName ?? row.item.name; }
   code(row: CurrentOutgoing) { return row.entry?.itemCode ?? row.item.code; }
   categoryId(row: CurrentOutgoing) { return row.entry?.expenseCategoryId ?? row.item.expenseCategoryId; }
   categoryName(row: CurrentOutgoing) { return row.entry?.expenseCategoryName ?? this.categories().find(category => category.id === row.item.expenseCategoryId)?.name ?? "Category unavailable"; }
@@ -101,7 +107,7 @@ export class OutgoingOverview {
     return !this.report()?.snapshotId ? "No effective plan" : !row.entry ? "Not included in plan" : row.entry.plannedAmount === null ? "Unknown amount" : "Amount recorded";
   }
   nextDate(row: CurrentOutgoing) {
-    return row.item.isRetired ? null : nextPaymentDate(row.item.paymentAnchorDate, row.item.frequency, row.item.intervalCount, this.report()!.asOf);
+    return this.kind(row) === "Allowance" || row.item.isRetired ? null : nextPaymentDate(row.item.paymentAnchorDate, row.item.frequency, row.item.intervalCount, this.report()!.asOf);
   }
   scheduleDiffers(row: CurrentOutgoing) {
     return !!row.entry && (row.entry.frequency !== row.item.frequency || row.entry.intervalCount !== row.item.intervalCount);

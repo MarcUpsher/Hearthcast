@@ -56,6 +56,10 @@ describe("Regular outgoing setup", () => {
     expect(fixture.nativeElement.textContent).toContain("Every month");
     expect(fixture.nativeElement.querySelector('[name="amount"]')).toBeNull();
   });
+  it("keeps allowance definitions out of the regular commitment setup screen", async () => {
+    const original = get.getMockImplementation()! as (path: string) => Promise<unknown>; get.mockImplementation(async path => path.includes("/items?") ? [budgetItem(), budgetItem("first", { id: "allowance", kind: "Allowance" })] : original(path));
+    const c = await page(); expect(c.rows().map(item => item.id)).toEqual(["internet"]);
+  });
   it("creates an outgoing with named recurrence and integer interval, then resets validation and defaults", async () => {
     const c = await page(); c.createDraft.set(budgetDraft());
     const saved = budgetItem("first", { id: "energy", code: "ENERGY", name: "Electricity", intervalCount: 3, notes: "Variable usage" });

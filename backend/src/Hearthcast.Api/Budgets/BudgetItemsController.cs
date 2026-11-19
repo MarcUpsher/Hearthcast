@@ -12,7 +12,10 @@ public sealed class BudgetItemsController(BudgetSetupService setup) : Controller
     public async Task<ActionResult<BudgetItemResponse>> Create(Guid householdId, CreateBudgetItemRequest request,
         CancellationToken cancellationToken)
     {
-        var item = await setup.CreateItemAsync(householdId, request.ExpenseCategoryId!.Value, request.Code!, request.Name!,
+        var item = request.Kind == BudgetItemKind.Allowance
+            ? await setup.CreateAllowanceAsync(householdId, request.ExpenseCategoryId!.Value, request.CurrencyCode!, request.Frequency!.Value,
+                request.IntervalCount!.Value, request.Notes, cancellationToken)
+            : await setup.CreateItemAsync(householdId, request.ExpenseCategoryId!.Value, request.Code!, request.Name!,
             request.CurrencyCode!, request.Frequency!.Value, request.IntervalCount!.Value, request.MerchantId, request.Notes, request.PaymentAnchorDate, cancellationToken);
         return CreatedAtAction(nameof(Get), new { householdId, itemId = item.Id }, BudgetItemResponse.From(item));
     }

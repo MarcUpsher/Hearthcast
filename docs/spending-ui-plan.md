@@ -117,10 +117,10 @@ and merchant setup remains accessible through Spending navigation.
    references and next-payment displays. [Dated outgoing plans and amounts](budget-plans-ui-slice.md)
    are implemented, including carry-forward capture, history, exact totals by
    currency/recurrence and saved amount corrections. The [current outgoings overview](outgoings-overview-ui-slice.md)
-   brings effective amounts and current payment schedules together. Proposed
-   category allowances (for example a Food target) need a subsequent budget
-   design distinct from recurring commitments, with explicit periods and no
-   double-counting. Actual-vs-plan comparisons still require a later agreed
+   brings effective amounts and current payment schedules together. The next
+   [commitments and allowances slice](budget-allowances-slice.md) is implemented:
+   saved item classification, lean category allowance entry and one two-section
+   dated budget, retaining explicitly additive amounts. Actual-vs-plan comparisons still require a later agreed
    allocation policy.
 
 ## Form usability follow-up (implemented)

@@ -25,7 +25,7 @@ public sealed class BudgetSnapshot
         var saved = entries.Select(input => new BudgetEntry(this, input)).ToArray();
         if (saved.Select(e => e.BudgetItemId).Distinct().Count() != saved.Length)
             throw new InvalidValueException("Include a budget item only once per plan.");
-        _entries.AddRange(saved);
+        foreach (var entry in saved) { RequireUnique(entry); _entries.Add(entry); }
         CreatedAtUtc = SpendingValueRules.Now();
         UpdatedAtUtc = CreatedAtUtc;
         Revision = Guid.NewGuid();
@@ -57,8 +57,7 @@ public sealed class BudgetSnapshot
         RequireRevision(expectedRevision);
         var entry = FindEntry(entryId);
         var candidate = new BudgetEntry(this, input, entry);
-        if (_entries.Any(e => e.Id != entryId && e.BudgetItemId == candidate.BudgetItemId))
-            throw new InvalidValueException("Include a budget item only once per plan.");
+        RequireUnique(candidate, entryId);
         entry.ApplyCorrection(candidate);
         Touch();
     }
@@ -67,7 +66,7 @@ public sealed class BudgetSnapshot
     internal void CorrectEntryMetadata(Guid expectedRevision, Guid entryId, BudgetEntryMetadata metadata)
     {
         RequireRevision(expectedRevision);
-        FindEntry(entryId).CorrectMetadata(metadata);
+        FindEntry(entryId).CorrectMetadata(metadata, candidate => RequireUnique(candidate, entryId));
         Touch();
     }
 
@@ -75,8 +74,7 @@ public sealed class BudgetSnapshot
     {
         RequireRevision(expectedRevision);
         var entry = new BudgetEntry(this, input);
-        if (_entries.Any(e => e.BudgetItemId == entry.BudgetItemId))
-            throw new InvalidValueException("Include a budget item only once per plan.");
+        RequireUnique(entry);
         _entries.Add(entry);
         Touch();
     }
@@ -130,6 +128,15 @@ public sealed class BudgetSnapshot
 
     private BudgetEntry FindEntry(Guid id) => _entries.SingleOrDefault(e => e.Id == id)
         ?? throw new InvalidValueException("The entry does not belong to this budget plan.");
+
+    private void RequireUnique(BudgetEntry candidate, Guid? except = null)
+    {
+        if (_entries.Any(e => e.Id != except && e.BudgetItemId == candidate.BudgetItemId))
+            throw new InvalidValueException("Include a budget item only once per plan.");
+        if (candidate.Kind == BudgetItemKind.Allowance && _entries.Any(e => e.Id != except && e.Kind == BudgetItemKind.Allowance
+            && e.ExpenseCategoryId == candidate.ExpenseCategoryId && e.CurrencyCode == candidate.CurrencyCode))
+            throw new InvalidValueException("Include only one allowance per category and currency in a plan.");
+    }
 
     private void RequireEarlierSource(BudgetSnapshot source, DateOnly effectiveFrom)
     {

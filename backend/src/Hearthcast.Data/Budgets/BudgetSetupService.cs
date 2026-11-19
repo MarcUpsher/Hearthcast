@@ -9,6 +9,17 @@ namespace Hearthcast.Data.Budgets;
 
 public sealed class BudgetSetupService(IDbContextFactory<HearthcastDbContext> contextFactory)
 {
+    public Task<BudgetItem> CreateAllowanceAsync(Guid householdId, Guid expenseCategoryId, string currencyCode,
+        BudgetFrequency frequency, int intervalCount = 1, string? notes = null, CancellationToken cancellationToken = default) =>
+        WriteAsync(async (context, token) =>
+        {
+            var category = await FindCategoryAsync(context, householdId, expenseCategoryId, token);
+            var item = new BudgetItem(category, "ALW_" + Guid.NewGuid().ToString("N"), category.Name, currencyCode,
+                frequency, intervalCount, notes: notes, kind: BudgetItemKind.Allowance);
+            context.BudgetItems.Add(item);
+            return item;
+        }, cancellationToken);
+
     private const string DuplicateCodeMessage = "A budget item with this code already exists in this household, including retired items.";
 
     public Task<BudgetItem> CreateItemAsync(Guid householdId, Guid expenseCategoryId, string code,
@@ -95,6 +106,9 @@ public sealed class BudgetSetupService(IDbContextFactory<HearthcastDbContext> co
         {
             return await SerializableTransaction.ExecuteAsync(contextFactory, operation, cancellationToken);
         }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: BudgetItemConfiguration.AllowanceIndexName })
+        { throw new BusinessRuleViolationException("An active allowance already exists for this category and currency."); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: BudgetItemConfiguration.CodeIndexName })
         {

@@ -53,6 +53,10 @@ occupies that port, or pass another port to `npm start`.
   Outgoings overview combines effective saved amounts with separately labelled
   current payment schedules, exact totals by currency/recurrence, and local
   search/category/retirement filters. See [overview](../docs/outgoings-overview-ui-slice.md).
+  Budget plans also supports lean category allowances alongside recurring
+  commitments, with shared dated capture/carry-forward and additive subtotals.
+  Allowances have no merchant or payment schedule; their setup is maintained
+  inline without another navigation tab. See [allowances](../docs/budget-allowances-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

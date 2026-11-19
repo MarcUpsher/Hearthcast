@@ -7,10 +7,14 @@ namespace Hearthcast.Data.Persistence.Configurations;
 
 public sealed class BudgetEntryConfiguration : IEntityTypeConfiguration<BudgetEntry>
 {
+    internal const string AllowanceIndexName = "UX_BudgetEntries_Allowance";
+
     public void Configure(EntityTypeBuilder<BudgetEntry> builder)
     {
         builder.ToTable("BudgetEntries", table =>
         {
+            table.HasCheckConstraint("CK_BudgetEntries_Kind", "\"Kind\" IN (1, 2)");
+            table.HasCheckConstraint("CK_BudgetEntries_Allowance", "\"Kind\" <> 2 OR (\"MerchantId\" IS NULL AND \"MerchantName\" IS NULL)");
             table.HasCheckConstraint("CK_BudgetEntries_Id", "\"Id\" <> '00000000-0000-0000-0000-000000000000'::uuid");
             table.HasCheckConstraint("CK_BudgetEntries_ItemCode", "\"ItemCode\" ~ '^[A-Z0-9][A-Z0-9._-]*$'");
             foreach (var column in new[] { "ItemName", "ExpenseCategoryName" })
@@ -31,6 +35,9 @@ public sealed class BudgetEntryConfiguration : IEntityTypeConfiguration<BudgetEn
         });
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).ValueGeneratedNever();
+        builder.Property(e => e.Kind).HasDefaultValue(BudgetItemKind.Commitment);
+        builder.HasIndex(e => new { e.BudgetSnapshotId, e.ExpenseCategoryId, e.CurrencyCode }).IsUnique()
+            .HasFilter("\"Kind\" = 2").HasDatabaseName(AllowanceIndexName);
         builder.HasAlternateKey(e => new { e.HouseholdId, e.Id });
         builder.HasIndex(e => new { e.BudgetSnapshotId, e.BudgetItemId }).IsUnique();
         builder.Property(e => e.ItemCode).HasMaxLength(SpendingSetupRules.MaximumCodeLength).IsRequired();

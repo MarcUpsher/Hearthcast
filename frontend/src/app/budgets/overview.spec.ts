@@ -14,7 +14,7 @@ import { deferred, spendingEntry } from "../../testing/spending";
 import { BudgetEntry, CurrentOutgoing, CurrentOutgoings } from "./models";
 import { OutgoingOverview } from "./overview";
 
-const saved = (extra: Partial<BudgetEntry> = {}): BudgetEntry => ({ id: "entry", budgetItemId: "internet", itemCode: "OLD", itemName: "Saved Internet",
+const saved = (extra: Partial<BudgetEntry> = {}): BudgetEntry => ({ id: "entry", budgetItemId: "internet", kind: "Commitment", itemCode: "OLD", itemName: "Saved Internet",
   expenseCategoryId: "saved-category", expenseCategoryName: "Saved category", merchantId: null, merchantName: null, plannedAmount: "30.123456",
   currencyCode: "GBP", frequency: "Month", intervalCount: 1, notes: "Saved notes", valueOrigin: "CarriedForward", lastConfirmedDate: "2026-01-01", carriedFromBudgetEntryId: "earlier-entry", ...extra });
 const row = (entry: BudgetEntry | null = saved()): CurrentOutgoing => ({ item: budgetItem("first", { paymentAnchorDate: "2026-01-31" }), entry });
@@ -80,6 +80,14 @@ describe("Current outgoings overview", () => {
   it("shows current lookup labels for rows without a saved entry", async () => {
     response.items = [row(null)]; const c = await page(); const body = fixture.nativeElement.textContent;
     expect(body).toContain("Food"); expect(body).toContain("Shop"); expect(c.categoryOptions()[0].id).toBe("first-food");
+  });
+  it("shows allowances under their saved category without internal codes or payment schedules", async () => {
+    response = report({ items: [{ item: budgetItem("first", { kind: "Allowance", code: "ALW_INTERNAL", name: "Internal allowance", merchantId: null }),
+      entry: saved({ kind: "Allowance", itemCode: "ALW_INTERNAL", expenseCategoryName: "Food", itemName: "Internal allowance", plannedAmount: "400" }) }] });
+    const c = await page(), list = fixture.nativeElement.querySelector(".overview-list:last-child") ?? fixture.nativeElement;
+    const body = fixture.nativeElement.textContent; expect(body).toContain("Spending allowances"); expect(body).toContain("GBP 400.00"); expect(body).not.toContain("ALW_INTERNAL");
+    expect(list.querySelector(".payment-schedule")).toBeNull(); expect(c.nextDate(c.visible()[0])).toBeNull();
+    c.search.set("ALW_INTERNAL"); expect(c.visible()).toHaveLength(0);
   });
   it("clears a category selection absent from a newly loaded report", async () => {
     const c = await page(); c.category.set("saved-category"); expect(c.visible()).toHaveLength(1);

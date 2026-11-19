@@ -7,6 +7,7 @@ namespace Hearthcast.Api.Budgets.Contracts;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record BudgetEntryMetadataRequest : IValidatableObject
 {
+    [Required, JsonConverter(typeof(BudgetItemKindJsonConverter))] public BudgetItemKind? Kind { get; init; } = BudgetItemKind.Commitment;
     [Required] public string? ItemCode { get; init; }
     [Required] public string? ItemName { get; init; }
     [Required] public Guid? ExpenseCategoryId { get; init; }
@@ -24,10 +25,12 @@ public sealed record BudgetEntryMetadataRequest : IValidatableObject
         foreach (var error in BudgetSetupRequestValidation.Text((ItemCode, nameof(ItemCode)), (ItemName, nameof(ItemName)),
             (ExpenseCategoryName, nameof(ExpenseCategoryName)), (CurrencyCode, nameof(CurrencyCode)),
             (MerchantName, nameof(MerchantName)), (Notes, nameof(Notes)))) yield return error;
+        if (Kind == BudgetItemKind.Allowance && (MerchantId.HasValue || MerchantName is not null))
+            yield return new ValidationResult("Allowances do not have merchants.", [nameof(MerchantId), nameof(MerchantName)]);
         if (MerchantId.HasValue != (MerchantName is not null))
             yield return new ValidationResult("Merchant identity and name must both be supplied or both be null.", [nameof(MerchantId), nameof(MerchantName)]);
     }
 
     internal BudgetEntryMetadataValues ToValues() => new(ItemCode!, ItemName!, ExpenseCategoryId!.Value, ExpenseCategoryName!,
-        CurrencyCode!, Frequency!.Value, IntervalCount!.Value, MerchantId, MerchantName, Notes);
+        CurrencyCode!, Frequency!.Value, IntervalCount!.Value, MerchantId, MerchantName, Notes, Kind!.Value);
 }

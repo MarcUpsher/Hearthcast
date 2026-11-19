@@ -1,8 +1,9 @@
+export type BudgetItemKind = "Commitment" | "Allowance";
 export type BudgetFrequency = "Week" | "Month" | "Year";
 
 // Reusable defaults only. Amounts belong to dated budget plan entries.
 export interface BudgetItem {
-  id: string; householdId: string; code: string; name: string;
+  id: string; householdId: string; code: string; name: string; kind: BudgetItemKind;
   expenseCategoryId: string; merchantId: string | null;
   currencyCode: string; frequency: BudgetFrequency; intervalCount: number;
   notes: string | null; isRetired: boolean; paymentAnchorDate: string | null;
@@ -21,7 +22,7 @@ export function budgetRecurrence(frequency: BudgetFrequency, count: number) {
 }
 
 export interface BudgetEntry {
-  id: string; budgetItemId: string; itemCode: string; itemName: string;
+  id: string; budgetItemId: string; kind: BudgetItemKind; itemCode: string; itemName: string;
   expenseCategoryId: string; expenseCategoryName: string; merchantId: string | null; merchantName: string | null;
   plannedAmount: string | null; currencyCode: string; frequency: BudgetFrequency; intervalCount: number;
   notes: string | null; valueOrigin: "Unrecorded" | "Confirmed" | "CarriedForward";

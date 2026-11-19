@@ -21,6 +21,10 @@ Category reporting UI and budget comparisons remain planned.
 The user prefers dated budget plans that remain effective until replaced. Variable
 outgoings likewise have an amount that applies until explicitly replaced; their
 amounts belong to budget entries, not the reusable outgoing item.
+The next [commitments and spending allowances slice](budget-allowances-slice-plan.md)
+adds an explicit setup/saved-entry kind and simple category allowance entry
+within the same dated plan; see the [implemented slice](budget-allowances-slice.md). Allowances
+retain the additive semantics described under Linking actual and planned spending.
 Usual purchase prices are remembered per item/merchant/currency and changed only
 by explicit user choice; last paid prices remain separate derived information.
 Both quick category-and-amount capture and optional itemised capture are agreed;

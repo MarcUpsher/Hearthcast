@@ -17,7 +17,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Hearthcast.Api.Tests.Budgets;
 
-public sealed class BudgetSetupApiTests : IAsyncLifetime
+public sealed partial class BudgetSetupApiTests : IAsyncLifetime
 {
     private readonly PostgresTestDatabase _database = new();
     private ApiTestFactory _factory = null!;
