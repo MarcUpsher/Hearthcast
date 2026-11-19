@@ -19,3 +19,24 @@ export function budgetRecurrence(frequency: BudgetFrequency, count: number) {
   const period = frequency.toLowerCase();
   return count === 1 ? `Every ${period}` : `Every ${count} ${period}s`;
 }
+
+export interface BudgetEntry {
+  id: string; budgetItemId: string; itemCode: string; itemName: string;
+  expenseCategoryId: string; expenseCategoryName: string; merchantId: string | null; merchantName: string | null;
+  plannedAmount: string | null; currencyCode: string; frequency: BudgetFrequency; intervalCount: number;
+  notes: string | null; valueOrigin: "Unrecorded" | "Confirmed" | "CarriedForward";
+  lastConfirmedDate: string | null; carriedFromBudgetEntryId: string | null;
+}
+export interface BudgetPlan {
+  id: string; householdId: string; effectiveFrom: string; notes: string | null;
+  createdAtUtc: string; updatedAtUtc: string; revision: string; copiedFromBudgetSnapshotId: string | null;
+  isComplete: boolean; entries: BudgetEntry[];
+}
+export interface BudgetHistory { records: BudgetPlan[]; nextBefore: string | null; pageSize: number; }
+export interface BudgetEffective { asOf: string; snapshot: BudgetPlan; effectiveUntilExclusive: string | null; }
+export type BudgetMode = "Carry" | "Confirm" | "Unrecorded";
+export interface PlanRow {
+  item: BudgetItem; context: BudgetEntry; source: BudgetEntry | null;
+  included: boolean; mode: BudgetMode; amount: string; confirmedOn: string;
+  refreshFromSetup: boolean;
+}

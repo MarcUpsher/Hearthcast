@@ -45,8 +45,11 @@ occupies that port, or pass another port to `npm start`.
   Regular outgoings maintains reusable expense definitions with currency, category,
   recurrence, optional payment reference dates, merchant/notes and retirement.
   Next expected payments retain anchored weekdays/day-of-month and handle short
-  months without drift. Amounts and dated outgoing
-  plan capture follow separately. See [outgoing setup](../docs/budget-setup-ui-slice.md).
+  months without drift. See [outgoing setup](../docs/budget-setup-ui-slice.md).
+  Outgoing plans records dated expected amounts together, carries previous saved
+  values forward, distinguishes unknown from zero, and groups exact totals by
+  currency/recurrence. Includes as-of/detail/history reads and revision-checked
+  saved amount corrections. See [dated outgoing plans](../docs/budget-plans-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

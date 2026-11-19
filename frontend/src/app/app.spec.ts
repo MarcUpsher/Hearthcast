@@ -15,6 +15,7 @@ import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
 import { SpendingRecords } from "./spending/records";
 import { RegularOutgoings } from "./budgets/outgoings";
+import { OutgoingPlans } from "./budgets/plans";
 import { budgetItem } from "../testing/budgets";
 import { SpendingSummary } from "./spending/summary";
 import { spendingDraft, spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
@@ -30,6 +31,8 @@ async function setup(path: string, history = false) {
   }));
   const get = vi.fn(async (path: string) => {
     if (path === "households") return households;
+    if (path.includes("/budgets/snapshots/effective?") || path.includes("/budgets/snapshots/copy-source?")) return null;
+    if (path.includes("/budgets/snapshots?")) return { records: [], nextBefore: null, pageSize: 25 };
     if (path.includes("/budgets/items?")) return [budgetItem(path.split("/")[1])];
     if (path.includes("/spending/items?")) return [spendingItem(path.split("/")[1])];
     if (path.includes("/spending/categories?")) return [spendingEntry("food", path.split("/")[1])];
@@ -73,14 +76,15 @@ async function setup(path: string, history = false) {
   const outlet = fixture.debugElement
     .query(By.directive(RouterOutlet))
     .injector.get(RouterOutlet);
-  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingRecords | RegularOutgoings;
+  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingRecords | RegularOutgoings | OutgoingPlans;
   if (page instanceof SpendingRecords) {
     await vi.waitFor(() => expect(page.lookupLoading()).toBe(false));
     fixture.detectChanges(); await fixture.whenStable();
   }
-  if (page instanceof RegularOutgoings) {
+  if (page instanceof RegularOutgoings || page instanceof OutgoingPlans) {
     await vi.waitFor(() => expect(page.loading()).toBe(false)); fixture.detectChanges(); await fixture.whenStable();
   }
+  if (page instanceof OutgoingPlans) { await page.startNew(); fixture.detectChanges(); await fixture.whenStable(); }
   const workspace = TestBed.inject(Workspace);
   const picker = fixture.debugElement.query(By.css(".household-picker"))
     .componentInstance as MatSelect;
@@ -91,13 +95,14 @@ async function setup(path: string, history = false) {
     await fixture.whenStable();
   };
   const edit = () => {
-    if (page instanceof SpendingRecords) page.capture()!.set("notes", "Unsaved purchase");
+    if (page instanceof OutgoingPlans) page.notes.set("Unsaved outgoing plan");
+    else if (page instanceof SpendingRecords) page.capture()!.set("notes", "Unsaved purchase");
     else if (page instanceof SpendingItems || page instanceof RegularOutgoings) page.change(false, "name", "Unsaved item");
     else if (page instanceof SpendingSetup) page.changeNewName("categories", "Unsaved category");
     else if (page instanceof Modelling) page.presetName = "Unsaved scenario";
     else page.date = "2000-01-01";
   };
-  const draft = () => page instanceof SpendingRecords ? page.capture()!.draft().notes : (page instanceof SpendingItems || page instanceof RegularOutgoings) ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
+  const draft = () => page instanceof OutgoingPlans ? page.notes() : page instanceof SpendingRecords ? page.capture()!.draft().notes : (page instanceof SpendingItems || page instanceof RegularOutgoings) ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
     (page instanceof Modelling ? page.presetName : page.date);
   const writing = () => {
     if (page instanceof SpendingRecords) page.capture()!.saving.set(true);
@@ -123,7 +128,7 @@ afterEach(() => {
   localStorage.removeItem("household");
 });
 
-describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records", "/spending/outgoings"])(
+describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records", "/spending/outgoings", "/spending/plans"])(
   "Household switching from %s",
   (path) => {
     it("allows a clean page to switch without confirmation", async () => {

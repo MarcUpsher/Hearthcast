@@ -114,8 +114,9 @@ and merchant setup remains accessible through Spending navigation.
 3. [Regular outgoing setup UI](budget-setup-ui-slice.md) is implemented with
    metadata, recurrence, retirement and shared category/merchant choices.
    [Expected payment dates](budget-payment-date-slice.md) provide optional schedule
-   references and next-payment displays. Dated
-   outgoing plans and amounts are next. Actual-vs-plan comparisons still require
+   references and next-payment displays. [Dated outgoing plans and amounts](budget-plans-ui-slice.md)
+   are implemented, including carry-forward capture, history, exact totals by
+   currency/recurrence and saved amount corrections. Actual-vs-plan comparisons still require
    a later agreed allocation policy.
 
 ## Form usability follow-up (implemented)

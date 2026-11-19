@@ -25,8 +25,9 @@ the outgoing's own flag and never delete a definition. Retiring a category does
 not hide its active outgoings. Edits/retirement do not change saved plan amounts,
 classification, recurrence, provenance or revisions.
 
-Amounts are absent from setup. Dated outgoing plan capture/history and expected
-amounts are the following UI slice; actual-versus-plan comparisons remain deferred.
+Amounts are absent from setup. [Dated outgoing plan capture/history and expected
+amounts](budget-plans-ui-slice.md) are now implemented separately;
+actual-versus-plan comparisons remain deferred.
 
 ## State, contracts and recovery
 

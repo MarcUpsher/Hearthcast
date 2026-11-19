@@ -1,0 +1,17 @@
+.plan-fields, .entry-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; gap: 24px 16px; }
+.toolbar { align-items: start; margin-bottom: 20px; }
+.panel { margin-top: 24px; }
+.plan-rows, .history-list { list-style: none; padding: 0; }
+.plan-rows > li { padding: 20px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+.entry-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.entry-context { margin: 6px 0 20px; }
+.definition-details { margin-bottom: 16px; }
+.definition-details summary { cursor: pointer; margin-bottom: 12px; }
+.saved-rows > li { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.saved-rows p { margin: 8px 0 0; }
+.totals { margin: 20px 0; font-variant-numeric: tabular-nums; }
+.history-list li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+textarea { resize: vertical; }
+form > .actions { margin-top: 24px; }
+@media (max-width: 600px) { .plan-fields, .entry-fields { grid-template-columns: 1fr; } .saved-rows > li { flex-wrap: wrap; } .toolbar mat-form-field { flex-basis: 100%; } }

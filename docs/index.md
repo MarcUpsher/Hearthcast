@@ -77,7 +77,9 @@ records the service scope. [Spending setup UI](spending-setup-ui-slice.md) is
 implemented, followed by [purchase capture/history](spending-capture-ui-slice.md).
 Saved [purchase editing](spending-edit-ui-slice.md) and
 [category reporting UI](spending-summary-ui-slice.md) are implemented.
-Budget screens and budget comparisons remain later work.
+[Regular outgoing setup](budget-setup-ui-slice.md), optional [payment dates](budget-payment-date-slice.md),
+and [dated outgoing plans](budget-plans-ui-slice.md) are implemented.
+Budget comparisons and period allocation remain later work.
 
 The [spending UI plan](spending-ui-plan.md) records the categories/merchants screen
 scope, API contracts, implementation/review ownership and acceptance criteria,
