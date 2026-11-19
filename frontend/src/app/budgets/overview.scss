@@ -1,0 +1,10 @@
+.toolbar { align-items: start; margin-bottom: 20px; }
+.panel { margin-top: 24px; }
+.totals { font-variant-numeric: tabular-nums; margin: 20px 0; }
+.overview-list { list-style: none; padding: 0; }
+.overview-list > li { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 20px 32px; padding: 24px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+.overview-list h3 { margin: 0; }
+.overview-list h3 span { font-size: .85em; font-weight: normal; }
+.overview-list p { margin: 8px 0 0; }
+.notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 680px) { .overview-list > li { grid-template-columns: 1fr; } .toolbar mat-form-field { flex-basis: 100%; } }

@@ -45,6 +45,8 @@ original single-currency projection and initial screen notes are superseded.
 | Budget setup HTTP contracts and endpoints | [Budget setup API](budget-setup-api-slice.md) |
 | Regular outgoing definitions, recurrence and setup screen | [Budget setup UI](budget-setup-ui-slice.md) |
 | Expected outgoing payment dates and recurring calendar timing | [Payment dates](budget-payment-date-slice.md) |
+| Dated outgoing amounts, carry-forward plans and saved corrections | [Outgoing plans UI](budget-plans-ui-slice.md) |
+| Current planned outgoings and payment schedules in one screen | [Outgoings overview](outgoings-overview-ui-slice.md) |
 | Budget capture, retries, corrections and as-of reads | [Budget snapshot services](budget-snapshot-service-slice.md) |
 | Budget snapshot HTTP contracts, history and effective reads | [Budget snapshot API](budget-snapshot-api-slice.md) |
 | Growth attribution | [Growth breakdown](projection-growth-breakdown-slice.md) |

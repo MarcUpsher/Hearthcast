@@ -50,6 +50,9 @@ occupies that port, or pass another port to `npm start`.
   values forward, distinguishes unknown from zero, and groups exact totals by
   currency/recurrence. Includes as-of/detail/history reads and revision-checked
   saved amount corrections. See [dated outgoing plans](../docs/budget-plans-ui-slice.md).
+  Outgoings overview combines effective saved amounts with separately labelled
+  current payment schedules, exact totals by currency/recurrence, and local
+  search/category/retirement filters. See [overview](../docs/outgoings-overview-ui-slice.md).
 - Modelling: snapshot-based native-currency scenarios, multiple loan payoffs,
   reusable/default presets, real/nominal display, growth breakdown and expense targets.
   See the [current modelling guide](../docs/modelling.md).

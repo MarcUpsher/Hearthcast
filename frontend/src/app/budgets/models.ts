@@ -34,6 +34,11 @@ export interface BudgetPlan {
 }
 export interface BudgetHistory { records: BudgetPlan[]; nextBefore: string | null; pageSize: number; }
 export interface BudgetEffective { asOf: string; snapshot: BudgetPlan; effectiveUntilExclusive: string | null; }
+export interface CurrentOutgoing { item: BudgetItem; entry: BudgetEntry | null; }
+export interface CurrentOutgoings {
+  asOf: string; snapshotId: string | null; effectiveFrom: string | null;
+  effectiveUntilExclusive: string | null; isComplete: boolean | null; items: CurrentOutgoing[];
+}
 export type BudgetMode = "Carry" | "Confirm" | "Unrecorded";
 export interface PlanRow {
   item: BudgetItem; context: BudgetEntry; source: BudgetEntry | null;

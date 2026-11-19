@@ -16,6 +16,7 @@ import { SpendingItems } from "./spending/items";
 import { SpendingRecords } from "./spending/records";
 import { RegularOutgoings } from "./budgets/outgoings";
 import { OutgoingPlans } from "./budgets/plans";
+import { OutgoingOverview } from "./budgets/overview";
 import { budgetItem } from "../testing/budgets";
 import { SpendingSummary } from "./spending/summary";
 import { spendingDraft, spendingEntry, spendingItem, spendingRecord } from "../testing/spending";
@@ -31,6 +32,7 @@ async function setup(path: string, history = false) {
   }));
   const get = vi.fn(async (path: string) => {
     if (path === "households") return households;
+    if (path.includes("/budgets/current-outgoings?")) return { asOf: new URL(path, "http://test/").searchParams.get("asOf"), snapshotId: null, effectiveFrom: null, effectiveUntilExclusive: null, isComplete: null, items: [] };
     if (path.includes("/budgets/snapshots/effective?") || path.includes("/budgets/snapshots/copy-source?")) return null;
     if (path.includes("/budgets/snapshots?")) return { records: [], nextBefore: null, pageSize: 25 };
     if (path.includes("/budgets/items?")) return [budgetItem(path.split("/")[1])];
@@ -311,6 +313,15 @@ it("opens Spending by category from feature navigation and changes household wit
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
   await choose("second");
   expect(workspace.current()?.id).toBe("second"); expect(confirm).not.toHaveBeenCalled(); expect(send).not.toHaveBeenCalled();
+});
+
+it("opens the outgoing overview from feature navigation and switches households without draft prompts", async () => {
+  const { fixture, page, choose, workspace, send } = await setup("/spending/overview");
+  expect(page).toBeInstanceOf(OutgoingOverview);
+  expect(fixture.nativeElement.querySelector('a[href="/spending/overview"]').classList.contains("active")).toBe(true);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false); await choose("second");
+  expect(workspace.current()?.id).toBe("second"); expect(confirm).not.toHaveBeenCalled(); expect(send).not.toHaveBeenCalled();
+  expect(await TestBed.inject(Router).navigateByUrl("/spending/plans")).toBe(true);
 });
 
 it("guards an item creation dialog on browser Back and household changes without losing the purchase", async () => {
