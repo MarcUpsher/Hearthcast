@@ -38,14 +38,16 @@
     <section class="panel" aria-labelledby="record-title"><h2 id="record-title">Record · {{ record.merchantName }}</h2>
       <p>{{ date(record.spendingDate) }} · {{ record.kind }}{{ record.isVoided ? ' · Voided' : '' }} · {{ record.currencyCode }}</p>
       <p><strong>Recorded spending total: {{ money(record.totalAmount, record.currencyCode, record.currencyMinorUnits) }}</strong></p>
-      @if (record.discounts?.length) { <p>Item lines: {{ money(record.grossAmount!, record.currencyCode, record.currencyMinorUnits) }} · Receipt discounts: −{{ money(record.discountAmount!, record.currencyCode, record.currencyMinorUnits) }}</p> }
+      @if (costLines(record).length || record.discounts?.length) {
+        <p>Items / category amounts: {{ money(record.purchaseAmount ?? record.grossAmount!, record.currencyCode, record.currencyMinorUnits) }} · Additional costs: +{{ money(record.additionalCostAmount ?? 0, record.currencyCode, record.currencyMinorUnits) }} · Receipt discounts: −{{ money(record.discountAmount ?? 0, record.currencyCode, record.currencyMinorUnits) }}</p>
+      }
       @if (record.isVoided) { <p class="notice">Voided records are retained but count as zero toward spending.</p> }
       @if (record.receiptTotal !== null) {
         <p>Receipt total: {{ money(record.receiptTotal, record.currencyCode, record.currencyMinorUnits) }}</p>
-        @if (record.reconciliationStatus === 'Unreconciled') { <p class="notice">Receipt mismatch: {{ money(record.receiptDifference!, record.currencyCode, record.currencyMinorUnits) }} (receipt minus recorded total). Lines less assigned receipt discounts are counted.</p> }
+        @if (record.reconciliationStatus === 'Unreconciled') { <p class="notice">Receipt mismatch: {{ money(record.receiptDifference!, record.currencyCode, record.currencyMinorUnits) }} (receipt minus recorded total). Items and additional costs less assigned receipt discounts are counted.</p> }
       } @else { <p class="muted">Receipt total was not supplied; reconciliation is unchecked.</p> }
       <ul class="detail-lines">
-        @for (line of record.lines; track line.id) {
+        @for (line of purchaseLines(record); track line.id) {
           <li><strong>{{ line.expenseCategoryName }} · {{ money(line.netAmount, record.currencyCode, record.currencyMinorUnits) }}</strong>
             @if (line.itemName) { <p>{{ line.itemCode }} · {{ line.itemName }}
               @if (line.quantity !== null && line.unitPrice !== null) { · {{ line.quantity }} {{ line.unitLabel }} @ {{ line.unitPrice }} each }
@@ -57,6 +59,14 @@
           </li>
         }
       </ul>
+      @if (costLines(record).length) {
+        <h3>Additional costs</h3><ul class="detail-lines" aria-label="Additional costs">@for (cost of costLines(record); track cost.id) {
+          <li><strong>{{ cost.expenseCategoryName }} · {{ money(cost.netAmount, record.currencyCode, record.currencyMinorUnits) }}</strong><p>{{ cost.description }}</p>
+            @if (cost.merchantItemReference) { <p>Receipt reference: {{ cost.merchantItemReference }}</p> }
+            @if (cost.notes) { <p class="notes">{{ cost.notes }}</p> }
+          </li>
+        }</ul>
+      }
       @if (record.discounts?.length) {
         <h3>Receipt discounts</h3><ul class="detail-lines">@for (discount of record.discounts; track discount.id) {
           <li><strong>{{ discount.expenseCategoryName }} · −{{ money(discount.amount, record.currencyCode, record.currencyMinorUnits) }}</strong>@if (discount.description) { <p>{{ discount.description }}</p> }</li>

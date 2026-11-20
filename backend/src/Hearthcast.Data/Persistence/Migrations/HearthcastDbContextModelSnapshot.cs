@@ -1436,6 +1436,11 @@ namespace Hearthcast.Data.Persistence.Migrations
                     b.Property<Guid>("HouseholdId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsAdditionalCost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("ItemCode")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -1494,6 +1499,8 @@ namespace Hearthcast.Data.Persistence.Migrations
 
                     b.ToTable("SpendingLines", null, t =>
                         {
+                            t.HasCheckConstraint("CK_SpendingLines_AdditionalCost", "NOT \"IsAdditionalCost\" OR (\"NetAmount\" > 0 AND \"Description\" IS NOT NULL\n    AND \"SpendingItemId\" IS NULL AND \"UnitKey\" IS NULL AND \"UnitLabel\" IS NULL\n    AND \"Quantity\" IS NULL AND \"UnitPrice\" IS NULL)");
+
                             t.HasCheckConstraint("CK_SpendingLines_CategoryName", "length(\"ExpenseCategoryName\") > 0 AND \"ExpenseCategoryName\" = btrim(\"ExpenseCategoryName\", U&'\\0009\\000A\\000B\\000C\\000D\\0020\\0085\\00A0\\1680\\2000\\2001\\2002\\2003\\2004\\2005\\2006\\2007\\2008\\2009\\200A\\2028\\2029\\202F\\205F\\3000')");
 
                             t.HasCheckConstraint("CK_SpendingLines_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$' AND \"CurrencyMinorUnits\" BETWEEN 0 AND 6");

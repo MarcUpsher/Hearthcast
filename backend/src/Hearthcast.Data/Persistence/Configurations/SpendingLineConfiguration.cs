@@ -10,6 +10,11 @@ public sealed class SpendingLineConfiguration : IEntityTypeConfiguration<Spendin
     {
         builder.ToTable("SpendingLines", table =>
         {
+            table.HasCheckConstraint("CK_SpendingLines_AdditionalCost", """
+                NOT "IsAdditionalCost" OR ("NetAmount" > 0 AND "Description" IS NOT NULL
+                    AND "SpendingItemId" IS NULL AND "UnitKey" IS NULL AND "UnitLabel" IS NULL
+                    AND "Quantity" IS NULL AND "UnitPrice" IS NULL)
+                """);
             table.HasCheckConstraint("CK_SpendingLines_Position", "\"Position\" > 0");
             table.HasCheckConstraint("CK_SpendingLines_Currency", "\"CurrencyCode\" ~ '^[A-Z]{3}$' AND \"CurrencyMinorUnits\" BETWEEN 0 AND 6");
             table.HasCheckConstraint("CK_SpendingLines_NetAmount", "\"NetAmount\" >= 0 AND \"NetAmount\" < 1000000000000 AND \"NetAmount\" = round(\"NetAmount\", \"CurrencyMinorUnits\")");
@@ -34,6 +39,7 @@ public sealed class SpendingLineConfiguration : IEntityTypeConfiguration<Spendin
         });
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.Property(l => l.IsAdditionalCost).HasDefaultValue(false);
         builder.HasAlternateKey(l => new { l.HouseholdId, l.Id });
         builder.HasIndex(l => new { l.SpendingRecordId, l.Position }).IsUnique().HasDatabaseName("UX_SpendingLines_RecordPosition");
         builder.Property(l => l.CurrencyCode).HasMaxLength(3).IsRequired();

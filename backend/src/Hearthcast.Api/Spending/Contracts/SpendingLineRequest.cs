@@ -20,6 +20,7 @@ public sealed record SpendingLineRequest : IValidatableObject
     [JsonConverter(typeof(PromotionStatusJsonConverter))]
     public PromotionStatus PromotionStatus { get; init; } = PromotionStatus.Unknown;
     public string? Notes { get; init; }
+    public bool IsAdditionalCost { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -31,5 +32,5 @@ public sealed record SpendingLineRequest : IValidatableObject
     }
 
     internal SpendingLineValues ToValues() => new(ExpenseCategoryId!.Value, NetAmount!.Value, SpendingItemId,
-        Quantity, UnitPrice, UnitKey, UnitLabel, Description, ReceiptDescription, MerchantItemReference, PromotionStatus, Notes);
+        Quantity, UnitPrice, UnitKey, UnitLabel, Description, ReceiptDescription, MerchantItemReference, PromotionStatus, Notes, IsAdditionalCost);
 }

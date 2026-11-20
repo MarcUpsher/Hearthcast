@@ -245,7 +245,7 @@ public sealed class SpendingRecordService(IDbContextFactory<HearthcastDbContext>
             throw new ResourceNotFoundException("A line category or item does not belong to this household.");
         return values.Select(l => new SpendingLineInput(categories[l.ExpenseCategoryId], l.NetAmount,
             l.SpendingItemId.HasValue ? items[l.SpendingItemId.Value] : null, l.Quantity, l.UnitPrice,
-            l.UnitKey, l.UnitLabel, l.Description, l.ReceiptDescription, l.MerchantItemReference, l.PromotionStatus, l.Notes)).ToArray();
+            l.UnitKey, l.UnitLabel, l.Description, l.ReceiptDescription, l.MerchantItemReference, l.PromotionStatus, l.Notes, l.IsAdditionalCost)).ToArray();
     }
 
     private static async Task<Dictionary<Guid, Guid>> DetachSourcesAsync(HearthcastDbContext context, Guid householdId,

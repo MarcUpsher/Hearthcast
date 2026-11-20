@@ -48,6 +48,7 @@ export interface SpendingLastPrice {
   quantity: number; unitPrice: number; netAmount: number; effectiveUnitPrice: number; promotionStatus: SpendingPromotion; hasReceiptDiscount: boolean;
 }
 export interface SpendingCaptureLine {
+  isAdditionalCost?: boolean;
   expenseCategoryId: string;
   netAmount: number;
   spendingItemId?: string;
@@ -84,6 +85,7 @@ export interface SpendingReplacementRequest {
   notes: string | null;
 }
 export interface SpendingRecordedLine {
+  isAdditionalCost?: boolean;
   id: string; position: number; expenseCategoryId: string; expenseCategoryName: string;
   spendingItemId: string | null; itemCode: string | null; itemName: string | null;
   unitKey: string | null; unitLabel: string | null; quantity: number | null; unitPrice: number | null;
@@ -100,6 +102,7 @@ export interface SpendingRecord {
   reconciliationStatus: "NotChecked" | "Reconciled" | "Unreconciled";
   lines: SpendingRecordedLine[];
   discounts?: SpendingRecordedDiscount[]; grossAmount?: number; discountAmount?: number;
+  purchaseAmount?: number; additionalCostAmount?: number;
 }
 export interface SpendingHistoryPage { records: SpendingRecord[]; nextCursor: string | null; pageSize: number; }
 

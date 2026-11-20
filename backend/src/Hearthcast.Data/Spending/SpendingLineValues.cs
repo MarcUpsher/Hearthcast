@@ -4,4 +4,4 @@ public sealed record SpendingLineValues(Guid ExpenseCategoryId, decimal NetAmoun
     Guid? SpendingItemId = null, decimal? Quantity = null, decimal? UnitPrice = null,
     string? UnitKey = null, string? UnitLabel = null, string? Description = null,
     string? ReceiptDescription = null, string? MerchantItemReference = null,
-    PromotionStatus PromotionStatus = PromotionStatus.Unknown, string? Notes = null);
+    PromotionStatus PromotionStatus = PromotionStatus.Unknown, string? Notes = null, bool IsAdditionalCost = false);

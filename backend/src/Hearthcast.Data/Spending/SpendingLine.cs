@@ -29,6 +29,9 @@ public sealed class SpendingLine
         if ((UnitKey is null) != (UnitLabel is null) || (input.Quantity.HasValue && UnitKey is null))
             throw new InvalidValueException("A quantity needs a unit key and label; unit metadata must be supplied together.");
         Description = SpendingSetupRules.Notes(input.Description);
+        IsAdditionalCost = input.IsAdditionalCost;
+        if (IsAdditionalCost && (SpendingItemId.HasValue || UnitKey is not null || Description is null))
+            throw new InvalidValueException("Additional costs need a description and cannot have catalogue items or units.");
         ReceiptDescription = SpendingSetupRules.Notes(input.ReceiptDescription);
         MerchantItemReference = SpendingSetupRules.Notes(input.MerchantItemReference);
         CorrectValues(input.NetAmount, input.Quantity, input.UnitPrice, input.PromotionStatus, input.Notes);
@@ -53,6 +56,7 @@ public sealed class SpendingLine
     public decimal? Quantity { get; private set; }
     public decimal? UnitPrice { get; private set; }
     public decimal NetAmount { get; private set; }
+    public bool IsAdditionalCost { get; private set; }
     public PromotionStatus PromotionStatus { get; private set; }
     public string? Notes { get; private set; }
 
@@ -61,6 +65,8 @@ public sealed class SpendingLine
     {
         var amount = SpendingValueRules.Amount(netAmount, CurrencyMinorUnits);
         SpendingValueRules.Units(quantity, unitPrice);
+        if (IsAdditionalCost && (amount <= 0 || quantity.HasValue || unitPrice.HasValue))
+            throw new InvalidValueException("Additional costs must be positive amounts without quantity or unit price.");
         if (quantity.HasValue && UnitKey is null)
             throw new InvalidValueException("Quantity needs a saved unit.");
         if (!Enum.IsDefined(promotionStatus)) throw new InvalidValueException("Select a valid promotion status.");

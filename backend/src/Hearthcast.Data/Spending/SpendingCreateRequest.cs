@@ -56,6 +56,15 @@ internal static class SpendingCreateRequest
             versionTwo["Discounts"] = JsonSerializer.SerializeToNode(discounts.Select(d => new { d.ExpenseCategoryId, Amount = Number(d.Amount), d.Description }).ToArray());
             bytes = JsonSerializer.SerializeToUtf8Bytes(versionTwo);
         }
+        var costPositions = lines.Select((line, index) => (line, position: index + 1))
+            .Where(x => x.line.IsAdditionalCost).Select(x => x.position).ToArray();
+        if (costPositions.Length > 0)
+        {
+            // Versions one and two stay byte-for-byte compatible when every flag is false.
+            var versionThree = JsonNode.Parse(bytes)!; versionThree["Version"] = 3;
+            versionThree["AdditionalCostLinePositions"] = JsonSerializer.SerializeToNode(costPositions);
+            bytes = JsonSerializer.SerializeToUtf8Bytes(versionThree);
+        }
         return (copy, choices, Convert.ToHexStringLower(SHA256.HashData(bytes)));
     }
 

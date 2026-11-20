@@ -14,6 +14,12 @@ Scoped foreign keys and row constraints protect currency, precision, text, amoun
 and positions. Aggregate writes require each discounted category to have lines
 and the combined discount not to exceed those lines. Zero net spending is valid.
 
+The subsequent [additional-costs slice](spending-additional-costs-slice.md) marks
+delivery/handling charges as ordinary categorised lines. GrossAmount continues to
+include all lines; purchase and additional-cost subtotals are also exposed. The
+new flag preserves versions one and two when absent/false; flagged costs use a
+version-three create hash.
+
 - `GrossAmount` is the sum of saved line `NetAmount` values.
 - `DiscountAmount` is the sum of receipt discounts.
 - `TotalAmount` is gross minus discounts; reconciliation compares this to the

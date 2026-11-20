@@ -20,6 +20,8 @@ const emptyPage = (): SpendingHistoryPage => ({ records: [], nextCursor: null, p
 })
 export class SpendingRecords {
   readonly w = inject(Workspace);
+  purchaseLines(record: SpendingRecord) { return record.lines.filter(line => !line.isAdditionalCost); }
+  costLines(record: SpendingRecord) { return record.lines.filter(line => line.isAdditionalCost); }
   private readonly api = inject(Api);
   readonly capture = viewChild(SpendingCapture);
   private home: string | null = null;

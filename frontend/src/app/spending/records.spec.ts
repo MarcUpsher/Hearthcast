@@ -43,6 +43,15 @@ describe("Spending history and records", () => {
     await vi.waitFor(() => { expect(c.lookupLoading()).toBe(false); expect(c.historyLoading()).toBe(false); });
     await settle(); return c;
   }
+  it("shows additional costs once in their own section with the correct recorded total", async () => {
+    const c = await page(), record = spendingRecord("first", { purchaseAmount: 10, additionalCostAmount: 3.99, grossAmount: 13.99, discountAmount: 0, totalAmount: 13.99, countedAmount: 13.99 });
+    record.lines.push({ ...record.lines[0], id: "cost", position: 2, isAdditionalCost: true, netAmount: 3.99, description: "Express delivery" });
+    c.view(record); await settle(); const section = fixture.nativeElement.querySelector('[aria-label="Additional costs"]');
+    expect(section.textContent).toContain("Express delivery"); expect(section.querySelectorAll("li")).toHaveLength(1);
+    expect(fixture.nativeElement.textContent.split("Express delivery")).toHaveLength(2);
+    expect(fixture.nativeElement.textContent).toContain("Recorded spending total: GBP 13.99");
+    expect(c.purchaseLines(record)).toHaveLength(1);
+  });
   it("reads setup and bounded history without writing and displays saved rather than current names", async () => {
     const c = await page();
     expect(get).toHaveBeenCalledTimes(5);

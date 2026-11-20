@@ -48,6 +48,8 @@ public sealed class SpendingRecordConfiguration : IEntityTypeConfiguration<Spend
         builder.Ignore(r => r.IsVoided);
         builder.Ignore(r => r.TotalAmount);
         builder.Ignore(r => r.GrossAmount);
+        builder.Ignore(r => r.PurchaseAmount);
+        builder.Ignore(r => r.AdditionalCostAmount);
         builder.Ignore(r => r.DiscountAmount);
         builder.Ignore(r => r.CountedAmount);
         builder.Ignore(r => r.ReceiptDifference);

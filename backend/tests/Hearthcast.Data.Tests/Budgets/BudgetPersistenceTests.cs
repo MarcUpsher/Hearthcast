@@ -517,7 +517,22 @@ public sealed class BudgetPersistenceTests : IAsyncLifetime
         await using var context = _database.CreateDbContext();
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync("20261117130910_AddSpendingRecords");
-        context.AddRange(home, category, merchant, receipt); await context.SaveChangesAsync();
+        context.AddRange(home, category, merchant); await context.SaveChangesAsync();
+        // Seed the historical schema explicitly: today's line mapping also reads
+        // IsAdditionalCost, which did not exist at this migration checkpoint.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SpendingRecords" ("Id", "HouseholdId", "Kind", "SpendingDate", "MerchantId", "MerchantName",
+                "CurrencyCode", "CurrencyMinorUnits", "CreatedAtUtc", "UpdatedAtUtc", "Revision", "CreationRequestHash")
+            VALUES ({receipt.Id}, {home.Id}, {(int)receipt.Kind}, {receipt.SpendingDate}, {merchant.Id}, {merchant.Name},
+                {receipt.CurrencyCode}, {receipt.CurrencyMinorUnits}, {receipt.CreatedAtUtc}, {receipt.UpdatedAtUtc},
+                {receipt.Revision}, {receipt.CreationRequestHash})
+            """);
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "SpendingLines" ("Id", "HouseholdId", "SpendingRecordId", "Position", "CurrencyCode",
+                "CurrencyMinorUnits", "ExpenseCategoryId", "ExpenseCategoryName", "NetAmount", "PromotionStatus")
+            VALUES ({receipt.Lines[0].Id}, {home.Id}, {receipt.Id}, 1, {receipt.CurrencyCode}, {receipt.CurrencyMinorUnits},
+                {category.Id}, {category.Name}, 12.50, 1)
+            """);
         await migrator.MigrateAsync();
         var d = await SeedAsync();
         await CarryAsync(d);
@@ -530,6 +545,7 @@ public sealed class BudgetPersistenceTests : IAsyncLifetime
         Assert.Equal(receipt.Revision, saved.Revision);
         Assert.Equal(receipt.CreationRequestHash, saved.CreationRequestHash);
         Assert.Equal(12.50m, saved.CountedAmount);
+        Assert.False(saved.Lines.Single().IsAdditionalCost);
         Assert.Empty(await context.BudgetSnapshots.ToArrayAsync());
     }
 }

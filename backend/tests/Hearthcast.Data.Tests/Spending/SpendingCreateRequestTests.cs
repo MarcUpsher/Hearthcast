@@ -5,6 +5,24 @@ namespace Hearthcast.Data.Tests.Spending;
 
 public sealed class SpendingCreateRequestTests
 {
+    [Fact]
+    public void VersionTwoDiscountHashStaysCompatibleAndChargeClassificationIsPartOfVersionThreeIntent()
+    {
+        // Independently hashed ordered version-two JSON, with no additional-cost positions.
+        const string expected = "6744495bfcfec478fe7923c540b926b0365b2c6b1f6405ff04f74ffc728a7971";
+        var home = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var id = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var merchant = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var category = Guid.Parse("44444444-4444-4444-4444-444444444444");
+        var line = new SpendingLineValues(category, 45.98m, Description: "Delivery");
+        var values = new SpendingRecordValues(merchant, new(2026, 11, 19), "GBP", [line], ReceiptTotal: 43.88m,
+            Discounts: [new(category, 2.10m, "Offer")]);
+        Assert.Equal(expected, SpendingCreateRequest.Freeze(home, id, values, null).Hash);
+        var cost = values with { Lines = [line with { IsAdditionalCost = true }] };
+        Assert.NotEqual(expected, SpendingCreateRequest.Freeze(home, id, cost, null).Hash);
+        Assert.Equal(SpendingCreateRequest.Freeze(home, id, cost, null).Hash,
+            SpendingCreateRequest.Freeze(home, id, cost with { Lines = [line with { IsAdditionalCost = true, NetAmount = 45.9800m, Description = " Delivery " }] }, []).Hash);
+    }
     [Theory]
     [InlineData("en-GB")]
     [InlineData("fr-FR")]

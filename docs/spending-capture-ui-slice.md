@@ -109,3 +109,9 @@ The [receipt discounts and last-price slice](receipt-discounts-and-last-price-sl
 extends this contract with category deductions, net recorded totals and explicit
 historical price assistance. Earlier verification counts above describe their
 original checkpoints.
+
+## Additional purchase costs
+
+The [additional-costs slice](spending-additional-costs-slice.md) adds a dedicated
+section for category-assigned delivery/handling charges, a visible amount
+breakdown, and persistent grouping in history and purchase editing.

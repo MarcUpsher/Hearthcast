@@ -106,7 +106,7 @@ historical records save their own copies.
 | SpendingItem | Id, HouseholdId, Code, Name, ExpenseCategoryId, UnitKey, UnitLabel, Notes?, IsRetired | Reusable eggs/milk/clothing or payment description. Usual prices live in SpendingItemMerchantPrice. |
 | SpendingItemMerchantPrice | Id, HouseholdId, SpendingItemId, MerchantId, CurrencyCode, UnitKey, UnitLabel, UsualUnitPrice, SourceSpendingLineId?, UpdatedAtUtc, Revision | Explicitly remembered usual price for this item at this merchant in this currency and unit. |
 | SpendingRecord | Id, HouseholdId, Kind, SpendingDate, MerchantId, MerchantName, CurrencyCode, CurrencyMinorUnits, ExternalReference?, Notes?, ReceiptTotal?, OriginalSpendingRecordId?, OriginalSpendingRecordKind?, CreatedAtUtc, UpdatedAtUtc, Revision, CreationRequestHash, VoidedAtUtc? | One purchase/payment or refund. Saved precision protects history; companion original kind enforces a Payment FK. Client-generated Id supports later service-level retries. |
-| SpendingLine | Id, HouseholdId, SpendingRecordId, Position, CurrencyCode, CurrencyMinorUnits, SpendingItemId?, ItemCode?, ItemName?, Description?, ExpenseCategoryId, ExpenseCategoryName, UnitKey?, UnitLabel?, ReceiptDescription?, MerchantItemReference?, Quantity?, UnitPrice?, NetAmount, PromotionStatus, Notes? | Categorised amount, optionally linked to a catalogue item. A composite FK matches parent currency/precision. PromotionStatus is Unknown, Yes or No. |
+| SpendingLine | Id, HouseholdId, SpendingRecordId, Position, CurrencyCode, CurrencyMinorUnits, SpendingItemId?, ItemCode?, ItemName?, Description?, ExpenseCategoryId, ExpenseCategoryName, UnitKey?, UnitLabel?, ReceiptDescription?, MerchantItemReference?, Quantity?, UnitPrice?, NetAmount, IsAdditionalCost, PromotionStatus, Notes? | Categorised amount, optionally linked to a catalogue item. Additional costs are positive, described amounts without an item or units. A composite FK matches parent currency/precision. PromotionStatus is Unknown, Yes or No. |
 | SpendingDiscount | Id, HouseholdId, SpendingRecordId, Position, ExpenseCategoryId, ExpenseCategoryName, CurrencyCode, CurrencyMinorUnits, Amount, Description? | Positive receipt-level deduction assigned to an existing line category; never allocated to item prices. |
 | BudgetItem | Id, HouseholdId, Code, Name, ExpenseCategoryId, MerchantId?, CurrencyCode, Frequency, IntervalCount, Notes?, IsRetired | Reusable outgoing or allowance. No stored cost or required fixed/variable classification on the base item. |
 | BudgetSnapshot | Id, HouseholdId, EffectiveFrom, Notes?, CreatedAtUtc, UpdatedAtUtc, Revision, CreationRequestHash, CopiedFromBudgetSnapshotId? | Complete plan, effective until the next plan begins. |
@@ -208,7 +208,9 @@ record later may change its category breakdown, but must not duplicate spending.
    in entry/history views. Reports sum lines less assigned receipt discounts. A
    missing ReceiptTotal means Not checked, not Reconciled; matching totals mean Reconciled. Derive this
    status rather than storing an independently editable flag.
-   Delivery, fees and other charges can be explicitly categorised lines.
+   Delivery, fees and other charges are explicitly categorised lines, marked
+   IsAdditionalCost so they remain grouped separately when reopening a purchase.
+   Their amounts are added before subtracting receipt discounts.
 6. Save the header, lines and discounts atomically with revision checking for
    corrections.
 

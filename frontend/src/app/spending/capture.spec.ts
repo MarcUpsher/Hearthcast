@@ -44,6 +44,51 @@ describe("Spending purchase capture", () => {
   }
   const button = (text: string) => TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(MatButtonHarness.with({ text }));
 
+  it("adds a separate delivery charge through the form and reconciles the VetUK example", async () => {
+    const c = await page(); quick(c, "45.98"); c.set("receiptTotal", "49.97"); await settle();
+    await (await button("Add additional cost")).click(); const cost = c.costLines()[0];
+    expect(cost.categoryId).toBe("first-food"); const loader = TestbedHarnessEnvironment.loader(fixture);
+    await (await loader.getHarness(MatInputHarness.with({ selector: '[name="cost-description-' + cost.key + '"]' }))).setValue("Delivery");
+    await (await loader.getHarness(MatInputHarness.with({ selector: '[name="cost-amount-' + cost.key + '"]' }))).setValue("3.99");
+    expect(c.purchaseLines()).toHaveLength(1); expect(c.costLines()).toHaveLength(1);
+    expect(c.purchaseTotal()).toBe("45.98"); expect(c.costTotal()).toBe("3.99"); expect(c.total()).toBe("49.97"); expect(c.difference()).toBe("0.00");
+    await c.save(); expect(send.mock.calls[0][2].lines).toHaveLength(2);
+    expect(send.mock.calls[0][2].lines[1]).toMatchObject({ isAdditionalCost: true, netAmount: 3.99, description: "Delivery", expenseCategoryId: "first-food" });
+    expect(send.mock.calls[0][2].lines[0].netAmount).toBe(45.98); expect(send.mock.calls[0][2].lines[1].spendingItemId).toBeUndefined();
+    expect(c.costLines()).toHaveLength(0); expect(c.hasUnsavedChanges()).toBe(false);
+  });
+  it.each(["0", "-1", "0.001", ""])("rejects incomplete or invalid additional cost %s", async amount => {
+    const c = await page(); quick(c); c.addCost(); const cost = c.costLines()[0];
+    c.changeLine(cost.key, "description", "Delivery"); c.changeLine(cost.key, "amount", amount);
+    expect(c.valid()).toBe(false); await c.save(); expect(send).not.toHaveBeenCalled();
+  });
+  it("requires a cost description and category and allows multiple explicitly assigned charges plus discounts", async () => {
+    const c = await page(); quick(c); c.addLine("category"); const other = c.purchaseLines()[1]; c.changeLine(other.key, "categoryId", "delivery"); c.changeLine(other.key, "amount", "1");
+    c.addCost(); const cost = c.costLines()[0]; expect(cost.categoryId).toBe(""); c.changeLine(cost.key, "amount", "3.99"); expect(c.valid()).toBe(false);
+    c.changeLine(cost.key, "description", "Delivery"); c.changeLine(cost.key, "categoryId", "delivery"); expect(c.valid()).toBe(true);
+    c.addCost(); const second = c.costLines()[1]; c.changeLine(second.key, "description", "Handling"); c.changeLine(second.key, "categoryId", "first-food"); c.changeLine(second.key, "amount", "1");
+    c.addDiscount(); const discount = c.draft().discounts[0]; c.changeDiscount(discount.key, "categoryId", "delivery"); c.changeDiscount(discount.key, "amount", "2");
+    expect(c.total()).toBe("13.99"); expect(c.valid()).toBe(true); c.removeLine(second.key); expect(c.total()).toBe("12.99");
+  });
+  it("restores charges to their own section and uses a narrow amount correction", async () => {
+    const record = spendingRecord(); record.lines.push({ ...record.lines[0], id: "delivery-line", position: 2, isAdditionalCost: true, description: "Delivery", netAmount: 3.99 });
+    const c = await edit(record); expect(c.costLines()[0].description).toBe("Delivery"); expect(c.purchaseLines()).toHaveLength(1); expect(c.hasUnsavedChanges()).toBe(false);
+    c.changeLine("delivery-line", "amount", "4.99"); expect(c.editOperation().kind).toBe("line"); await c.save();
+    expect(send.mock.calls[0][1]).toBe("households/first/spending/records/record/lines/delivery-line"); expect(send.mock.calls[0][2].netAmount).toBe(4.99);
+  });
+  it("preserves charges on header changes and sends their classification in replacements", async () => {
+    const record = spendingRecord(); record.lines.push({ ...record.lines[0], id: "charge", position: 2, isAdditionalCost: true, description: "Delivery", netAmount: 3.99 });
+    const c = await edit(record); c.set("notes", "Updated"); expect(c.editOperation().kind).toBe("header");
+    c.changeLine("charge", "description", "Express delivery"); expect(c.editOperation().kind).toBe("replace"); await c.save();
+    expect(send.mock.calls[0][2].lines[1]).toMatchObject({ isAdditionalCost: true, description: "Express delivery", netAmount: 3.99 });
+  });
+  it("locks charges into exact retries and includes them in dirty and currency guards", async () => {
+    const c = await page(); quick(c); c.addCost(); const cost = c.costLines()[0]; c.changeLine(cost.key, "description", "Delivery"); c.changeLine(cost.key, "amount", "3.99");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false); expect(c.canLeave()).toBe(false); c.setCurrency("EUR"); expect(c.draft().currencyCode).toBe("GBP");
+    send.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 })); await c.save(); const body = structuredClone(send.mock.calls[0][2]);
+    c.changeLine(cost.key, "amount", "5"); c.removeLine(cost.key); c.addCost(); await c.save(); expect(send.mock.calls[1][2]).toEqual(body); expect(confirm).toHaveBeenCalled();
+  });
+
   it("captures a quick category amount with explicit currency, date, notes and safe client identity", async () => {
     const c = await page();
     expect(c.hasUnsavedChanges()).toBe(false);

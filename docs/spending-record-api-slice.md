@@ -153,3 +153,11 @@ until backend workflows are established.
 See the [receipt discounts and last-price slice](receipt-discounts-and-last-price-slice.md)
 for optional capture discounts, replacement omission/empty/null behaviour, net
 response amounts, discount-only correction and historical-price discount flags.
+
+## Additional purchase costs
+
+The [additional-costs slice](spending-additional-costs-slice.md) adds optional
+`isAdditionalCost` to capture/replacement lines and returns the saved flag plus
+`purchaseAmount`/`additionalCostAmount` subtotals. Charges count once through
+existing line aggregation. Unflagged create requests preserve their original
+hashes; flagged costs use version three.

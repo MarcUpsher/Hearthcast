@@ -15,7 +15,7 @@ import { decimalAmount, localToday, minorAmount, safeAmount, suggestedAmount, sp
 import { SpendingItemCreate, SpendingItemCreateData } from "./item-create";
 
 export interface CaptureLineDraft {
-  kind: "item" | "category";
+  kind: "item" | "category" | "cost";
   key: string; itemId: string; categoryId: string; quantity: string; unitPrice: string; amount: string;
   description: string; reference: string; promotion: SpendingPromotion;
   autoAmount: boolean; priceTouched: boolean;
@@ -207,6 +207,13 @@ export class SpendingCapture {
     if (!this.locked()) this.updateLine(key, line => this.recalculate({ ...line, autoAmount: true }));
   }
   addLine(kind: CaptureLineDraft["kind"] = "item") { if (!this.locked()) this.draft.update(draft => ({ ...draft, lines: [...draft.lines, newLine(kind)] })); }
+  purchaseLines() { return this.draft().lines.filter(line => line.kind !== "cost"); }
+  costLines() { return this.draft().lines.filter(line => line.kind === "cost"); }
+  addCost() {
+    if (this.locked()) return;
+    const categories = [...new Set(this.purchaseLines().map(line => line.categoryId).filter(Boolean))];
+    this.draft.update(draft => ({ ...draft, lines: [...draft.lines, { ...newLine("cost"), categoryId: categories.length === 1 ? categories[0] : "" }] }));
+  }
   removeLine(key: string) {
     if (this.locked() || this.draft().lines.length === 1) return;
     this.draft.update(draft => ({ ...draft, lines: draft.lines.filter(line => line.key !== key) }));
@@ -272,10 +279,13 @@ export class SpendingCapture {
     if (!this.locked()) { this.draft.update(draft => ({ ...draft, discounts: draft.discounts.map(discount => discount.key === key ? { ...discount, [field]: value } : discount) })); this.error.set(""); }
   }
   removeDiscount(key: string) { if (!this.locked()) this.draft.update(draft => ({ ...draft, discounts: draft.discounts.filter(discount => discount.key !== key) })); }
-  gross() {
+  purchaseTotal() { return this.lineTotal(this.purchaseLines()); }
+  costTotal() { return this.lineTotal(this.costLines()); }
+  gross() { return this.lineTotal(this.draft().lines); }
+  private lineTotal(lines: CaptureLineDraft[]) {
     const places = this.minorUnits(); if (places === null) return "";
     let total = 0n;
-    for (const line of this.draft().lines) { const value = minorAmount(line.amount, places); if (value === null) return ""; total += value; }
+    for (const line of lines) { const value = minorAmount(line.amount, places); if (value === null) return ""; total += value; }
     return decimalAmount(total, places);
   }
   discountTotal() {
@@ -314,7 +324,7 @@ export class SpendingCapture {
     const draft = this.draft(), places = this.minorUnits();
     if (!this.home || this.w.current()?.id !== this.home || places === null || !draft.merchantId || !validSpendingDate(draft.date) || !draft.lines.length) return false;
     if (draft.receiptTotal && safeAmount(draft.receiptTotal, places, 1e12) === null) return false;
-    return this.discountsValid() && draft.lines.every(line => (line.kind !== "item" || !!line.itemId) && !!line.categoryId && safeAmount(line.amount, places, 1e12) !== null &&
+    return this.discountsValid() && draft.lines.every(line => (line.kind !== "cost" || (!!line.description.trim() && (safeAmount(line.amount, places, 1e12) ?? 0) > 0)) && (line.kind !== "item" || !!line.itemId) && !!line.categoryId && safeAmount(line.amount, places, 1e12) !== null &&
       (!(line.quantity || line.unitPrice || (line.kind === "item" && !this.historicalAmountOnly(line))) ||
         (Number(line.quantity) > 0 && safeAmount(line.quantity, 6, 1e6) !== null && safeAmount(line.unitPrice, 6, 1e9) !== null)));
   }
@@ -330,7 +340,7 @@ export class SpendingCapture {
       externalReference: draft.reference.trim() || null, notes: draft.notes.trim() || null,
       ...(draft.discounts.length ? { discounts: draft.discounts.map(discount => ({ expenseCategoryId: discount.categoryId,
         amount: safeAmount(discount.amount, places, 1e12)!, description: discount.description.trim() || null })) } : {}),
-      lines: draft.lines.map(line => ({ expenseCategoryId: line.categoryId, netAmount: safeAmount(line.amount, places, 1e12)!,
+      lines: draft.lines.map(line => ({ ...(line.kind === "cost" ? { isAdditionalCost: true } : {}), expenseCategoryId: line.categoryId, netAmount: safeAmount(line.amount, places, 1e12)!,
         ...(line.itemId ? { spendingItemId: line.itemId } : {}),
         ...(line.quantity || line.unitPrice ? { quantity: safeAmount(line.quantity, 6, 1e6)!, unitPrice: safeAmount(line.unitPrice, 6, 1e9)! } : {}),
         ...(this.editing() ? { receiptDescription: line.receiptDescription.trim() || null, notes: line.notes.trim() || null,
@@ -465,7 +475,7 @@ export class SpendingCapture {
     const draft: CaptureDraft = record ? { date: record.spendingDate, merchantId: record.merchantId, currencyCode: record.currencyCode,
       receiptTotal: record.receiptTotal === null ? "" : String(record.receiptTotal), reference: record.externalReference ?? "", notes: record.notes ?? "",
       discounts: (record.discounts ?? []).map(discount => ({ key: discount.id, categoryId: discount.expenseCategoryId, amount: String(discount.amount), description: discount.description ?? "" })),
-      lines: record.lines.map(line => ({ ...newLine(line.spendingItemId ? "item" : "category"), key: line.id, itemId: line.spendingItemId ?? "", categoryId: line.expenseCategoryId,
+      lines: record.lines.map(line => ({ ...newLine(line.isAdditionalCost ? "cost" : line.spendingItemId ? "item" : "category"), key: line.id, itemId: line.spendingItemId ?? "", categoryId: line.expenseCategoryId,
         quantity: line.quantity === null ? "" : String(line.quantity), unitPrice: line.unitPrice === null ? "" : String(line.unitPrice), amount: String(line.netAmount),
         description: line.description ?? "", reference: line.merchantItemReference ?? "", promotion: line.promotionStatus,
         receiptDescription: line.receiptDescription ?? "", notes: line.notes ?? "", unitKey: line.unitKey ?? "", unitLabel: line.unitLabel ?? "",

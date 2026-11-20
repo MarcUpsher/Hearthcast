@@ -10,7 +10,8 @@ public sealed record SpendingRecordResponse(Guid Id, Guid HouseholdId,
     DateTimeOffset CreatedAtUtc, DateTimeOffset UpdatedAtUtc, Guid Revision, DateTimeOffset? VoidedAtUtc,
     bool IsVoided, decimal TotalAmount, decimal CountedAmount, decimal? ReceiptDifference,
     string ReconciliationStatus, IReadOnlyList<SpendingLineResponse> Lines,
-    IReadOnlyList<SpendingDiscountResponse> Discounts, decimal GrossAmount, decimal DiscountAmount, bool? OriginalPaymentIsVoided = null)
+    IReadOnlyList<SpendingDiscountResponse> Discounts, decimal GrossAmount, decimal DiscountAmount, bool? OriginalPaymentIsVoided = null,
+    decimal PurchaseAmount = 0, decimal AdditionalCostAmount = 0)
 {
     internal static SpendingRecordResponse From(SpendingRecord record, bool? originalPaymentIsVoided = null) => new(record.Id, record.HouseholdId,
         record.Kind, record.SpendingDate, record.MerchantId, record.MerchantName, record.CurrencyCode,
@@ -18,5 +19,5 @@ public sealed record SpendingRecordResponse(Guid Id, Guid HouseholdId,
         record.OriginalSpendingRecordId, record.CreatedAtUtc, record.UpdatedAtUtc, record.Revision,
         record.VoidedAtUtc, record.IsVoided, record.TotalAmount, record.CountedAmount, record.ReceiptDifference,
         record.ReconciliationStatus, record.Lines.OrderBy(l => l.Position).Select(SpendingLineResponse.From).ToArray(),
-        record.Discounts.OrderBy(d => d.Position).Select(SpendingDiscountResponse.From).ToArray(), record.GrossAmount, record.DiscountAmount, originalPaymentIsVoided);
+        record.Discounts.OrderBy(d => d.Position).Select(SpendingDiscountResponse.From).ToArray(), record.GrossAmount, record.DiscountAmount, originalPaymentIsVoided, record.PurchaseAmount, record.AdditionalCostAmount);
 }

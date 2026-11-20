@@ -61,6 +61,8 @@ public sealed class SpendingRecord
     public bool IsVoided => VoidedAtUtc.HasValue;
     public IReadOnlyList<SpendingLine> Lines => _lines.AsReadOnly();
     public IReadOnlyList<SpendingDiscount> Discounts => _discounts.AsReadOnly();
+    public decimal PurchaseAmount => _lines.Where(l => !l.IsAdditionalCost).Sum(l => l.NetAmount);
+    public decimal AdditionalCostAmount => _lines.Where(l => l.IsAdditionalCost).Sum(l => l.NetAmount);
     public decimal GrossAmount => _lines.Sum(l => l.NetAmount);
     public decimal DiscountAmount => _discounts.Sum(d => d.Amount);
     public decimal TotalAmount => GrossAmount - DiscountAmount;
