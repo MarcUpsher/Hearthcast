@@ -1,7 +1,4 @@
-.record-list, .detail-lines { list-style: none; padding: 0; }
+.record-list { list-style: none; padding: 0; }
 .record-list li { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
 .record-list p { margin: 6px 0; }
-.detail-lines li { padding: 12px 0; border-top: 1px solid var(--mat-sys-outline-variant); }
-.detail-lines p { margin: 6px 0; }
-.notes { white-space: pre-wrap; }
 @media (max-width: 550px) { .record-list li { flex-wrap: wrap; } .toolbar mat-form-field { flex-basis: 100%; } }

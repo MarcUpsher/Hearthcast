@@ -1,5 +1,9 @@
 # Spending capture and history UI
 
+The subsequent [purchase pages slice](spending-purchase-pages-slice.md) separates
+the original combined page into a list, full-page creation and read-only details
+with explicit editing. The capture and recovery rules below still apply.
+
 18 November 2026. Adds `/spending/records` through Spending → Purchases & history.
 This is the separately authorised slice after the reviewed item catalogue. It
 uses the existing capture/history/detail/void and exact usual-price lookup APIs.

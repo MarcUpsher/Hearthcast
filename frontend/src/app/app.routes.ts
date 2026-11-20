@@ -34,8 +34,18 @@ export const routes: Routes = [
     redirectTo: "spending/items",
   },
   {
+    path: "spending/records/new",
+    data: { create: true },
+    canDeactivate: [(component: import("./spending/purchase").SpendingPurchase) => component.canLeave()],
+    loadComponent: () => import("./spending/purchase").then((m) => m.SpendingPurchase),
+  },
+  {
+    path: "spending/records/:recordId",
+    canDeactivate: [(component: import("./spending/purchase").SpendingPurchase) => component.canLeave()],
+    loadComponent: () => import("./spending/purchase").then((m) => m.SpendingPurchase),
+  },
+  {
     path: "spending/records",
-    canDeactivate: [(component: import("./spending/records").SpendingRecords) => component.canLeave()],
     loadComponent: () => import("./spending/records").then((m) => m.SpendingRecords),
   },
   {

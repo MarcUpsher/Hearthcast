@@ -13,7 +13,7 @@ import { Modelling } from "./modelling/modelling";
 import { SnapshotEditor } from "./snapshots/editor";
 import { SpendingSetup } from "./spending/setup";
 import { SpendingItems } from "./spending/items";
-import { SpendingRecords } from "./spending/records";
+import { SpendingPurchase } from "./spending/purchase";
 import { RegularOutgoings } from "./budgets/outgoings";
 import { OutgoingPlans } from "./budgets/plans";
 import { OutgoingOverview } from "./budgets/overview";
@@ -24,6 +24,7 @@ import { firstValueFrom, filter } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
 
 async function setup(path: string, history = false) {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   localStorage.setItem("household", "first");
   const households = ["first", "second"].map((id) => ({
     id,
@@ -78,8 +79,8 @@ async function setup(path: string, history = false) {
   const outlet = fixture.debugElement
     .query(By.directive(RouterOutlet))
     .injector.get(RouterOutlet);
-  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingRecords | RegularOutgoings | OutgoingPlans;
-  if (page instanceof SpendingRecords) {
+  const page = outlet.component as Modelling | SnapshotEditor | SpendingSetup | SpendingItems | SpendingPurchase | RegularOutgoings | OutgoingPlans;
+  if (page instanceof SpendingPurchase) {
     await vi.waitFor(() => expect(page.lookupLoading()).toBe(false));
     fixture.detectChanges(); await fixture.whenStable();
   }
@@ -98,16 +99,16 @@ async function setup(path: string, history = false) {
   };
   const edit = () => {
     if (page instanceof OutgoingPlans) page.notes.set("Unsaved outgoing plan");
-    else if (page instanceof SpendingRecords) page.capture()!.set("notes", "Unsaved purchase");
+    else if (page instanceof SpendingPurchase) page.capture()!.set("notes", "Unsaved purchase");
     else if (page instanceof SpendingItems || page instanceof RegularOutgoings) page.change(false, "name", "Unsaved item");
     else if (page instanceof SpendingSetup) page.changeNewName("categories", "Unsaved category");
     else if (page instanceof Modelling) page.presetName = "Unsaved scenario";
     else page.date = "2000-01-01";
   };
-  const draft = () => page instanceof OutgoingPlans ? page.notes() : page instanceof SpendingRecords ? page.capture()!.draft().notes : (page instanceof SpendingItems || page instanceof RegularOutgoings) ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
+  const draft = () => page instanceof OutgoingPlans ? page.notes() : page instanceof SpendingPurchase ? page.capture()!.draft().notes : (page instanceof SpendingItems || page instanceof RegularOutgoings) ? page.createDraft().name : page instanceof SpendingSetup ? page.newNames().categories :
     (page instanceof Modelling ? page.presetName : page.date);
   const writing = () => {
-    if (page instanceof SpendingRecords) page.capture()!.saving.set(true);
+    if (page instanceof SpendingPurchase) page.capture()!.saving.set(true);
     else if (page instanceof Modelling) page.savingPreset.set(true);
     else page.saving.set(true);
   };
@@ -130,7 +131,7 @@ afterEach(() => {
   localStorage.removeItem("household");
 });
 
-describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records", "/spending/outgoings", "/spending/plans"])(
+describe.each(["/modelling", "/record", "/spending/setup", "/spending/items", "/spending/records/new", "/spending/outgoings", "/spending/plans"])(
   "Household switching from %s",
   (path) => {
     it("allows a clean page to switch without confirmation", async () => {
@@ -290,9 +291,9 @@ it("opens the item catalogue from the Spending navigation entry", async () => {
 });
 
 it("guards saved purchase edits across route and household changes", async () => {
-  const { fixture, page, get, choose, workspace } = await setup("/spending/records");
-  const records = page as SpendingRecords;
-  records.view(spendingRecord()); get.mockResolvedValueOnce(spendingRecord());
+  const { fixture, page, get, choose, workspace } = await setup("/spending/records/record");
+  const records = page as SpendingPurchase;
+  get.mockResolvedValueOnce(spendingRecord());
   await records.beginEdit(); fixture.detectChanges(); await fixture.whenStable();
   records.capture()!.set("notes", "Keep saved-record correction");
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -336,9 +337,9 @@ it("protects unsaved inline allowance defaults when leaving budget plans or swit
 
 it("guards an item creation dialog on browser Back and household changes without losing the purchase", async () => {
   const { fixture, workspace, choose } = await setup("/setup", true);
-  const router = TestBed.inject(Router); router.initialNavigation(); await router.navigateByUrl("/spending/records");
+  const router = TestBed.inject(Router); router.initialNavigation(); await router.navigateByUrl("/spending/records/new");
   fixture.detectChanges(); await fixture.whenStable();
-  const records = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingRecords;
+  const records = fixture.debugElement.query(By.directive(RouterOutlet)).injector.get(RouterOutlet).component as SpendingPurchase;
   await vi.waitFor(() => expect(records.lookupLoading()).toBe(false)); fixture.detectChanges(); await fixture.whenStable();
   const capture = records.capture()!; capture.set("notes", "Keep receipt"); capture.createItem(capture.draft().lines[0].key);
   fixture.detectChanges(); await fixture.whenStable();
@@ -346,7 +347,7 @@ it("guards an item creation dialog on browser Back and household changes without
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
   const navigation = firstValueFrom(router.events.pipe(filter(event => event instanceof NavigationEnd || event instanceof NavigationCancel)));
   TestBed.inject(Location).back(); expect(await navigation).toBeInstanceOf(NavigationCancel);
-  expect(router.url).toBe("/spending/records"); expect(capture.itemEditor()?.componentInstance.draft().name).toBe("Milk");
+  expect(router.url).toBe("/spending/records/new"); expect(capture.itemEditor()?.componentInstance.draft().name).toBe("Milk");
   await choose("second"); expect(workspace.current()?.id).toBe("first"); expect(capture.draft().notes).toBe("Keep receipt");
   confirm.mockReturnValue(true); await choose("second");
   expect(workspace.current()?.id).toBe("second"); expect(capture.itemEditor()).toBeNull();
@@ -359,6 +360,6 @@ it("opens regular outgoing setup from Spending navigation and guards leaving its
   expect(fixture.nativeElement.querySelector('a[href="/spending/outgoings"]').classList.contains("active")).toBe(true);
   expect(fixture.nativeElement.querySelector('header a[href="/spending"]').classList.contains("active")).toBe(true);
   edit(); const before = draft(), confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-  expect(await TestBed.inject(Router).navigateByUrl("/spending/records")).toBe(false); expect(draft()).toBe(before);
-  confirm.mockReturnValue(true); expect(await TestBed.inject(Router).navigateByUrl("/spending/records")).toBe(true);
+  expect(await TestBed.inject(Router).navigateByUrl("/spending/records/new")).toBe(false); expect(draft()).toBe(before);
+  confirm.mockReturnValue(true); expect(await TestBed.inject(Router).navigateByUrl("/spending/records/new")).toBe(true);
 });

@@ -1,5 +1,5 @@
-<section class="panel" aria-labelledby="purchase-title">
-  <h2 id="purchase-title">{{ editing() ? 'Edit purchase' : 'Record a purchase' }}</h2>
+<section class="panel" [attr.aria-labelledby]="showHeading() ? 'purchase-title' : null" [attr.aria-label]="showHeading() ? null : editing() ? 'Edit purchase' : 'Record a purchase'">
+  @if (showHeading()) { <h2 id="purchase-title">{{ editing() ? 'Edit purchase' : 'Record a purchase' }}</h2> }
   <p class="muted">Add item lines or quick category amounts, or mix both. Usual prices are suggestions; enter what you actually paid.</p>
   @if (editing(); as record) {
     <p class="notice">Editing the saved purchase from {{ record.merchantName }}. Currency and payment/refund type cannot change; void and recreate a record to correct those.</p>

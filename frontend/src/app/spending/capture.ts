@@ -34,6 +34,7 @@ type CaptureDraft = ReturnType<typeof blankDraft>;
   templateUrl: "capture.html", styleUrl: "capture.scss",
 })
 export class SpendingCapture {
+  readonly showHeading = input(true);
   readonly categories = input<SpendingSetupEntry[]>([]);
   readonly merchants = input<SpendingSetupEntry[]>([]);
   readonly items = input<SpendingItem[]>([]);
@@ -41,6 +42,7 @@ export class SpendingCapture {
   readonly disabled = input(false);
   readonly record = input<SpendingRecord | null>(null);
   readonly saved = output<SpendingRecord>();
+  readonly mutationUncertain = output<void>();
   readonly reloaded = output<SpendingRecord>();
   readonly cancelled = output<void>();
   readonly itemCreated = output<SpendingItem>();
@@ -385,6 +387,10 @@ export class SpendingCapture {
     }
     return { kind: "replace" };
   }
+  private requireRecord(record: SpendingRecord, home: string, id: string) {
+    if (record?.householdId !== home || record?.id !== id)
+      throw new Error("The returned purchase does not match the requested household and record. Your draft is retained.");
+  }
   async saveEdit() {
     const record = this.editing(), home = this.home, generation = this.generation;
     if (!record || !home || !this.current(generation, home) || this.locked() || !this.valid() || !this.hasUnsavedChanges()) return;
@@ -410,11 +416,12 @@ export class SpendingCapture {
     this.saving.set(true); this.error.set("");
     try {
       const saved = await this.api.send<SpendingRecord>("PUT", path, body);
-      if (this.current(generation, home)) { this.reset(); this.saved.emit(saved); }
+      if (this.current(generation, home)) { this.requireRecord(saved, home, record.id); this.reset(); this.saved.emit(saved); }
     } catch (error) {
       if (this.current(generation, home)) {
         const rejected = error instanceof HttpErrorResponse && error.status === 400;
         this.editNeedsReload.set(!rejected);
+        if (!rejected) this.mutationUncertain.emit();
         this.error.set(message(error) + (rejected ? "" : " The record may have changed or the save may have succeeded. Your draft is retained. Reload the saved version before another save."));
       }
     } finally { if (this.current(generation, home)) this.saving.set(false); }
@@ -427,6 +434,7 @@ export class SpendingCapture {
     try {
       const latest = await this.api.get<SpendingRecord>(`households/${home}/spending/records/${record.id}`);
       if (!this.current(generation, home)) return;
+      this.requireRecord(latest, home, record.id);
       this.reloaded.emit(latest);
       if (latest.isVoided) { this.editNeedsReload.set(true); this.error.set("This record has been voided. Cancel editing to return to history."); }
       else this.reset(latest);
@@ -444,10 +452,12 @@ export class SpendingCapture {
     try {
       const saved = await this.api.send<SpendingRecord>("POST", `households/${home}/spending/records`, request);
       if (!this.current(generation, home)) return;
+      this.requireRecord(saved, home, request.id);
       this.reset(); this.saved.emit(saved);
     } catch (error) {
       if (!this.current(generation, home)) return;
       if (error instanceof HttpErrorResponse && (error.status === 400 || error.status === 404)) this.frozen.set(null);
+      else this.mutationUncertain.emit();
       this.error.set(message(error));
     } finally { if (this.current(generation, home)) this.saving.set(false); }
   }
@@ -457,7 +467,7 @@ export class SpendingCapture {
     this.checking.set(true);
     try {
       const saved = await this.api.get<SpendingRecord>(`households/${home}/spending/records/${request.id}`);
-      if (this.current(generation, home)) { this.reset(); this.saved.emit(saved); }
+      if (this.current(generation, home)) { this.requireRecord(saved, home, request.id); this.reset(); this.saved.emit(saved); }
     } catch (error) {
       if (this.current(generation, home)) this.error.set(error instanceof HttpErrorResponse && error.status === 404 ?
         "No saved record found yet. Retry the same save to avoid creating a duplicate." : message(error));

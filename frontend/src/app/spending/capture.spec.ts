@@ -21,7 +21,7 @@ describe("Spending purchase capture", () => {
   let get: ReturnType<typeof vi.fn>, send: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     current = signal<Household | null>({ id: "first", name: "Home", people: [] });
-    get = vi.fn(async (path: string) => path.includes("/last-paid-price?") ? null : spendingPrice()); send = vi.fn(async () => spendingRecord());
+    get = vi.fn(async (path: string) => path.includes("/last-paid-price?") ? null : spendingPrice()); send = vi.fn(async (method: string, path: string, body: { id?: string }) => spendingRecord("first", { id: method === "POST" ? body.id : path.split("/")[4] }));
     TestBed.configureTestingModule({ providers: [
       { provide: Workspace, useValue: { current } }, { provide: Api, useValue: { get, send } }] });
   });
@@ -43,6 +43,25 @@ describe("Spending purchase capture", () => {
     return key;
   }
   const button = (text: string) => TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(MatButtonHarness.with({ text }));
+
+  it.each(["id", "household"])("rejects an edit reload with a mismatched %s and keeps subsequent writes on the original record", async mismatch => {
+    const c = await edit(); c.set("notes", "Keep this correction"); const before = structuredClone(c.draft());
+    const reloaded = vi.fn(); c.reloaded.subscribe(reloaded); vi.spyOn(window, "confirm").mockReturnValue(true);
+    get.mockResolvedValueOnce(spendingRecord(mismatch === "household" ? "second" : "first", { id: mismatch === "id" ? "other" : "record" }));
+    await c.reloadEdit(); expect(reloaded).not.toHaveBeenCalled(); expect(c.draft()).toEqual(before); expect(c.editing()?.id).toBe("record");
+    await c.save(); expect(send.mock.calls[0][1]).toBe("households/first/spending/records/record/header");
+  });
+  it.each(["create", "check", "edit"])("retains the draft when a %s response has a mismatched identity", async operation => {
+    const c = operation === "edit" ? await edit() : await page();
+    if (operation === "edit") c.set("notes", "Keep edit"); else quick(c);
+    const saved = vi.fn(); c.saved.subscribe(saved); const before = structuredClone(c.draft());
+    if (operation === "check") {
+      send.mockRejectedValueOnce(new HttpErrorResponse({ status: 0 })); await c.save();
+      get.mockResolvedValueOnce(spendingRecord("first", { id: "wrong" })); await c.checkSaved();
+    } else { send.mockResolvedValueOnce(spendingRecord("second", { id: "wrong" })); await c.save(); }
+    expect(saved).not.toHaveBeenCalled(); expect(c.draft()).toEqual(before); expect(c.error()).toContain("does not match");
+    if (operation === "edit") expect(c.editNeedsReload()).toBe(true); else expect(c.frozen()).not.toBeNull();
+  });
 
   it("adds a separate delivery charge through the form and reconciles the VetUK example", async () => {
     const c = await page(); quick(c, "45.98"); c.set("receiptTotal", "49.97"); await settle();

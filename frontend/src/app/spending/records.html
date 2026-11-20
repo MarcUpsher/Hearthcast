@@ -1,13 +1,9 @@
 <app-spending-navigation />
-<section class="page-heading"><div><h1>Spending</h1><p class="muted">Record purchases and browse the spending you have captured.</p></div></section>
+<section class="page-heading"><div><h1>Purchases &amp; history</h1><p class="muted">Browse the spending you have captured.</p></div>
+  @if (w.current()) { <a mat-flat-button routerLink="/spending/records/new">Record purchase</a> }
+</section>
 @if (w.current(); as household) {
   <p class="muted">For {{ household.name }}. Currencies stay separate.</p>
-  @if (lookupLoading()) { <p role="status">Loading entry choices…</p> }
-  @if (lookupError()) { <p class="error" role="alert">{{ lookupError() }}</p><button mat-stroked-button [disabled]="busy()" (click)="loadLookups()">Retry entry choices</button> }
-  @if (!lookupLoading() && !lookupError() && (!categories().length || !merchants().length)) { <p class="notice">Add categories and merchants in Spending setup before recording a purchase.</p> }
-  <app-spending-capture [categories]="categories()" [merchants]="merchants()" [items]="items()" [currencies]="currencies()"
-    [record]="editing()" [disabled]="lookupLoading() || !!lookupError() || voiding() || detailLoading()" (saved)="onSaved($event)" (reloaded)="onReloaded($event)" (cancelled)="editing.set(null)" (itemCreated)="onItemCreated($event)" />
-  <p role="status" aria-live="polite">{{ notice() }}</p>
   <section class="panel" aria-labelledby="history-title"><h2 id="history-title">Recorded spending history</h2>
     <form class="toolbar" aria-label="History filters" (ngSubmit)="loadHistory()">
       <mat-form-field><mat-label>From (inclusive)</mat-label><input matInput type="date" name="from" [disabled]="historyLoading()" [ngModel]="filters().from" (ngModelChange)="changeFilter('from', $event)" /></mat-form-field>
@@ -15,8 +11,9 @@
       <mat-checkbox name="includeVoided" [disabled]="historyLoading()" [ngModel]="filters().includeVoided" (ngModelChange)="changeFilter('includeVoided', $event)">Include voided</mat-checkbox>
       <button mat-stroked-button type="submit" [disabled]="historyLoading()">Apply filters / refresh</button>
     </form>
+    @if (refreshNeeded()) { <p class="notice">Purchases have changed. Refreshing this page keeps your applied filters and position.</p> }
     @if (historyLoading()) { <p role="status">Loading history…</p> }
-    @if (historyError()) { <p class="error" role="alert">{{ historyError() }}</p><button mat-button [disabled]="historyLoading()" (click)="loadHistory()">Retry history</button> }
+    @if (historyError()) { <p class="error" role="alert">{{ historyError() }}</p><button mat-button [disabled]="historyLoading()" (click)="loadHistory(retryDirection())">Retry history</button> }
     @if (filtersChanged()) { <p class="notice">Apply your changed filters before moving between pages.</p> }
     <p class="muted">Showing {{ applied().from || 'all dates' }} through {{ applied().to || 'all dates' }}{{ applied().includeVoided ? ', including voided records' : ', excluding voided records' }}. This is recorded spending, not a guarantee that every purchase was captured.</p>
     @if (page().records.length) {
@@ -25,7 +22,7 @@
           <li><div><strong>{{ record.merchantName }}</strong> · {{ date(record.spendingDate) }}
             <p>{{ record.kind }}{{ record.isVoided ? ' · Voided' : '' }} · {{ money(record.countedAmount, record.currencyCode, record.currencyMinorUnits) }}</p>
             <span class="badge">{{ record.reconciliationStatus === 'NotChecked' ? 'Receipt total not supplied' : record.reconciliationStatus }}</span>
-          </div><button mat-button [disabled]="voiding() || !!editing()" (click)="view(record)" [attr.aria-label]="'View record from ' + record.merchantName + ' on ' + record.spendingDate">View details</button></li>
+          </div><a mat-button [routerLink]="['/spending/records', record.id]" [attr.aria-label]="'View record from ' + record.merchantName + ' on ' + record.spendingDate">View details</a></li>
         }
       </ul>
     } @else if (!historyLoading() && !historyError()) { <p class="muted">No captured spending in this range.</p> }
@@ -34,53 +31,4 @@
       <button mat-button [disabled]="historyLoading() || filtersChanged() || !page().nextCursor" (click)="loadHistory('next')">Next page</button>
     </div>
   </section>
-  @if (selected(); as record) {
-    <section class="panel" aria-labelledby="record-title"><h2 id="record-title">Record · {{ record.merchantName }}</h2>
-      <p>{{ date(record.spendingDate) }} · {{ record.kind }}{{ record.isVoided ? ' · Voided' : '' }} · {{ record.currencyCode }}</p>
-      <p><strong>Recorded spending total: {{ money(record.totalAmount, record.currencyCode, record.currencyMinorUnits) }}</strong></p>
-      @if (costLines(record).length || record.discounts?.length) {
-        <p>Items / category amounts: {{ money(record.purchaseAmount ?? record.grossAmount!, record.currencyCode, record.currencyMinorUnits) }} · Additional costs: +{{ money(record.additionalCostAmount ?? 0, record.currencyCode, record.currencyMinorUnits) }} · Receipt discounts: −{{ money(record.discountAmount ?? 0, record.currencyCode, record.currencyMinorUnits) }}</p>
-      }
-      @if (record.isVoided) { <p class="notice">Voided records are retained but count as zero toward spending.</p> }
-      @if (record.receiptTotal !== null) {
-        <p>Receipt total: {{ money(record.receiptTotal, record.currencyCode, record.currencyMinorUnits) }}</p>
-        @if (record.reconciliationStatus === 'Unreconciled') { <p class="notice">Receipt mismatch: {{ money(record.receiptDifference!, record.currencyCode, record.currencyMinorUnits) }} (receipt minus recorded total). Items and additional costs less assigned receipt discounts are counted.</p> }
-      } @else { <p class="muted">Receipt total was not supplied; reconciliation is unchecked.</p> }
-      <ul class="detail-lines">
-        @for (line of purchaseLines(record); track line.id) {
-          <li><strong>{{ line.expenseCategoryName }} · {{ money(line.netAmount, record.currencyCode, record.currencyMinorUnits) }}</strong>
-            @if (line.itemName) { <p>{{ line.itemCode }} · {{ line.itemName }}
-              @if (line.quantity !== null && line.unitPrice !== null) { · {{ line.quantity }} {{ line.unitLabel }} @ {{ line.unitPrice }} each }
-              @else { · {{ line.unitLabel }} }
-            </p> }
-            @if (line.description) { <p>{{ line.description }}</p> }
-            @if (line.merchantItemReference) { <p>Receipt item reference: {{ line.merchantItemReference }}</p> }
-            <small>Promotion: {{ line.promotionStatus }}</small>
-          </li>
-        }
-      </ul>
-      @if (costLines(record).length) {
-        <h3>Additional costs</h3><ul class="detail-lines" aria-label="Additional costs">@for (cost of costLines(record); track cost.id) {
-          <li><strong>{{ cost.expenseCategoryName }} · {{ money(cost.netAmount, record.currencyCode, record.currencyMinorUnits) }}</strong><p>{{ cost.description }}</p>
-            @if (cost.merchantItemReference) { <p>Receipt reference: {{ cost.merchantItemReference }}</p> }
-            @if (cost.notes) { <p class="notes">{{ cost.notes }}</p> }
-          </li>
-        }</ul>
-      }
-      @if (record.discounts?.length) {
-        <h3>Receipt discounts</h3><ul class="detail-lines">@for (discount of record.discounts; track discount.id) {
-          <li><strong>{{ discount.expenseCategoryName }} · −{{ money(discount.amount, record.currencyCode, record.currencyMinorUnits) }}</strong>@if (discount.description) { <p>{{ discount.description }}</p> }</li>
-        }</ul><p class="muted">Receipt discounts are assigned to categories. Item-level prices are shown before those separate discounts.</p>
-      }
-      @if (record.externalReference) { <p>Receipt reference: {{ record.externalReference }}</p> }
-      @if (record.notes) { <p class="notes">{{ record.notes }}</p> }
-      @if (detailError()) { <p class="error" role="alert">{{ detailError() }}</p> }
-      @if (detailLoading()) { <p role="status">Reloading record…</p> }
-      <div class="actions">
-        <button mat-button [disabled]="voiding() || detailLoading() || !!editing()" (click)="reloadDetail()">Reload record</button>
-        @if (record.kind === 'Payment') { <button mat-flat-button [disabled]="record.isVoided || busy() || detailLoading() || !!editing() || lookupLoading() || !!lookupError()" (click)="beginEdit()">Edit purchase</button> }
-        <button mat-stroked-button [disabled]="record.isVoided || busy() || detailLoading() || !!editing() || needsReload().has(record.id)" (click)="voidRecord()">{{ voiding() ? 'Voiding…' : 'Void accidental record' }}</button>
-      </div>
-    </section>
-  }
-} @else { <p class="notice">Select or create a household to record spending.</p> }
+} @else { <p class="notice">Select or create a household to browse spending.</p> }

@@ -35,3 +35,8 @@ controls and actions, but no live visual inspection is claimed.
 
 After fixes, all **287 frontend tests** pass under `TZ=Europe/London`, and
 `npm run build` passes. No backend or application database changes.
+# Purchase-page navigation update
+
+The [purchase pages slice](spending-purchase-pages-slice.md) moves editing into a
+dedicated receipt page, opened read-only by default. Save and Cancel return to its
+saved view. Existing correction, revision and recovery contracts remain in use.

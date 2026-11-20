@@ -1,0 +1,66 @@
+<app-spending-navigation />
+<a mat-button routerLink="/spending/records">Back to purchases</a>
+<section class="page-heading"><div><h1>{{ editing() ? 'Edit purchase' : creating && !selected() ? 'Record a purchase' : 'Purchase details' }}</h1></div></section>
+@if (w.current(); as household) {
+  <p class="muted">For {{ household.name }}. Currencies stay separate.</p>
+  <p role="status" aria-live="polite">{{ notice() }}</p>
+  @if (detailLoading()) { <p role="status">Loading purchase…</p> }
+  @if (detailError()) { <p class="error" role="alert">{{ detailError() }}</p>
+    @if (!selected() && !detailLoading()) { <button mat-stroked-button (click)="reloadDetail()">Retry purchase</button> }
+  }
+  @if (showForm()) {
+    @if (lookupLoading()) { <p role="status">Loading entry choices…</p> }
+    @if (lookupError()) { <p class="error" role="alert">{{ lookupError() }}</p><button mat-stroked-button [disabled]="busy()" (click)="loadLookups()">Retry entry choices</button> }
+    @if (!lookupLoading() && !lookupError() && (!categories().length || !merchants().length)) { <p class="notice">Add categories and merchants in Spending setup before recording a purchase.</p> }
+    <app-spending-capture [showHeading]="false" [categories]="categories()" [merchants]="merchants()" [items]="items()" [currencies]="currencies()"
+      [record]="editing()" [disabled]="lookupLoading() || !!lookupError() || voiding() || detailLoading()" (mutationUncertain)="onMutationUncertain()" (saved)="onSaved($event)" (reloaded)="onReloaded($event)" (cancelled)="editing.set(null)" (itemCreated)="onItemCreated($event)" />
+  }
+  @if (!showForm()) { @if (selected(); as record) {
+    <section class="panel" aria-labelledby="record-title"><h2 id="record-title">Record · {{ record.merchantName }}</h2>
+      <p>{{ date(record.spendingDate) }} · {{ record.kind }}{{ record.isVoided ? ' · Voided' : '' }} · {{ record.currencyCode }}</p>
+      <p><strong>Recorded spending total: {{ money(record.totalAmount, record.currencyCode, record.currencyMinorUnits) }}</strong></p>
+      @if (costLines(record).length || record.discounts?.length) {
+        <p>Items / category amounts: {{ money(record.purchaseAmount ?? record.grossAmount!, record.currencyCode, record.currencyMinorUnits) }} · Additional costs: +{{ money(record.additionalCostAmount ?? 0, record.currencyCode, record.currencyMinorUnits) }} · Receipt discounts: −{{ money(record.discountAmount ?? 0, record.currencyCode, record.currencyMinorUnits) }}</p>
+      }
+      @if (record.isVoided) { <p class="notice">Voided records are retained but count as zero toward spending.</p> }
+      @if (record.receiptTotal !== null) {
+        <p>Receipt total: {{ money(record.receiptTotal, record.currencyCode, record.currencyMinorUnits) }}</p>
+        @if (record.reconciliationStatus === 'Unreconciled') { <p class="notice">Receipt mismatch: {{ money(record.receiptDifference!, record.currencyCode, record.currencyMinorUnits) }} (receipt minus recorded total). Items and additional costs less assigned receipt discounts are counted.</p> }
+      } @else { <p class="muted">Receipt total was not supplied; reconciliation is unchecked.</p> }
+      <ul class="detail-lines">
+        @for (line of purchaseLines(record); track line.id) {
+          <li><strong>{{ line.expenseCategoryName }} · {{ money(line.netAmount, record.currencyCode, record.currencyMinorUnits) }}</strong>
+            @if (line.itemName) { <p>{{ line.itemCode }} · {{ line.itemName }}
+              @if (line.quantity !== null && line.unitPrice !== null) { · {{ line.quantity }} {{ line.unitLabel }} @ {{ line.unitPrice }} each }
+              @else { · {{ line.unitLabel }} }
+            </p> }
+            @if (line.description) { <p>{{ line.description }}</p> }
+            @if (line.merchantItemReference) { <p>Receipt item reference: {{ line.merchantItemReference }}</p> }
+            <small>Promotion: {{ line.promotionStatus }}</small>
+          </li>
+        }
+      </ul>
+      @if (costLines(record).length) {
+        <h3>Additional costs</h3><ul class="detail-lines" aria-label="Additional costs">@for (cost of costLines(record); track cost.id) {
+          <li><strong>{{ cost.expenseCategoryName }} · {{ money(cost.netAmount, record.currencyCode, record.currencyMinorUnits) }}</strong><p>{{ cost.description }}</p>
+            @if (cost.merchantItemReference) { <p>Receipt reference: {{ cost.merchantItemReference }}</p> }
+            @if (cost.notes) { <p class="notes">{{ cost.notes }}</p> }
+          </li>
+        }</ul>
+      }
+      @if (record.discounts?.length) {
+        <h3>Receipt discounts</h3><ul class="detail-lines">@for (discount of record.discounts; track discount.id) {
+          <li><strong>{{ discount.expenseCategoryName }} · −{{ money(discount.amount, record.currencyCode, record.currencyMinorUnits) }}</strong>@if (discount.description) { <p>{{ discount.description }}</p> }</li>
+        }</ul><p class="muted">Receipt discounts are assigned to categories. Item-level prices are shown before those separate discounts.</p>
+      }
+      @if (record.externalReference) { <p>Receipt reference: {{ record.externalReference }}</p> }
+      @if (record.notes) { <p class="notes">{{ record.notes }}</p> }
+      <div class="actions">
+        <button mat-button [disabled]="voiding() || detailLoading() || !!editing()" (click)="reloadDetail()">Reload record</button>
+        @if (record.kind === 'Payment') { <button mat-flat-button [disabled]="record.isVoided || busy() || detailLoading() || !!editing()" (click)="beginEdit()">Edit purchase</button> }
+        <button mat-stroked-button [disabled]="record.isVoided || busy() || detailLoading() || !!editing() || needsReload().has(record.id)" (click)="voidRecord()">{{ voiding() ? 'Voiding…' : 'Void accidental record' }}</button>
+      </div>
+    </section>
+  }
+  }
+} @else { <p class="notice">Select or create a household to view or record spending.</p> }
