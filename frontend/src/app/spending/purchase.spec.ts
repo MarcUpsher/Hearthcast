@@ -228,14 +228,14 @@ describe("Purchase creation, view and editing", () => {
   });
 
   it.each([false, true])("returns keyboard focus to the initiating receipt line after closing creation (saved=%s)", async saved => {
-    const c = await page(), capture = c.capture()!; capture.addLine(); await settle();
+    const c = await page(), capture = c.capture()!; capture.set("merchantId", "first-shop"); capture.addLine(); await settle();
     const trigger = fixture.nativeElement.querySelector('button[aria-label="Create item for line 2"]') as HTMLButtonElement;
     trigger.focus(); const editor = await createDialog(c, capture.draft().lines[1].key);
     expect(trigger.disabled).toBe(false);
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("name")).toBe("name"));
     if (saved) { editor.draft.set(spendingDraft()); send.mockResolvedValueOnce(spendingItem("first", { id: "milk" })); await editor.save(); }
     else editor.dismiss();
-    await itemClosed(c); expect(document.activeElement).toBe(trigger);
+    await itemClosed(c); expect(document.activeElement === trigger).toBe(true);
   });
 
   it("uses a newly created item's actual category even when it differs from the initial filter", async () => {

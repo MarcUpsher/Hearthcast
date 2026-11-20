@@ -44,6 +44,46 @@ describe("Spending purchase capture", () => {
   }
   const button = (text: string) => TestbedHarnessEnvironment.documentRootLoader(fixture).getHarness(MatButtonHarness.with({ text }));
 
+  it("requires selecting Merchant before enabling purchase entry and then fills the selected item's price", async () => {
+    const c = await page(), loader = TestbedHarnessEnvironment.loader(fixture);
+    expect(fixture.nativeElement.textContent).toContain("Choose a merchant first");
+    const selects = await loader.getAllHarnesses(MatSelectHarness);
+    const merchant = await loader.getHarness(MatSelectHarness.with({ selector: '[name="merchant"]' }));
+    expect(await merchant.isDisabled()).toBe(false);
+    for (const picker of selects) if (await picker.host().then(host => host.getAttribute("name")) !== "merchant") expect(await picker.isDisabled()).toBe(true);
+    for (const input of await loader.getAllHarnesses(MatInputHarness)) expect(await input.isDisabled()).toBe(true);
+    for (const text of ["Create item", "Use category amount instead", "Add item", "Add category amount", "Add additional cost", "Add receipt discount", "Save purchase"])
+      expect(await (await button(text)).isDisabled()).toBe(true);
+    expect(await (await button("Clear purchase")).isDisabled()).toBe(false); expect(c.canLeave()).toBe(true); expect(get).not.toHaveBeenCalled();
+    await merchant.open(); await merchant.clickOptions({ text: "Shop" });
+    expect(fixture.nativeElement.textContent).not.toContain("Choose a merchant first");
+    expect(await (await loader.getHarness(MatInputHarness.with({ selector: '[name="date"]' }))).isDisabled()).toBe(false);
+    expect(await (await loader.getHarness(MatSelectHarness.with({ selector: '[name="currency"]' }))).isDisabled()).toBe(false);
+    for (const text of ["Create item", "Use category amount instead", "Add item", "Add category amount", "Add additional cost", "Add receipt discount"])
+      expect(await (await button(text)).isDisabled()).toBe(false);
+    const item = await loader.getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 1"]' }));
+    await item.enterText("EGGS-6"); await item.selectOption({ text: /EGGS-6/ });
+    const key = c.draft().lines[0].key;
+    expect(await (await loader.getHarness(MatInputHarness.with({ selector: '[name="price-' + key + '"]' }))).getValue()).toBe("3");
+  });
+  it("restores the merchant-first step after clearing and keeps it locked during external loading", async () => {
+    const c = await page(), loader = TestbedHarnessEnvironment.loader(fixture);
+    fixture.componentRef.setInput("disabled", true); await settle();
+    expect(await (await loader.getHarness(MatSelectHarness.with({ selector: '[name="merchant"]' }))).isDisabled()).toBe(true);
+    fixture.componentRef.setInput("disabled", false); await settle();
+    const merchant = await loader.getHarness(MatSelectHarness.with({ selector: '[name="merchant"]' })); await merchant.open(); await merchant.clickOptions({ text: "Shop" });
+    vi.spyOn(window, "confirm").mockReturnValue(true); await (await button("Clear purchase")).click();
+    expect(c.draft().merchantId).toBe(""); expect(c.hasUnsavedChanges()).toBe(false);
+    expect(await (await loader.getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 1"]' }))).isDisabled()).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll(".mat-form-field-invalid")).toHaveLength(0);
+  });
+  it("opens saved purchases with their merchant already selected and entry enabled", async () => {
+    await edit(); const loader = TestbedHarnessEnvironment.loader(fixture);
+    expect(fixture.nativeElement.textContent).not.toContain("Choose a merchant first");
+    expect(await (await loader.getHarness(MatInputHarness.with({ selector: '[name="date"]' }))).isDisabled()).toBe(false);
+    expect(await (await button("Add additional cost")).isDisabled()).toBe(false);
+  });
+
   it.each(["id", "household"])("rejects an edit reload with a mismatched %s and keeps subsequent writes on the original record", async mismatch => {
     const c = await edit(); c.set("notes", "Keep this correction"); const before = structuredClone(c.draft());
     const reloaded = vi.fn(); c.reloaded.subscribe(reloaded); vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -421,7 +461,7 @@ describe("Spending purchase capture", () => {
     vi.spyOn(window, "confirm").mockReturnValue(false); expect(c.canLeave()).toBe(false);
   });
   it("searches names, codes and pack labels, showing readable names plus secondary identifiers", async () => {
-    const c = await page(); fixture.componentRef.setInput("items", [spendingItem(), spendingItem("first", { id: "big", code: "EGGS-12", unitLabel: "Box of twelve" })]);
+    const c = await page(); c.set("merchantId", "first-shop"); fixture.componentRef.setInput("items", [spendingItem(), spendingItem("first", { id: "big", code: "EGGS-12", unitLabel: "Box of twelve" })]);
     await settle(); const picker = await autocomplete();
     await picker.enterText("eGgS-6"); const options = await picker.getOptions(); expect(options).toHaveLength(1);
     expect(await options[0].getText()).toContain("Eggs"); expect(await options[0].getText()).toContain("EGGS-6");
@@ -432,7 +472,7 @@ describe("Spending purchase capture", () => {
     const empty = await picker.getOptions(); expect(await empty[0].getText()).toContain("No matching items"); expect(await empty[0].isDisabled()).toBe(true);
   });
   it("filters by category then sets and locks the selected item's category with keyboard selection", async () => {
-    const c = await page(), key = c.draft().lines[0].key;
+    const c = await page(), key = c.draft().lines[0].key; c.set("merchantId", "first-shop");
     fixture.componentRef.setInput("categories", [spendingEntry("food"), { ...spendingEntry("food"), id: "clothing", name: "Clothing" }]);
     fixture.componentRef.setInput("items", [spendingItem(), spendingItem("first", { id: "coat", code: "COAT", name: "Coat", expenseCategoryId: "clothing" })]);
     await settle(); const category = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatSelectHarness.with({ selector: '[aria-label="Category for line 1"]' }));

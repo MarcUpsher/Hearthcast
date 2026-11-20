@@ -91,6 +91,7 @@ export class SpendingCapture {
   }
   private current(generation: number, home: string) { return !this.destroyed && generation === this.generation && this.w.current()?.id === home; }
   locked() { return this.saving() || this.checking() || !!this.frozen() || this.editNeedsReload() || !!this.itemEditor() || this.disabled(); }
+  entryLocked() { return this.locked() || !this.draft().merchantId; }
   busy() { return this.saving() || this.checking() || (this.itemEditor()?.componentInstance?.saving() ?? false); }
   minorUnits() { return this.editing()?.currencyMinorUnits ?? this.currencies().find(row => row.code === this.draft().currencyCode)?.minorUnits ?? null; }
   set(field: Exclude<keyof CaptureDraft, "lines" | "discounts">, value: string) {

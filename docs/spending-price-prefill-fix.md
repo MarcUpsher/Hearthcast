@@ -51,3 +51,29 @@ and eight direct receipt URLs, and scoped receipt/report reads. The earlier pric
 inspection confirmed recorded prices were available for 39 recent item/merchant/
 currency combinations, all without saved usual prices. No historical receipts or
 usual-price records were changed by the fix or verification.
+
+## Merchant-first purchase entry
+
+The user subsequently confirmed the remaining blank-price case came from choosing
+an item before selecting Merchant, and requested that entry wait for that choice.
+Merchant is now the first form control. Until it is selected, date/currency, item
+and category controls, receipt fields, costs/discounts and entry actions are
+disabled. A visible status prompt explains that recorded prices depend on the
+merchant. Merchant itself remains selectable, subject to the existing loading,
+write, frozen-request and dialog locks. Save still requires a merchant.
+
+Selecting Merchant unlocks entry. Clear restores the initial gate and pristine
+validation state. Saved edits already supply a merchant and open enabled under
+their existing restrictions. Clear, Cancel, reload/recovery and route navigation
+remain available under their normal guards. This is a UI prerequisite; existing
+service/API merchant validation and programmatic draft setup are unchanged.
+
+Astra reviewed once and found no correctness issue. Its suggested additional
+assertions now cover inline Create item and line-type switching alongside all
+other entry actions. Material tests exercise the merchant selector, unlocking,
+price prefill, clear/loading behaviour and saved editing.
+
+All **657 frontend tests** across 33 files pass under Europe/London. Production
+builds and whitespace checks pass. Only the web container was deployed; backend
+code, schema and application records remain unchanged. Live read-only rollout
+checks verify the exact tested purchase bundle and route/API availability.
