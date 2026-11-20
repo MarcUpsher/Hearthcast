@@ -69,6 +69,7 @@ export class SpendingCapture {
   readonly lastPriceStates = signal<Record<string, string>>({});
   readonly date = spendingDate;
   readonly priceStates = signal<Record<string, string>>({});
+  readonly priceHints = signal<Record<string, string>>({});
   readonly editing = signal<SpendingRecord | null>(null);
   readonly editNeedsReload = signal(false);
   readonly itemEditor = signal<MatDialogRef<SpendingItemCreate, SpendingItem> | null>(null);
@@ -229,7 +230,10 @@ export class SpendingCapture {
     this.changedSelections.delete(key);
     this.itemSearches.update(searches => { const next = { ...searches }; delete next[key]; return next; });
   }
-  private priceState(key: string, text: string) { this.priceStates.update(states => ({ ...states, [key]: text })); }
+  private priceState(key: string, text: string, hint = text) {
+    this.priceStates.update(states => ({ ...states, [key]: text }));
+    this.priceHints.update(hints => ({ ...hints, [key]: hint }));
+  }
   private refreshPrices() {
     for (const line of this.draft().lines) {
       if (!line.itemId) continue;
@@ -268,31 +272,34 @@ export class SpendingCapture {
         this.suggestPrice(key, usual.usualUnitPrice, current);
         return;
       }
-      const last = await pendingLast;
+      const { price: last, unavailable: historyUnavailable } = await pendingLast;
       if (!current()) return;
+      const merchantName = this.merchants().find(merchant => merchant.id === draft.merchantId)?.name ?? "the selected merchant";
       if (last) {
-        this.priceState(key, `${usualUnavailable ? "Usual price unavailable." : "No saved usual price."} Last recorded price suggested below; check the actual price for this purchase.`);
+        this.priceState(key, `${usualUnavailable ? "Usual price unavailable." : "No saved usual price."} Last recorded price suggested below; check the actual price for this purchase.`, `Last recorded at ${merchantName}: ${last.currencyCode} ${last.unitPrice}. Check the price on this receipt.`);
         this.suggestPrice(key, last.unitPrice, current);
-      } else this.priceState(key, usualUnavailable ? "Usual price unavailable. Enter an actual price or retry the lookup." : "No usual price. Enter the actual unit price.");
+      } else if (!validSpendingDate(draft.date)) this.priceState(key, "Choose a valid purchase date to look up earlier prices.");
+      else if (historyUnavailable) this.priceState(key, "Recorded price lookup unavailable. Enter the actual price or retry the lookup.");
+      else this.priceState(key, usualUnavailable ? `Usual price unavailable; no earlier recorded price at ${merchantName} in ${draft.currencyCode}. Enter the actual price.` : `No usual price or earlier recorded price at ${merchantName} in ${draft.currencyCode}. Enter the actual unit price.`, `No earlier price found at ${merchantName}. Enter the actual price.`);
     } catch {
       if (current()) this.priceState(key, "Price suggestion unavailable. Enter an actual price or retry the lookup.");
     }
   }
-  private async lookupLastPrice(key: string, home: string, itemId: string, draft: CaptureDraft, current: () => boolean): Promise<SpendingLastPrice | null> {
-    if (!validSpendingDate(draft.date)) return null;
+  private async lookupLastPrice(key: string, home: string, itemId: string, draft: CaptureDraft, current: () => boolean): Promise<{ price: SpendingLastPrice | null; unavailable: boolean }> {
+    if (!validSpendingDate(draft.date)) return { price: null, unavailable: false };
     this.lastPriceStates.update(states => ({ ...states, [key]: "Loading last recorded price…" }));
     try {
       const query = new URLSearchParams({ merchantId: draft.merchantId, currencyCode: draft.currencyCode, onOrBefore: draft.date });
       if (this.editing()) query.set("excludeRecordId", this.editing()!.id);
       const price = await this.api.get<SpendingLastPrice | null>(`households/${home}/spending/items/${itemId}/last-paid-price?${query}`);
-      if (!current()) return null;
+      if (!current()) return { price: null, unavailable: false };
       const valid = price && typeof price.unitPrice === "number" && typeof price.spendingDate === "string" && price.currencyCode === draft.currencyCode;
       this.lastPrices.update(prices => ({ ...prices, [key]: valid ? price : null }));
       this.lastPriceStates.update(states => ({ ...states, [key]: valid ? "" : "No earlier recorded price for this merchant and currency." }));
-      return valid ? price : null;
+      return { price: valid ? price : null, unavailable: false };
     } catch {
       if (current()) this.lastPriceStates.update(states => ({ ...states, [key]: "Last recorded price unavailable; the usual-price lookup is separate." }));
-      return null;
+      return { price: null, unavailable: true };
     }
   }
   useLastPrice(key: string) {
@@ -519,7 +526,7 @@ export class SpendingCapture {
         autoAmount: false, priceTouched: true })) } : blankDraft();
     this.editing.set(record); this.editNeedsReload.set(false); this.originalDraft = record ? structuredClone(draft) : null;
     this.draft.set(draft); this.baseline = this.persisted(draft);
-    this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({}); this.lastPrices.set({}); this.lastPriceStates.set({}); this.itemSearches.set({});
+    this.frozen.set(null); this.error.set(""); this.saving.set(false); this.checking.set(false); this.priceStates.set({}); this.priceHints.set({}); this.lastPrices.set({}); this.lastPriceStates.set({}); this.itemSearches.set({});
     this.formVersion.update(version => version + 1);
     if (record) for (const line of draft.lines) if (line.itemId) void this.lookupPrice(line.key);
   }

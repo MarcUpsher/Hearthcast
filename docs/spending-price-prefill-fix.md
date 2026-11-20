@@ -77,3 +77,34 @@ All **657 frontend tests** across 33 files pass under Europe/London. Production
 builds and whitespace checks pass. Only the web container was deployed; backend
 code, schema and application records remain unchanged. Live read-only rollout
 checks verify the exact tested purchase bundle and route/API availability.
+
+## Make merchant-specific matches visible
+
+A subsequent report of empty price responses was traced to the actual request
+context: Bravecto at M&S had no match, while its recorded price belonged to VetUK.
+Beef Stir Fry likewise had history at Waitrose. The server's 204 responses were
+correct for unmatched merchant/item combinations. The shared household catalogue
+can contain items purchased from different merchants; it is not currently filtered
+by the selected merchant. Prices remain merchant-specific. A future merchant-aware
+picker could show previously purchased items first without duplicating or locking
+the catalogue item to one shop.
+
+Compact lookup feedback now appears directly beneath Actual unit price, naming
+the merchant for a historical suggestion or absent match. The existing detailed
+status remains available. Failed HTTP lookups are distinguished from successful
+empty responses; invalid dates ask for a date rather than claiming no history.
+
+New full-page HTTP integration tests use the real Api/HttpClient transport and
+Material merchant/autocomplete controls, including selecting without first typing
+a search. A 204 usual-price result followed by a 200 historical result fills the
+rendered price field; two 204 results show a merchant-specific no-match explanation;
+a failed historical request shows an unavailable/retry message. These tests issue
+no application-database writes.
+
+Astra reviewed once and suggested receipt-specific wording for backdated entry;
+the hint now says to check the price on this receipt. All **660 frontend tests**
+across 34 files pass under Europe/London, and production builds and whitespace
+checks pass. The web-only rollout is healthy and live read checks confirm the
+exact tested page bundles and purchase/API routes. No backend/schema changes or
+application-data edits were required. Merchant-aware item filtering remains a
+future refinement, not part of this feedback change.

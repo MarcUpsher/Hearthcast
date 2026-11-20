@@ -52,7 +52,7 @@
             }
             @if ((line.kind === 'item' && line.itemId) || (line.kind === 'category' && (line.quantity || line.unitPrice))) {
               <mat-form-field><mat-label>Quantity ({{ line.unitLabel || unitLabel(line.itemId) }})</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'quantity-' + line.key" [required]="!historicalAmountOnly(line)" [disabled]="entryLocked()" [ngModel]="line.quantity" (ngModelChange)="changeLine(line.key, 'quantity', $event)" /><mat-hint>Positive, below one million; up to 6 decimals.</mat-hint></mat-form-field>
-              <mat-form-field><mat-label>Actual unit price</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'price-' + line.key" [required]="!historicalAmountOnly(line)" [disabled]="entryLocked()" [ngModel]="line.unitPrice" (ngModelChange)="changeLine(line.key, 'unitPrice', $event)" /><mat-hint>Zero is valid; up to 6 decimals, below 1 billion.</mat-hint></mat-form-field>
+              <mat-form-field><mat-label>Actual unit price</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'price-' + line.key" [required]="!historicalAmountOnly(line)" [disabled]="entryLocked()" [ngModel]="line.unitPrice" (ngModelChange)="changeLine(line.key, 'unitPrice', $event)" /><mat-hint>{{ priceHints()[line.key] || 'Zero is valid; up to 6 decimals, below 1 billion.' }}</mat-hint></mat-form-field>
             }
             <mat-form-field><mat-label>Actual line amount</mat-label><input matInput appMoney="text" inputmode="decimal" [name]="'amount-' + line.key" required [disabled]="entryLocked()" [ngModel]="line.amount" (ngModelChange)="changeLine(line.key, 'amount', $event)" />
               <mat-hint>{{ minorUnits() === null ? 'Choose currency first' : 'Up to ' + minorUnits() + ' decimal places. Zero is valid.' }}</mat-hint></mat-form-field>
@@ -63,7 +63,7 @@
             @if (lastPrices()[line.key]; as last) {
               <p class="muted">Last recorded unit price: {{ last.currencyCode }} {{ last.unitPrice }} per {{ last.unitLabel }} · {{ date(last.spendingDate) }}.
                 @if (last.effectiveUnitPrice !== last.unitPrice) { Saved line-only effective price: {{ last.effectiveUnitPrice }} per unit. }
-                @if (last.promotionStatus === 'Yes') { Marked as a promotion on that purchase; check today's price. }
+                @if (last.promotionStatus === 'Yes') { Marked as a promotion on that purchase; check the price on this receipt. }
                 @if (last.hasReceiptDiscount) { A receipt discount was recorded in this category; the final item price was not allocated. }
               </p>
               <button mat-button type="button" [disabled]="entryLocked()" (click)="useLastPrice(line.key)" [attr.aria-label]="'Use last recorded price for line ' + (index + 1)">Use this price</button>
