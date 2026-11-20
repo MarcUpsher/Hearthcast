@@ -550,6 +550,57 @@ describe("Spending purchase capture", () => {
     expect(send.mock.calls[1][2]).toEqual(original);
   });
   const lastPrice = (extra: Partial<SpendingLastPrice> = {}): SpendingLastPrice => ({ spendingRecordId: "past", spendingLineId: "past-line", spendingDate: "2026-11-17", currencyCode: "GBP", unitKey: "pack-6", unitLabel: "Six eggs", quantity: 1, unitPrice: 1.95, netAmount: 1.95, effectiveUnitPrice: 1.95, promotionStatus: "Unknown", hasReceiptDiscount: false, ...extra });
+  it.each(["usual-first", "history-first"])("keeps the saved usual price ahead of history (%s)", async order => {
+    const c = await page(), usual = deferred<SpendingUsualPrice | null>(), history = deferred<SpendingLastPrice | null>();
+    get.mockImplementation((path: string) => path.includes("/last-paid-price?") ? history.promise : usual.promise);
+    c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs");
+    if (order === "usual-first") { usual.resolve(spendingPrice()); await settle(); expect(c.line(key)?.unitPrice).toBe(String(spendingPrice().usualUnitPrice)); history.resolve(lastPrice()); }
+    else { history.resolve(lastPrice()); await settle(); expect(c.line(key)?.unitPrice).toBe(""); usual.resolve(spendingPrice()); }
+    await settle(); expect(c.line(key)?.unitPrice).toBe(String(spendingPrice().usualUnitPrice)); expect(c.lastPrices()[key]?.unitPrice).toBe(1.95);
+    expect(send).not.toHaveBeenCalled();
+  });
+  it.each(["unit-price", "line-amount"])("keeps a manual %s while a history fallback arrives", async override => {
+    const c = await page(), history = deferred<SpendingLastPrice>();
+    get.mockImplementation((path: string) => path.includes("/last-paid-price?") ? history.promise : Promise.resolve(null));
+    c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs");
+    c.changeLine(key, override === "unit-price" ? "unitPrice" : "amount", "7"); history.resolve(lastPrice()); await settle();
+    expect(c.line(key)?.amount).toBe(override === "unit-price" ? "7.00" : "7");
+    expect(c.line(key)?.unitPrice).toBe(override === "unit-price" ? "7" : "1.95");
+  });
+  it.each(["merchant", "date", "currency", "item", "household", "removed"])("ignores a late history fallback after changing %s", async context => {
+    const c = await page(), history = deferred<SpendingLastPrice>();
+    fixture.componentRef.setInput("items", [spendingItem(), spendingItem("first", { id: "milk", name: "Milk" })]); await settle();
+    get.mockImplementation((path: string) => path.includes("/items/eggs/last-paid-price?merchantId=first-shop&currencyCode=GBP&onOrBefore=2026-11-18") ? history.promise : Promise.resolve(null));
+    c.set("date", "2026-11-18"); c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs");
+    if (context === "merchant") c.set("merchantId", "other-shop");
+    if (context === "date") c.set("date", "2026-11-16");
+    if (context === "currency") c.setCurrency("EUR");
+    if (context === "item") c.selectItem(key, "milk");
+    if (context === "household") { current.set({ id: "second", name: "Other", people: [] }); await settle(); }
+    if (context === "removed") { c.addLine("category"); c.removeLine(key); }
+    history.resolve(lastPrice()); await settle(); expect(c.line(key)?.unitPrice ?? "").toBe("");
+  });
+  it("uses history when the usual lookup fails, retaining promotion and receipt-discount context", async () => {
+    const c = await page(); get.mockImplementation(async (path: string) => {
+      if (path.includes("/last-paid-price?")) return lastPrice({ promotionStatus: "Yes", hasReceiptDiscount: true, effectiveUnitPrice: 1.5 });
+      throw new Error("Offline");
+    });
+    c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs"); await settle(); await settle();
+    expect(c.line(key)?.unitPrice).toBe("1.95"); expect(c.priceStates()[key]).toContain("Usual price unavailable");
+    expect(fixture.nativeElement.textContent).toContain("Marked as a promotion"); expect(fixture.nativeElement.textContent).toContain("final item price was not allocated");
+    expect(fixture.nativeElement.textContent).toContain("line-only effective price: 1.5"); expect(send).not.toHaveBeenCalled();
+  });
+  it.each(["usual", "history"])("resumes a pending %s suggestion when an item dialog is cancelled", async source => {
+    const c = await page(), history = deferred<SpendingLastPrice | null>(), usual = deferred<SpendingUsualPrice | null>();
+    get.mockImplementation((path: string) => path.includes("/last-paid-price?") ? history.promise : usual.promise);
+    c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs");
+    c.addLine(); c.createItem(c.draft().lines[1].key); await settle(); expect(c.itemEditor()).not.toBeNull();
+    usual.resolve(source === "usual" ? spendingPrice() : null); history.resolve(lastPrice()); await settle(); await settle();
+    expect(c.line(key)?.unitPrice).toBe(""); c.itemEditor()!.componentInstance.dismiss();
+    await vi.waitFor(() => expect(c.itemEditor() === null).toBe(true)); await settle();
+    expect(c.itemEditor() === null).toBe(true); expect(c.line(key)?.unitPrice).toBe(String(source === "usual" ? spendingPrice().usualUnitPrice : 1.95));
+    expect(send).not.toHaveBeenCalled();
+  });
   it("loads historical references immediately on editing and reloading without changing saved prices", async () => {
     const c = await page(); const record = spendingRecord();
     record.lines[0] = { ...record.lines[0], spendingItemId: "eggs", itemName: "Eggs", unitKey: "pack-6", unitLabel: "Six eggs", quantity: 2, unitPrice: 5 };
@@ -563,12 +614,17 @@ describe("Spending purchase capture", () => {
     expect(c.lastPrices()["saved-line"]?.unitPrice).toBe(1.95); expect(c.line("saved-line")?.amount).toBe("10");
     expect(c.hasUnsavedChanges()).toBe(false);
   });
-  it("offers the last recorded price when there is no usual price, using it only after explicit selection", async () => {
+  it("prefills the last recorded price when there is no usual price, keeping it editable", async () => {
     const c = await page(); get.mockImplementation(async (path: string) => path.includes("/last-paid-price?") ? lastPrice() : null);
-    c.set("date", "2026-11-18"); c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key; c.selectItem(key, "eggs"); await settle();
-    expect(c.line(key)?.unitPrice).toBe(""); expect(c.lastPrices()[key]?.unitPrice).toBe(1.95);
+    c.set("date", "2026-11-18"); c.set("merchantId", "first-shop"); const key = c.draft().lines[0].key;
+    const loader = TestbedHarnessEnvironment.loader(fixture);
+    const picker = await loader.getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 1"]' }));
+    await picker.enterText("EGGS-6"); await picker.selectOption({ text: /EGGS-6/ }); await settle();
+    expect(await (await loader.getHarness(MatInputHarness.with({ selector: '[name="price-' + key + '"]' }))).getValue()).toBe("1.95");
+    expect(c.line(key)?.unitPrice).toBe("1.95"); expect(c.line(key)?.amount).toBe("1.95"); expect(c.lastPrices()[key]?.unitPrice).toBe(1.95); await settle();
+    expect(fixture.nativeElement.textContent).toContain("check the actual price for this purchase");
     expect(get).toHaveBeenCalledWith("households/first/spending/items/eggs/last-paid-price?merchantId=first-shop&currencyCode=GBP&onOrBefore=2026-11-18");
-    await (await button("Use this price")).click(); expect(c.line(key)).toMatchObject({ unitPrice: "1.95", amount: "1.95", priceTouched: true }); expect(send).not.toHaveBeenCalled();
+    c.changeLine(key, "unitPrice", "2.10"); expect(c.line(key)).toMatchObject({ unitPrice: "2.10", amount: "2.10", priceTouched: true }); expect(send).not.toHaveBeenCalled();
   });
   it("does not let a late usual price overwrite an explicitly selected historical price", async () => {
     const c = await page(), pending = deferred<SpendingUsualPrice>(); get.mockImplementation(async (path: string) => path.includes("/last-paid-price?") ? lastPrice() : pending.promise);

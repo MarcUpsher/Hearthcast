@@ -62,12 +62,13 @@
             @if (lastPrices()[line.key]; as last) {
               <p class="muted">Last recorded unit price: {{ last.currencyCode }} {{ last.unitPrice }} per {{ last.unitLabel }} · {{ date(last.spendingDate) }}.
                 @if (last.effectiveUnitPrice !== last.unitPrice) { Saved line-only effective price: {{ last.effectiveUnitPrice }} per unit. }
+                @if (last.promotionStatus === 'Yes') { Marked as a promotion on that purchase; check today's price. }
                 @if (last.hasReceiptDiscount) { A receipt discount was recorded in this category; the final item price was not allocated. }
               </p>
               <button mat-button type="button" [disabled]="locked()" (click)="useLastPrice(line.key)" [attr.aria-label]="'Use last recorded price for line ' + (index + 1)">Use this price</button>
             } @else { <p class="muted">{{ lastPriceStates()[line.key] }}</p> }
             <div class="actions">
-              <button mat-button type="button" [disabled]="locked()" (click)="lookupPrice(line.key)">Retry usual price</button>
+              <button mat-button type="button" [disabled]="locked()" (click)="lookupPrice(line.key)">Retry price lookup</button>
               @if (!line.autoAmount && suggestion(line)) { <button mat-button type="button" [disabled]="locked()" (click)="useSuggestion(line.key)">Use calculated amount {{ suggestion(line) }}</button> }
             </div>
           }

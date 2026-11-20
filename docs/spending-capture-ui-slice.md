@@ -20,8 +20,10 @@ actual unit price; quick lines need neither. Notes, receipt reference/total,
 line description, receipt item reference and promotion status are optional.
 
 Usual-price lookup is exact for the item/merchant/currency. Missing or failed
-lookups permit manual price entry. Last recorded prices are shown separately with
-an explicit Use this price action; no cross-currency fallback is performed.
+lookups fall back to a last recorded nominal unit price when available, labelled
+as a suggestion to check against the current purchase. Last recorded prices are
+also shown separately with an explicit Use this price action; no cross-currency
+fallback is performed. Neither suggestion path changes remembered usual prices.
 Late lookups cannot overwrite manual unit prices or actual line-amount overrides.
 Selecting another merchant clears an unedited suggestion and fetches the new exact
 identity. Currency changes require confirmation when numbers are present, perform

@@ -84,8 +84,10 @@ date. An edited receipt excludes itself. The UI shows price, date and unit, with
 a receipt discount, the reference explains that the offer was not allocated to
 the individual item's price (`hasReceiptDiscount` in the lookup response).
 
-A saved usual price continues to prefill automatically. Last recorded prices do
-not automatically replace it or become a new usual price. The explicit action
+A saved usual price continues to prefill automatically and takes priority. The
+subsequent [price-prefill fix](spending-price-prefill-fix.md) uses the last recorded
+nominal unit price automatically when no usual price is found or that lookup fails,
+with a visible suggestion label. It never creates or replaces a saved usual price. The explicit action
 counts as a manual price choice, so late usual-price responses cannot overwrite
 it, and a manual line-total override is preserved. Missing/failed historical
 lookups leave manual entry available. Date, merchant, currency, item, household

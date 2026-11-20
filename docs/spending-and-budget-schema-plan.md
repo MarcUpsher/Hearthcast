@@ -230,9 +230,11 @@ unknown specials without making the user identify every promotion correctly.
 
 Use a unique (HouseholdId, SpendingItemId, MerchantId, CurrencyCode, UnitKey)
 price record. Never reuse a different merchant's, currency's or unit's price
-silently. If there is no matching usual price, require entry and offer to remember
-it, or explicitly use the displayed last recorded price for this purchase;
-do not silently adopt a possibly promotional last-paid price. Keep pack sizes
+silently. If there is no matching usual price, prefill the last recorded nominal
+unit price as a clearly labelled, editable suggestion for this purchase. The same
+fallback is available if the usual-price lookup fails. Show its date and any known
+promotion/receipt-discount context; require manual entry if neither lookup supplies
+a price. This does not create or replace a remembered usual price. Keep pack sizes
 as distinct items where appropriate rather than mutating their meaning.
 
 Last paid is read from saved item-linked Payment lines with quantity/unit price
@@ -616,4 +618,6 @@ reporting choices should not block the first capture/schema slices.
 The [receipt discount and last-price slice](receipt-discounts-and-last-price-slice.md)
 adds explicit category-level deductions while preserving printed item prices,
 legacy create retries and usual-price defaults. Last recorded prices are now
-visible with an explicit Use this price action in purchase capture.
+visible with an explicit Use this price action in purchase capture. The subsequent
+[price-prefill fix](spending-price-prefill-fix.md) also uses history automatically
+when a matching usual price is absent or unavailable, without persisting a default.
