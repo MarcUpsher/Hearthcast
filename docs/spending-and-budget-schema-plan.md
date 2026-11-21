@@ -97,7 +97,9 @@ budgeting, not a complete accounting system.
 
 All identities are UUIDs. Every table is household-scoped, directly or through an
 enforced parent relationship. Setup names/codes below are current defaults;
-historical records save their own copies.
+historical records save their own copies. Spending item code/name edits explicitly
+refresh those two fields on linked historical spending lines (including refunds
+and voided records); stable item UUIDs and all other saved metadata remain intact.
 
 | Table | Principal fields | Purpose |
 | --- | --- | --- |
@@ -414,8 +416,10 @@ outside the first version.
   (HouseholdId, EffectiveFrom). Do not make SpendingItem unique per purchase:
   the same item can appear twice at different prices/discounts.
 - Saved item/category codes and names, units, merchants, currency and budget
-  frequency drive historical displays. Setup renaming/reclassification cannot
-  silently move past expenses or rewrite past plans.
+  frequency drive historical displays. Spending item code/name edits refresh those
+  two labels in linked purchase history atomically and advance affected receipt
+  revisions. Category, unit, merchant and budget metadata remain as recorded;
+  setup reclassification cannot move past expenses or rewrite past plans.
 - One currency per SpendingRecord; remembered usual prices carry a currency.
   BudgetEntries may use different currencies. Keep totals separate by currency
   until explicit saved conversion rules are added; never sum GBP and ZAR directly.

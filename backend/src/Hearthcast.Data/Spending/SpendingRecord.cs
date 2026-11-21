@@ -185,6 +185,15 @@ public sealed class SpendingRecord
         Notes = savedNotes;
     }
 
+    // Catalogue identity corrections also apply to refunds and voided records.
+    // Refresh every matching line before touching the parent revision once.
+    internal void RefreshItemIdentity(SpendingItem item)
+    {
+        var changed = false;
+        foreach (var line in _lines) changed |= line.RefreshItemIdentity(item);
+        if (changed) Touch();
+    }
+
     private void RequireEditable(Guid expectedRevision)
     {
         if (Revision != expectedRevision) throw new SpendingRecordConflictException();

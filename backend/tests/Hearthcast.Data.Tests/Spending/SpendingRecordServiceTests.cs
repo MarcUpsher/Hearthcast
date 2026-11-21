@@ -80,11 +80,13 @@ public sealed class SpendingRecordServiceTests : IAsyncLifetime
                 Lines = [d.Detailed(3.0000m)]
             }, [new(1, 3m)]);
             Assert.False(retry.WasCreated);
-            Assert.Equal(result.Record.Revision, retry.Record.Revision);
+            Assert.NotEqual(result.Record.Revision, retry.Record.Revision);
+            Assert.Equal("Renamed", retry.Record.Lines[0].ItemName);
             Assert.Equal("Shop", retry.Record.MerchantName);
         }
         finally { CultureInfo.CurrentCulture = oldCulture; }
-        var corrected = await Service.CorrectHeaderAsync(d.Home, id, result.Record.Revision, new(2026, 11, 1), null, null, "Corrected");
+        var current = await Service.GetAsync(d.Home, id);
+        var corrected = await Service.CorrectHeaderAsync(d.Home, id, current.Revision, new(2026, 11, 1), null, null, "Corrected");
         var replay = await Service.CreateAsync(d.Home, id, values, [new(1, 3m)]);
         Assert.False(replay.WasCreated);
         Assert.Equal(corrected.Revision, replay.Record.Revision);
@@ -208,9 +210,10 @@ public sealed class SpendingRecordServiceTests : IAsyncLifetime
         var price = Assert.Single(await Setup.ListUsualPricesAsync(d.Home, d.Item.Id));
         await Setup.UpdateItemAsync(d.Home, d.Item.Id, d.Category.Id, "Renamed", "Box of six", null);
         await Setup.RenameCategoryAsync(d.Home, d.Category.Id, "Groceries");
-        var correction = await Service.CorrectLineAsync(d.Home, record.Id, record.Revision, record.Lines[0].Id,
+        var current = await Service.GetAsync(d.Home, record.Id);
+        var correction = await Service.CorrectLineAsync(d.Home, record.Id, current.Revision, record.Lines[0].Id,
             2m, 1m, 2m, PromotionStatus.Yes, "Sale");
-        Assert.Equal("Eggs", correction.Lines[0].ItemName);
+        Assert.Equal("Renamed", correction.Lines[0].ItemName);
         Assert.Equal("Food", correction.Lines[0].ExpenseCategoryName);
         Assert.Equal("Six eggs", correction.Lines[0].UnitLabel);
         var retained = await Setup.GetUsualPriceAsync(d.Home, price.Id);

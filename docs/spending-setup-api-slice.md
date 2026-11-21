@@ -57,8 +57,11 @@ Item create:
 
 Item details update requires `expenseCategoryId`, `name`, `unitLabel` and an
 explicit `notes` member (null clears it). Create allows notes to be omitted.
-Code and UnitKey cannot be changed; supplying those, retirement or other unknown
-JSON members in an update is a 400 error rather than a silently ignored edit.
+Optional `code` changes the household-unique item code (omission/null preserves
+it); code/name edits also update those labels in linked historical receipts.
+Amounts and UUID links are preserved, and affected receipt revisions advance.
+UnitKey cannot be changed; supplying it, retirement or other unknown JSON members
+in an update is a 400 error rather than a silently ignored edit.
 
 Price create requires `spendingItemId`, `merchantId`, `currencyCode` and
 `usualUnitPrice`. Price update requires `expectedRevision` and `usualUnitPrice`.

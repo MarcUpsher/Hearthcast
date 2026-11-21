@@ -35,7 +35,7 @@ export class SpendingItemFields {
   readonly value = input.required<SpendingItemDraft>();
   readonly categories = input<SpendingSetupEntry[]>([]);
   readonly disabled = input(false);
-  readonly immutable = input(false);
+  readonly editing = input(false);
   readonly changed = output<{ field: keyof SpendingItemDraft; value: string }>();
   change(field: keyof SpendingItemDraft, value: string) { this.changed.emit({ field, value }); }
 }

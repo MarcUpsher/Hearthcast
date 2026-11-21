@@ -60,6 +60,15 @@ public sealed class SpendingLine
     public PromotionStatus PromotionStatus { get; private set; }
     public string? Notes { get; private set; }
 
+    internal bool RefreshItemIdentity(SpendingItem item)
+    {
+        if (HouseholdId != item.HouseholdId || SpendingItemId != item.Id ||
+            (ItemCode == item.Code && ItemName == item.Name)) return false;
+        ItemCode = item.Code;
+        ItemName = item.Name;
+        return true;
+    }
+
     internal void CorrectValues(decimal netAmount, decimal? quantity, decimal? unitPrice,
         PromotionStatus promotionStatus, string? notes)
     {

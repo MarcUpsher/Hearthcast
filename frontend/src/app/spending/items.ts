@@ -169,7 +169,7 @@ export class SpendingItems {
   async submit(edit: boolean, form?: NgForm) {
     if (!this.canWrite() || !this.valid(edit) || (edit && (!this.editing() || !this.editDirty()))) return;
     const home = this.home!, generation = this.generation, item = this.editing(), draft = this.draft(edit);
-    const details = { expenseCategoryId: draft.expenseCategoryId, name: draft.name, unitLabel: draft.unitLabel,
+    const details = { expenseCategoryId: draft.expenseCategoryId, code: draft.code, name: draft.name, unitLabel: draft.unitLabel,
       notes: draft.notes.trim() ? draft.notes : null };
     this.saving.set(true);
     this.notice.set("");

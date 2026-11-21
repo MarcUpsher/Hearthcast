@@ -41,8 +41,11 @@ UUID. Price lists are scoped to one existing item and sort by currency, merchant
 UUID and price UUID; they include prices for retired merchants/items. Reads return
 entities from a disposed context; changing them does not implicitly persist data.
 
-UpdateItemAsync saves name, category, unit display label and notes as one operation.
-Code and UnitKey remain immutable. A changed display label never changes the
+UpdateItemAsync saves code, name, category, unit display label and notes as one operation.
+Code/name edits refresh linked historical spending lines, including refunds and
+voided records, and advance affected receipt revisions in the same serializable
+transaction. Omitted/null code preserves the current code for older callers.
+UnitKey remains immutable. A changed unit display label never changes the
 price's copied label or remembered amount. Category and merchant names remain
 nonunique; only normalized item codes have household uniqueness, including retired
 items. Duplicate codes are BusinessRuleViolationException conflicts.

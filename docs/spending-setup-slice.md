@@ -44,7 +44,9 @@ implementations.
   silently treated as whitespace. Tests verify every listed character at both
   boundaries and compare the explicit policy with this target runtime's whitespace
   set, rather than assuming universal Unicode equivalence.
-- Code and UnitKey have no mutation method. Changing a pack size/meaning requires
+- Code can be corrected through the item-details service, which also refreshes
+  linked receipt codes/names; UUID links and household uniqueness remain intact.
+  UnitKey has no mutation method. Changing a pack size/meaning requires
   a new item. UnitLabel may be renamed for display. Usual prices retain their
   copied unit label; changing an item's display label does not mutate a price.
 - Remembered prices are unique per household, item, merchant, currency and unit.

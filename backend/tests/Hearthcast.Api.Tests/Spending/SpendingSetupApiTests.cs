@@ -334,9 +334,48 @@ public sealed class SpendingSetupApiTests : IAsyncLifetime
         Assert.Null(item.Notes);
     }
 
+    [Fact]
+    public async Task CodeAndNameUpdateHistoricalReceiptsThroughHttpWithoutChangingPriceLinks()
+    {
+        var d = await SeedAsync();
+        using var capture = await _client.PostAsJsonAsync(d.Root + "/records", new
+        {
+            id = Guid.NewGuid(), merchantId = d.Merchant.Id, spendingDate = "2026-11-17", currencyCode = "GBP", kind = "Payment",
+            lines = new[] { new { expenseCategoryId = d.Category.Id, spendingItemId = d.Item.Id, netAmount = 3m, quantity = 1m, unitPrice = 3m } }
+        });
+        Assert.Equal(HttpStatusCode.Created, capture.StatusCode);
+        var before = (await capture.Content.ReadFromJsonAsync<SpendingRecordResponse>())!;
+        using var update = await _client.PutAsJsonAsync(d.Root + $"/items/{d.Item.Id}/details", new
+        { expenseCategoryId = d.Category.Id, code = " generic-eggs ", name = " Eggs ", unitLabel = "Box", notes = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var item = (await update.Content.ReadFromJsonAsync<SpendingItemResponse>())!;
+        Assert.Equal("GENERIC-EGGS", item.Code); Assert.Equal("Eggs", item.Name); Assert.Equal(d.Item.Id, item.Id);
+        var after = (await _client.GetFromJsonAsync<SpendingRecordResponse>(d.Root + $"/records/{before.Id}"))!;
+        Assert.NotEqual(before.Revision, after.Revision);
+        Assert.Equal(before.Lines[0] with { ItemCode = "GENERIC-EGGS", ItemName = "Eggs" }, after.Lines[0]);
+        Assert.Equal(before.TotalAmount, after.TotalAmount);
+        Assert.Equal(d.Price, await _client.GetFromJsonAsync<UsualPriceResponse>(d.Root + $"/usual-prices/{d.Price.Id}"));
+    }
+
+    [Theory]
+    [InlineData("bad code", 400)]
+    [InlineData(" ", 400)]
+    [InlineData("_BAD", 400)]
+    [InlineData("overlong", 400)]
+    [InlineData("taken", 409)]
+    public async Task InvalidOrDuplicateCodeUpdatesReturnProblemsAndPreserveItem(string code, int status)
+    {
+        var d = await SeedAsync();
+        var taken = await CreateAsync<SpendingItemResponse>(d.Root + "/items", new
+        { expenseCategoryId = d.Category.Id, code = "TAKEN", name = "Other", unitKey = "each", unitLabel = "Each" });
+        (await _client.PutAsJsonAsync(d.Root + $"/items/{taken.Id}/retirement", new { isRetired = true })).EnsureSuccessStatusCode();
+        await Problem(await _client.PutAsJsonAsync(d.Root + $"/items/{d.Item.Id}/details", new
+        { expenseCategoryId = d.Category.Id, code = code == "overlong" ? new string('A', 65) : code, name = "Changed", unitLabel = "Changed", notes = (string?)null }), status);
+        Assert.Equal(d.Item, await _client.GetFromJsonAsync<SpendingItemResponse>(d.Root + $"/items/{d.Item.Id}"));
+    }
+
     [Theory]
     [InlineData("missingNotes")]
-    [InlineData("code")]
     [InlineData("unitKey")]
     [InlineData("isRetired")]
     [InlineData("unitLabel")]

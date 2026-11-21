@@ -7,9 +7,10 @@ schema, dependency or backend changes.
 ## Catalogue
 
 Users create catalogue items with unique code, name, default expense category,
-unit/pack code, unit label and optional notes. Code and unit identity are fixed
-after creation. The right edit sidebar changes only name, category, label and
-notes; blank notes become explicit null. A different unit/pack should use another
+unit/pack code, unit label and optional notes. Internal UUID and unit identity are
+fixed after creation. The right edit sidebar changes code, name, category, label
+and notes; blank notes become explicit null. It explains that code/name edits
+also update linked historical purchases, refunds and voided records. A different unit/pack should use another
 item identity. Category options include clearly marked retired categories so
 existing metadata remains editable. Items are filtered by their own retirement
 flag, not their category's flag.

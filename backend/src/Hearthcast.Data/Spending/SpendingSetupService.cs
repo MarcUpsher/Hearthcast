@@ -62,14 +62,29 @@ public sealed class SpendingSetupService(IDbContextFactory<HearthcastDbContext> 
 
     public Task<SpendingItem> UpdateItemAsync(Guid householdId, Guid itemId, Guid expenseCategoryId,
         string name, string unitLabel, string? notes, CancellationToken cancellationToken = default) =>
+        UpdateItemAsync(householdId, itemId, expenseCategoryId, null, name, unitLabel, notes, cancellationToken);
+
+    public Task<SpendingItem> UpdateItemAsync(Guid householdId, Guid itemId, Guid expenseCategoryId,
+        string? code, string name, string unitLabel, string? notes, CancellationToken cancellationToken = default) =>
         WriteAsync(async (context, token) =>
         {
             var item = await FindItemAsync(context, householdId, itemId, token);
             var category = await FindCategoryAsync(context, householdId, expenseCategoryId, token);
+            var oldCode = item.Code;
+            var oldName = item.Name;
+            if (code is not null) item.SetCode(code);
             item.Rename(name);
             item.SetCategory(category);
             item.SetUnitLabel(unitLabel);
             item.SetNotes(notes);
+            if (item.Code != oldCode || item.Name != oldName)
+            {
+                var records = await context.SpendingRecords
+                    .Where(r => r.HouseholdId == householdId && r.Lines.Any(l => l.SpendingItemId == itemId &&
+                        (l.ItemCode != item.Code || l.ItemName != item.Name)))
+                    .Include(r => r.Lines).ToListAsync(token);
+                foreach (var record in records) record.RefreshItemIdentity(item);
+            }
             return item;
         }, cancellationToken);
 
@@ -214,6 +229,10 @@ public sealed class SpendingSetupService(IDbContextFactory<HearthcastDbContext> 
         try
         {
             return await SerializableTransaction.ExecuteAsync(contextFactory, operation, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException exception) when (exception.Entries.Any(e => e.Entity is SpendingRecord))
+        {
+            throw new SpendingRecordConflictException(exception);
         }
         catch (DbUpdateConcurrencyException exception)
         {

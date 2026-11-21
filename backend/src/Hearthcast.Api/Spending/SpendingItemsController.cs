@@ -31,7 +31,7 @@ public sealed class SpendingItemsController(SpendingSetupService setup) : Contro
     public async Task<ActionResult<SpendingItemResponse>> Update(Guid householdId, Guid itemId,
         UpdateSpendingItemRequest request, CancellationToken cancellationToken) =>
         SpendingItemResponse.From(await setup.UpdateItemAsync(householdId, itemId, request.ExpenseCategoryId!.Value,
-            request.Name!, request.UnitLabel!, request.Notes, cancellationToken));
+            request.Code, request.Name!, request.UnitLabel!, request.Notes, cancellationToken));
 
     [HttpPut("{itemId:guid}/retirement")]
     public async Task<ActionResult<SpendingItemResponse>> SetRetirement(Guid householdId, Guid itemId,

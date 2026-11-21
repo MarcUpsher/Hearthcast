@@ -24,10 +24,13 @@ it.each([200, 204, 503])("renders the HTTP price result after choosing Merchant 
   http.expectOne("/api/households/first/spending/merchants?includeRetired=true").flush([spendingEntry("shop", "first")]);
   http.expectOne("/api/households/first/spending/items?includeRetired=true").flush([spendingItem("first", { id: "beef", name: "Beef Stir Fry", code: "BEEF_STIR_FRY", unitKey: "pack", unitLabel: "Pack" })]);
   http.expectOne("/api/households/first/spending/currencies").flush([{ code: "GBP", minorUnits: 2 }]);
-  await fixture.whenStable(); fixture.detectChanges(); const c = fixture.componentInstance.capture()!; c.set("date", "2026-11-20");
+  await fixture.whenStable(); fixture.detectChanges(); const c = fixture.componentInstance.capture()!;
   const loader = TestbedHarnessEnvironment.loader(fixture);
   const merchant = await loader.getHarness(MatSelectHarness.with({ selector: '[name="merchant"]' }));
   await merchant.open(); await merchant.clickOptions({ text: "Shop" });
+  const date = await loader.getHarness(MatInputHarness.with({ selector: '[name="date"]' }));
+  await date.setValue("2026-11-20");
+  expect(c.draft().date).toBe("2026-11-20");
   const item = await loader.getHarness(MatAutocompleteHarness.with({ selector: '[aria-label="Item for line 1"]' }));
   await item.focus(); const selecting = item.selectOption({ text: /Beef Stir Fry/ });
   let usual: TestRequest | undefined, last: TestRequest | undefined;

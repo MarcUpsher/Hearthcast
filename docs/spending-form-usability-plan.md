@@ -28,7 +28,8 @@ Create item dialog:
   Renaming the sold-by label must not regenerate the key.
 - Preserve all existing item codes/unit keys and price associations. Hide internal
   unit keys in ordinary catalogue row descriptions as well as forms; show the
-  readable sold-by label. Existing item codes remain immutable.
+  readable sold-by label. Item codes can now be corrected in the catalogue editor;
+  code/name edits also refresh linked purchase history, preserving UUID/unit links.
 - Put optional item notes under a More details disclosure, retaining existing notes
   on edit regardless of whether the disclosure is opened.
 

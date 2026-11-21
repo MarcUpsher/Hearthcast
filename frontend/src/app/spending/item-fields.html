@@ -1,7 +1,7 @@
-    <div class="item-fields" [class.single-column]="immutable()">
+    <div class="item-fields" [class.single-column]="editing()">
       <mat-form-field><mat-label>Item name</mat-label><input matInput name="name" required [disabled]="disabled()" [ngModel]="value().name" (ngModelChange)="change('name', $event)" /></mat-form-field>
-      <mat-form-field><mat-label>Item code</mat-label><input matInput name="code" required maxlength="64" [readonly]="immutable()" [disabled]="disabled()" [ngModel]="value().code" (ngModelChange)="change('code', $event)" />
-        <mat-hint>{{ immutable() ? 'Fixed for this item' : 'Unique code, e.g. EGGS-6. Letters, digits, dots, hyphens or underscores.' }}</mat-hint></mat-form-field>
+      <mat-form-field><mat-label>Item code</mat-label><input matInput name="code" required maxlength="64" [disabled]="disabled()" [ngModel]="value().code" (ngModelChange)="change('code', $event)" />
+        <mat-hint>Unique code, e.g. EGGS-6. Letters, digits, dots, hyphens or underscores.</mat-hint></mat-form-field>
       <mat-form-field><mat-label>Default category</mat-label><mat-select name="expenseCategoryId" required [disabled]="disabled()" [ngModel]="value().expenseCategoryId" (ngModelChange)="change('expenseCategoryId', $event)">
         @for (entry of categories(); track entry.id) { <mat-option [value]="entry.id">{{ entry.name }}{{ entry.isRetired ? ' (retired)' : '' }}</mat-option> }
       </mat-select></mat-form-field>

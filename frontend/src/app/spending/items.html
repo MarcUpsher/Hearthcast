@@ -44,7 +44,8 @@
 <ng-template #itemForm let-edit="edit">
   @let value = draft(edit);
   <form #form="ngForm" class="item-form" [class.editor-form]="edit" [attr.aria-label]="edit ? 'Edit item' : 'Add item'" [attr.aria-busy]="saving()" (ngSubmit)="submit(edit, form)">
-    <app-spending-item-fields [value]="value" [categories]="categories()" [disabled]="busy()" [immutable]="edit"
+    @if (edit) { <p class="muted">Changes to the item code and name also update historical purchases, including refunds and voided records.</p> }
+    <app-spending-item-fields [value]="value" [categories]="categories()" [disabled]="busy()" [editing]="edit"
       (changed)="change(edit, $event.field, $event.value)" />
     @if (edit ? editError() : createError()) { <p class="error" role="alert">{{ edit ? editError() : createError() }}</p> }
     <div class="actions">

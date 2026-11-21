@@ -91,23 +91,25 @@ describe("Spending item catalogue", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("edits mutable metadata in a sidebar while keeping code and unit identity read-only", async () => {
+  it("edits code and name in a sidebar, explains historical updates and preserves unit identity", async () => {
     const c = await page();
     c.beginEdit(spendingItem());
     await settle();
     const form = document.querySelector<HTMLFormElement>('form[aria-label="Edit item"]')!;
-    expect(form.querySelector<HTMLInputElement>('input[name="code"]')!.readOnly).toBe(true);
+    expect(form.querySelector<HTMLInputElement>('input[name="code"]')!.readOnly).toBe(false);
+    expect(form.textContent).toContain("also update historical purchases");
     expect(form.querySelector('input[name="unitKey"]')).toBeNull();
     expect(c.editDraft().unitKey).toBe("pack-6");
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("name")).toBe("name"));
     c.change(true, "name", "Free range eggs");
+    c.change(true, "code", "EGGS");
     c.change(true, "unitLabel", "Box of six");
     c.change(true, "notes", "");
-    send.mockResolvedValue(spendingItem("first", { name: "Free range eggs", unitLabel: "Box of six" }));
+    send.mockResolvedValue(spendingItem("first", { code: "EGGS", name: "Free range eggs", unitLabel: "Box of six" }));
     await settle();
     await (await button("Save item")).click();
     expect(send).toHaveBeenCalledExactlyOnceWith("PUT", "households/first/spending/items/eggs/details", {
-      expenseCategoryId: "first-food", name: "Free range eggs", unitLabel: "Box of six", notes: null,
+      expenseCategoryId: "first-food", code: "EGGS", name: "Free range eggs", unitLabel: "Box of six", notes: null,
     });
     expect(c.rows().find(row => row.id === "eggs")?.name).toBe("Free range eggs");
     await vi.waitFor(async () => expect(await root().getAllHarnesses(MatDialogHarness)).toHaveLength(0));
@@ -119,9 +121,11 @@ describe("Spending item catalogue", () => {
     c.beginEdit(spendingItem());
     await settle();
     c.change(true, "name", "Edited eggs");
+    c.change(true, "code", "TAKEN");
     send.mockRejectedValue(new Error("Edit failed"));
     await c.submit(true);
     expect(c.editDraft().name).toBe("Edited eggs");
+    expect(c.editDraft().code).toBe("TAKEN");
     expect(c.editError()).toBe("Edit failed");
     expect(c.editing()).not.toBeNull();
     c.cancelEdit();

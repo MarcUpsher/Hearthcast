@@ -30,6 +30,7 @@ public sealed class SpendingItem
     public bool IsRetired { get; private set; }
 
     public void Rename(string name) => Name = SpendingSetupRules.Text(name);
+    internal void SetCode(string code) => Code = SpendingSetupRules.Code(code);
     public void SetUnitLabel(string label) => UnitLabel = SpendingSetupRules.Text(label);
     public void SetNotes(string? notes) => Notes = SpendingSetupRules.Notes(notes);
     public void SetRetired(bool isRetired) => IsRetired = isRetired;
